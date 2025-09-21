@@ -1,0 +1,25 @@
+version: "3.8"
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./data/db.sqlite3
+      - JUDGE0_URL=http://judge0:2358
+    volumes:
+      - ./backend/data:/app/data
+    depends_on:
+      - judge0
+
+  judge0:
+    image: judge0/api:latest
+    ports:
+      - "2358:2358"
+    environment:
+      - JUDGE0_DB=sqlite
+    volumes:
+      - judge0-data:/data
+
+volumes:
+  judge0-data:
