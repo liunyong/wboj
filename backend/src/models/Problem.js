@@ -4,7 +4,9 @@ const testCaseSchema = new mongoose.Schema(
   {
     input: { type: String, required: true },
     expectedOutput: { type: String, required: true },
-    isPublic: { type: Boolean, default: false }
+    isPublic: { type: Boolean, default: false },
+    inputFileName: { type: String, trim: true },
+    outputFileName: { type: String, trim: true }
   },
   { _id: false }
 );

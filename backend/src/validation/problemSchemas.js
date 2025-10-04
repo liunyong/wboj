@@ -6,7 +6,17 @@ const isObjectId = (value) => mongoose.isValidObjectId(value);
 const testCaseSchema = z.object({
   input: z.string().min(1, 'Input is required'),
   expectedOutput: z.string().min(1, 'Expected output is required'),
-  isPublic: z.boolean().optional().default(false)
+  isPublic: z.boolean().optional().default(false),
+  inputFileName: z
+    .string()
+    .max(255, 'inputFileName must be 255 characters or fewer')
+    .optional()
+    .transform((value) => value || undefined),
+  outputFileName: z
+    .string()
+    .max(255, 'outputFileName must be 255 characters or fewer')
+    .optional()
+    .transform((value) => value || undefined)
 });
 
 export const listProblemsQuerySchema = z

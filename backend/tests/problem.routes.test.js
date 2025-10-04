@@ -13,8 +13,20 @@ const buildProblem = (overrides = {}) => ({
   description: 'Add two numbers',
   judge0LanguageIds: [71],
   testCases: [
-    { input: '1 2', expectedOutput: '3', isPublic: true },
-    { input: '2 3', expectedOutput: '5', isPublic: false }
+    {
+      input: '1 2',
+      expectedOutput: '3',
+      isPublic: true,
+      inputFileName: 'input1.txt',
+      outputFileName: 'output1.txt'
+    },
+    {
+      input: '2 3',
+      expectedOutput: '5',
+      isPublic: false,
+      inputFileName: 'input2.txt',
+      outputFileName: 'output2.txt'
+    }
   ],
   ...overrides
 });
@@ -89,12 +101,19 @@ describe('Problem routes', () => {
         description: 'Simple addition',
         judge0LanguageIds: [71, 63],
         testCases: [
-          { input: '1 1', expectedOutput: '2', isPublic: true }
+          {
+            input: '1 1',
+            expectedOutput: '2',
+            isPublic: true,
+            inputFileName: 'case1.in',
+            outputFileName: 'case1.out'
+          }
         ]
       });
 
     expect(response.status).toBe(201);
     expect(response.body.slug).toBe('new-problem');
+    expect(response.body.testCases[0].inputFileName).toBe('case1.in');
     expect(await Problem.countDocuments()).toBe(1);
   });
 

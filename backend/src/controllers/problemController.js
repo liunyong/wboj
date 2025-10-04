@@ -5,7 +5,9 @@ const sanitizeTestCases = (testCases = []) =>
   testCases.map((testCase) => ({
     input: testCase.input,
     expectedOutput: testCase.expectedOutput,
-    isPublic: Boolean(testCase.isPublic)
+    isPublic: Boolean(testCase.isPublic),
+    ...(testCase.inputFileName ? { inputFileName: testCase.inputFileName } : {}),
+    ...(testCase.outputFileName ? { outputFileName: testCase.outputFileName } : {})
   }));
 
 export const getProblems = async (req, res, next) => {
