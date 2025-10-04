@@ -1,25 +1,35 @@
-version: "3.8"
+version: "3.9"
+
 services:
+  mongo:
+    image: mongo:6.0
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
   backend:
     build: ./backend
-    ports:
-      - "8000:8000"
+    restart: unless-stopped
     environment:
-      - DATABASE_URL=sqlite+aiosqlite:///./data/db.sqlite3
-      - JUDGE0_URL=http://judge0:2358
-    volumes:
-      - ./backend/data:/app/data
+      - PORT=4000
+      - MONGO_URI=mongodb://mongo:27017/judge0
+      - JUDGE0_URL=${JUDGE0_URL:-http://host.docker.internal:2358}
     depends_on:
-      - judge0
-
-  judge0:
-    image: judge0/api:latest
+      - mongo
     ports:
-      - "2358:2358"
-    environment:
-      - JUDGE0_DB=sqlite
-    volumes:
-      - judge0-data:/data
+      - "4000:4000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
 
 volumes:
-  judge0-data:
+  mongo-data:
