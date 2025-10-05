@@ -21,6 +21,7 @@ const seed = async () => {
     title: 'A+B Problem',
     slug: 'a-plus-b',
     description: 'Given two integers, output their sum.',
+    problemNumber: 1,
     judge0LanguageIds: [71, 63, 52],
     testCases: [
       { input: '1 2', expectedOutput: '3', isPublic: true },

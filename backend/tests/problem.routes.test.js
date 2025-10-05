@@ -6,30 +6,43 @@ import app from '../src/app.js';
 import Problem from '../src/models/Problem.js';
 
 let mongoServer;
+let nextProblemNumber = 1;
 
-const buildProblem = (overrides = {}) => ({
-  title: 'Sample Problem',
-  slug: 'sample-problem',
-  description: 'Add two numbers',
-  judge0LanguageIds: [71],
-  testCases: [
-    {
-      input: '1 2',
-      expectedOutput: '3',
-      isPublic: true,
-      inputFileName: 'input1.txt',
-      outputFileName: 'output1.txt'
-    },
-    {
-      input: '2 3',
-      expectedOutput: '5',
-      isPublic: false,
-      inputFileName: 'input2.txt',
-      outputFileName: 'output2.txt'
-    }
-  ],
-  ...overrides
-});
+const buildProblem = (overrides = {}) => {
+  const hasOverrideNumber = typeof overrides.problemNumber === 'number';
+  const assignedNumber = hasOverrideNumber ? overrides.problemNumber : nextProblemNumber;
+
+  if (hasOverrideNumber) {
+    nextProblemNumber = Math.max(nextProblemNumber, overrides.problemNumber + 1);
+  } else {
+    nextProblemNumber += 1;
+  }
+
+  return {
+    title: 'Sample Problem',
+    slug: 'sample-problem',
+    description: 'Add two numbers',
+    judge0LanguageIds: [71],
+    testCases: [
+      {
+        input: '1 2',
+        expectedOutput: '3',
+        isPublic: true,
+        inputFileName: 'input1.txt',
+        outputFileName: 'output1.txt'
+      },
+      {
+        input: '2 3',
+        expectedOutput: '5',
+        isPublic: false,
+        inputFileName: 'input2.txt',
+        outputFileName: 'output2.txt'
+      }
+    ],
+    problemNumber: assignedNumber,
+    ...overrides
+  };
+};
 
 beforeAll(async () => {
   mongoServer = await MongoMemoryServer.create({
@@ -50,6 +63,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await Problem.deleteMany({});
+  nextProblemNumber = 1;
 });
 
 describe('Problem routes', () => {
@@ -66,8 +80,12 @@ describe('Problem routes', () => {
     expect(response.body.items).toHaveLength(1);
     expect(response.body.page).toBe(2);
     expect(response.body.limit).toBe(2);
-    expect(response.body.total).toBe(3);
-    expect(response.body.totalPages).toBe(2);
+   expect(response.body.total).toBe(3);
+   expect(response.body.totalPages).toBe(2);
+   expect(response.body.items[0].problemNumber).toBeDefined();
+    expect(response.body.items[0].submissionCount).toBe(0);
+    expect(response.body.items[0].acceptedSubmissionCount).toBe(0);
+    expect(response.body.items[0].acceptanceRate).toBe(0);
   });
 
   it('filters problems by visibility', async () => {
@@ -113,7 +131,11 @@ describe('Problem routes', () => {
 
     expect(response.status).toBe(201);
     expect(response.body.slug).toBe('new-problem');
+    expect(response.body.problemNumber).toBe(1);
     expect(response.body.testCases[0].inputFileName).toBe('case1.in');
+    expect(response.body.submissionCount).toBe(0);
+    expect(response.body.acceptedSubmissionCount).toBe(0);
+    expect(response.body.acceptanceRate).toBe(0);
     expect(await Problem.countDocuments()).toBe(1);
   });
 
@@ -141,6 +163,7 @@ describe('Problem routes', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.title).toBe('Updated Title');
+    expect(response.body.problemNumber).toBe(problem.problemNumber);
   });
 
   it('deletes a problem by id', async () => {
@@ -165,5 +188,65 @@ describe('Problem routes', () => {
     );
     expect(privateResponse.status).toBe(200);
     expect(privateResponse.body.testCases).toHaveLength(2);
+  });
+
+  it('reuses freed problem numbers when creating new problems', async () => {
+    const first = await request(app)
+      .post('/api/problems')
+      .send({
+        title: 'First Problem',
+        slug: 'first-problem',
+        description: 'First',
+        judge0LanguageIds: [71],
+        testCases: [
+          {
+            input: '1 1',
+            expectedOutput: '2',
+            isPublic: true
+          }
+        ]
+      });
+
+    const second = await request(app)
+      .post('/api/problems')
+      .send({
+        title: 'Second Problem',
+        slug: 'second-problem',
+        description: 'Second',
+        judge0LanguageIds: [71],
+        testCases: [
+          {
+            input: '2 2',
+            expectedOutput: '4',
+            isPublic: true
+          }
+        ]
+      });
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect(first.body.problemNumber).toBe(1);
+    expect(second.body.problemNumber).toBe(2);
+
+    await request(app).delete(`/api/problems/${first.body._id}`);
+
+    const third = await request(app)
+      .post('/api/problems')
+      .send({
+        title: 'Third Problem',
+        slug: 'third-problem',
+        description: 'Third',
+        judge0LanguageIds: [71],
+        testCases: [
+          {
+            input: '3 3',
+            expectedOutput: '6',
+            isPublic: true
+          }
+        ]
+      });
+
+    expect(third.status).toBe(201);
+    expect(third.body.problemNumber).toBe(1);
   });
 });

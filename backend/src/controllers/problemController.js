@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Problem from '../models/Problem.js';
+import { findNextProblemNumber } from '../services/problemService.js';
 
 const sanitizeTestCases = (testCases = []) =>
   testCases.map((testCase) => ({
@@ -29,8 +30,11 @@ export const getProblems = async (req, res, next) => {
     const skip = (page - 1) * limit;
 
     const [items, total] = await Promise.all([
-      Problem.find(filters, 'title slug description judge0LanguageIds')
-        .sort({ createdAt: -1 })
+      Problem.find(
+        filters,
+        'title slug description judge0LanguageIds problemNumber submissionCount acceptedSubmissionCount createdAt updatedAt'
+      )
+        .sort({ problemNumber: 1 })
         .skip(skip)
         .limit(limit),
       Problem.countDocuments(filters)
@@ -78,14 +82,46 @@ export const getProblem = async (req, res, next) => {
 export const createProblem = async (req, res, next) => {
   try {
     const payload = req.validated?.body || req.body;
+    const sanitizedTestCases = sanitizeTestCases(payload.testCases);
 
-    const problem = await Problem.create({
-      ...payload,
-      testCases: sanitizeTestCases(payload.testCases)
-    });
+    const MAX_NUMBER_RETRIES = 5;
 
-    res.status(201).json(problem);
+    for (let attempt = 0; attempt < MAX_NUMBER_RETRIES; attempt += 1) {
+      const problemNumber = await findNextProblemNumber();
+
+      try {
+        const problem = await Problem.create({
+          ...payload,
+          problemNumber,
+          testCases: sanitizedTestCases
+        });
+
+        res.status(201).json(problem);
+        return;
+      } catch (error) {
+        if (error.code === 11000) {
+          if (error.keyPattern?.slug) {
+            return res.status(409).json({ message: 'A problem with this slug already exists' });
+          }
+
+          if (error.keyPattern?.problemNumber) {
+            if (attempt < MAX_NUMBER_RETRIES - 1) {
+              continue;
+            }
+
+            return res.status(503).json({ message: 'Failed to allocate a unique problem number' });
+          }
+        }
+
+        throw error;
+      }
+    }
+
+    return res.status(503).json({ message: 'Failed to allocate a unique problem number' });
   } catch (error) {
+    if (error.message === 'All problem numbers are in use') {
+      return res.status(503).json({ message: error.message });
+    }
     if (error.code === 11000) {
       return res.status(409).json({ message: 'A problem with this slug already exists' });
     }
@@ -97,6 +133,16 @@ export const updateProblem = async (req, res, next) => {
   try {
     const { id } = req.validated?.params || req.params;
     const updates = req.validated?.body || req.body;
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'problemNumber')) {
+      delete updates.problemNumber;
+    }
+
+    ['submissionCount', 'acceptedSubmissionCount'].forEach((field) => {
+      if (Object.prototype.hasOwnProperty.call(updates, field)) {
+        delete updates[field];
+      }
+    });
 
     if (updates.testCases) {
       updates.testCases = sanitizeTestCases(updates.testCases);

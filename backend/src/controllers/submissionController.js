@@ -111,6 +111,19 @@ export const createSubmission = async (req, res, next) => {
 
     await submission.save();
 
+    const acceptedIncrement = verdict === 'Accepted' ? 1 : 0;
+
+    await Problem.updateOne(
+      { _id: problem._id },
+      {
+        $inc: {
+          submissionCount: 1,
+          acceptedSubmissionCount: acceptedIncrement
+        }
+      },
+      { timestamps: false }
+    );
+
     const populated = await submission.populate('problem', 'title slug');
 
     res.status(201).json(populated);

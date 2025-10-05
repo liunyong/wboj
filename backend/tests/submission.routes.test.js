@@ -91,6 +91,10 @@ describe('Submission routes', () => {
     expect(response.body.verdict).toBe('Accepted');
     expect(runJudge0Submission).toHaveBeenCalledTimes(2);
     expect(response.body.testCaseResults).toHaveLength(2);
+
+    const updatedProblem = await Problem.findById(problem._id);
+    expect(updatedProblem?.submissionCount).toBe(1);
+    expect(updatedProblem?.acceptedSubmissionCount).toBe(1);
   });
 
   it('validates submission payloads', async () => {
@@ -116,6 +120,36 @@ describe('Submission routes', () => {
 
     expect(response.status).toBe(404);
     expect(response.body.message).toBe('Problem not found');
+  });
+
+  it('tracks non-accepted submissions separately', async () => {
+    const problem = await Problem.create(buildProblem());
+
+    runJudge0Submission.mockImplementationOnce(async () => ({
+      stdout: Buffer.from('999', 'utf8').toString('base64'),
+      stderr: null,
+      compile_output: null,
+      message: null,
+      status_id: 6,
+      status: { id: 6, description: 'Wrong Answer' },
+      time: '0.01',
+      memory: 1024
+    }));
+
+    const response = await request(app)
+      .post('/api/submissions')
+      .send({
+        problemId: problem._id.toString(),
+        languageId: 71,
+        sourceCode: 'print(0)'
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.verdict).toBe('Wrong Answer');
+
+    const updatedProblem = await Problem.findById(problem._id);
+    expect(updatedProblem?.submissionCount).toBe(1);
+    expect(updatedProblem?.acceptedSubmissionCount).toBe(0);
   });
 
   it('lists submissions with optional filters', async () => {
