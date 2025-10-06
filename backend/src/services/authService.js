@@ -187,4 +187,3 @@ export const revokeAllSessions = async (userId) => {
   user.sessions = [];
   await user.save();
 };
-*** End of File
