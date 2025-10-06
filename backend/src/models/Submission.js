@@ -18,16 +18,37 @@ const testCaseResultSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const judge0Schema = new mongoose.Schema(
+  {
+    jobId: { type: String },
+    rawPayload: { type: mongoose.Schema.Types.Mixed }
+  },
+  { _id: false }
+);
+
 const submissionSchema = new mongoose.Schema(
   {
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     problem: { type: mongoose.Schema.Types.ObjectId, ref: 'Problem', required: true },
     languageId: { type: Number, required: true },
     sourceCode: { type: String, required: true },
-    verdict: { type: String, default: 'Pending' },
-    testCaseResults: { type: [testCaseResultSchema], default: [] }
+    sourceLen: { type: Number, default: 0 },
+    verdict: {
+      type: String,
+      enum: ['PENDING', 'AC', 'WA', 'TLE', 'RTE', 'CE', 'MLE', 'PE', 'IE'],
+      default: 'PENDING'
+    },
+    execTimeMs: { type: Number, default: null },
+    memoryKb: { type: Number, default: null },
+    testCaseResults: { type: [testCaseResultSchema], default: [] },
+    judge0: { type: judge0Schema, default: () => ({}) },
+    submittedAt: { type: Date, default: Date.now }
   },
   { timestamps: true }
 );
+
+submissionSchema.index({ user: 1, submittedAt: -1 });
+submissionSchema.index({ problem: 1, submittedAt: -1 });
 
 const Submission = mongoose.model('Submission', submissionSchema);
 

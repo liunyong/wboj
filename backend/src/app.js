@@ -1,13 +1,18 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import morgan from 'morgan';
 
+import authRoutes from './routes/authRoutes.js';
+import dashboardRoutes from './routes/dashboardRoutes.js';
+import languageRoutes from './routes/languageRoutes.js';
 import problemRoutes from './routes/problemRoutes.js';
 import submissionRoutes from './routes/submissionRoutes.js';
-import languageRoutes from './routes/languageRoutes.js';
+import userRoutes from './routes/userRoutes.js';
 
 const app = express();
 
+app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
@@ -16,17 +21,28 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.use('/api/auth', authRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/problems', problemRoutes);
 app.use('/api/submissions', submissionRoutes);
 app.use('/api/languages', languageRoutes);
+app.use('/api/users', userRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(err.status || 500).json({ message: err.message || 'Internal Server Error' });
+  const status = err.status && Number.isInteger(err.status) ? err.status : 500;
+  const body = {
+    code: err.code || (status >= 500 ? 'INTERNAL_SERVER_ERROR' : 'ERROR'),
+    message: err.message || 'Internal Server Error'
+  };
+  if (err.details) {
+    body.details = err.details;
+  }
+  res.status(status).json(body);
 });
 
 app.use((req, res) => {
-  res.status(404).json({ message: 'Not Found' });
+  res.status(404).json({ code: 'NOT_FOUND', message: 'Not Found' });
 });
 
 export default app;

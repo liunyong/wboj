@@ -1,6 +1,6 @@
 # Judge0-enabled Playground
 
-Full-stack example that uses a Node.js + MongoDB backend with Judge0 for code execution and a React frontend for interacting with problems and submissions.
+Full-stack online judge featuring a Node.js + MongoDB backend with Judge0 execution, JWT authentication with role-based access control, and a React dashboard for contestants and administrators.
 
 ## Project Structure
 
@@ -21,21 +21,24 @@ Full-stack example that uses a Node.js + MongoDB backend with Judge0 for code ex
 cd backend
 npm install
 cp .env.example .env
-# edit .env with your Mongo URI and Judge0 URL
-npm run seed     # optional: load sample problem
-npm run dev      # start the API on http://localhost:4000
+# Set MONGO_URI, JUDGE0_URL, ACCESS/REFRESH secrets, and optional admin seed credentials
+npm run seed              # creates admin account + sample problem
+npm run dev               # start the API on http://localhost:4000
 ```
 
 ### Key Endpoints
 
-- `GET /api/health` — Basic health check.
-- `GET /api/languages` — Proxy of Judge0 language catalogue (cached).
-- `GET /api/problems` — Fetch available problems.
-- `POST /api/problems` — Create a problem (expects title, slug, description, testCases).
-- `POST /api/submissions` — Submit solution `{ problemId, languageId, sourceCode }`.
-- `GET /api/submissions` — Recent submissions with verdicts.
+- `POST /api/auth/register` / `POST /api/auth/login` — Issue access + refresh tokens.
+- `POST /api/auth/refresh` — Rotate tokens when the access token expires.
+- `GET /api/auth/me` — Session info for the currently authenticated user.
+- `GET /api/problems` — List public problems (admins can request `visibility=all`).
+- `POST /api/problems` — Admin-only creation with difficulty, tags, samples, visibility.
+- `POST /api/submissions` — Authenticated submission `{ problemId, languageId, sourceCode }`.
+- `GET /api/submissions/mine` — Personal submission history.
+- `GET /api/dashboard/me/summary` + `/me/heatmap` — Yearly stats for dashboards.
+- `GET /api/users` — Admin search, plus role/status management via `PATCH` endpoints.
 
-Each submission triggers Judge0 for every stored test case and persists the results.
+The backend queues Judge0 runs per test case, stores per-case verdicts, updates per-problem counters, and maintains a daily submission cache (`user_stats_daily`) for dashboard heatmaps.
 
 ## Frontend Setup
 
@@ -47,7 +50,14 @@ cp .env.example .env
 npm run dev      # Vite dev server on http://localhost:5173
 ```
 
-The UI dynamically fetches Judge0 languages, lets you pick a problem, select a supported language, edit code, submit, and review Judge0 outputs alongside submission history.
+The UI wraps React Router with TanStack Query and an auth context to offer:
+
+- Login/register flow with token persistence and automatic refresh.
+- Header that swaps between “Login” and a user dropdown (Dashboard, Settings, Logout).
+- Dashboard heatmap + summary cards powered by `/api/dashboard` endpoints.
+- Profile + password update flows under Settings.
+- Admin panel with problem CRUD/visibility toggles and user role/status management.
+- Problem detail pages with submission forms, samples, and personal submission history.
 
 ## Running with Docker Compose
 
@@ -72,10 +82,10 @@ Any time you need a clean database with the starter “A+B Problem”, run:
 npm run seed --prefix backend
 ```
 
-The seed clears existing problems and inserts one that expects the sum of two integers.
+The seed clears existing problems, inserts a sample addition challenge, and provisions an admin account based on `ADMIN_USERNAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` in the backend `.env`.
 
 ## Next Steps
 
-- Add authentication/authorization for problem management.
-- Expand problem schema with difficulty, tags, and IO constraints.
-- Queue submissions asynchronously instead of sequential Judge0 blocking calls.
+- Harden refresh-token storage (e.g., persistent session store or Redis revocation).
+- Add end-to-end tests for login → submit → dashboard refresh.
+- Streamline Judge0 execution with async workers and webhooks.

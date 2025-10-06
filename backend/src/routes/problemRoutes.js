@@ -6,6 +6,7 @@ import {
   updateProblem,
   deleteProblem
 } from '../controllers/problemController.js';
+import { authenticateOptional, requireAuth, requireRole } from '../middlewares/auth.js';
 import validate from '../middlewares/validate.js';
 import {
   createProblemSchema,
@@ -18,14 +19,33 @@ import {
 
 const router = Router();
 
-router.get('/', validate({ query: listProblemsQuerySchema }), getProblems);
+router.get('/', authenticateOptional, validate({ query: listProblemsQuerySchema }), getProblems);
 router.get(
   '/:idOrSlug',
+  authenticateOptional,
   validate({ params: problemIdentifierParamSchema, query: getProblemQuerySchema }),
   getProblem
 );
-router.post('/', validate({ body: createProblemSchema }), createProblem);
-router.patch('/:id', validate({ params: problemIdParamSchema, body: updateProblemSchema }), updateProblem);
-router.delete('/:id', validate({ params: problemIdParamSchema }), deleteProblem);
+router.post(
+  '/',
+  requireAuth,
+  requireRole('admin'),
+  validate({ body: createProblemSchema }),
+  createProblem
+);
+router.patch(
+  '/:id',
+  requireAuth,
+  requireRole('admin'),
+  validate({ params: problemIdParamSchema, body: updateProblemSchema }),
+  updateProblem
+);
+router.delete(
+  '/:id',
+  requireAuth,
+  requireRole('admin'),
+  validate({ params: problemIdParamSchema }),
+  deleteProblem
+);
 
 export default router;
