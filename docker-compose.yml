@@ -3,11 +3,20 @@ version: "3.9"
 services:
   mongo:
     image: mongo:6.0
+    container_name: mongo
     restart: unless-stopped
     ports:
       - "27017:27017"
     volumes:
       - mongo-data:/data/db
+
+  mongo-express:
+    image: mongo-express
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongo
 
   backend:
     build: ./backend
