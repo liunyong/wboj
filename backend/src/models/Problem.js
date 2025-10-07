@@ -23,7 +23,7 @@ const sampleSchema = new mongoose.Schema(
 const problemSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
-    slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    problemId: { type: Number, required: true, unique: true, min: 100000, immutable: true },
     statement: { type: String, required: true },
     inputFormat: { type: String },
     outputFormat: { type: String },
@@ -38,8 +38,13 @@ const problemSchema = new mongoose.Schema(
       default: [],
       set: (values = []) => values.map((tag) => tag.trim()).filter(Boolean)
     },
+    algorithms: {
+      type: [String],
+      default: [],
+      set: (values = []) =>
+        Array.from(new Set(values.map((algorithm) => algorithm.trim()).filter(Boolean)))
+    },
     samples: { type: [sampleSchema], default: [] },
-    problemNumber: { type: Number, required: true, unique: true, min: 1, immutable: true },
     judge0LanguageIds: { type: [Number], default: [71] },
     testCases: { type: [testCaseSchema], default: [] },
     submissionCount: { type: Number, default: 0, min: 0 },

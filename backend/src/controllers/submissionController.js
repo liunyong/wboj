@@ -77,7 +77,7 @@ const sanitizeSubmission = (submission) => ({
     ? {
         id: submission.problem._id.toString(),
         title: submission.problem.title,
-        slug: submission.problem.slug,
+        problemId: submission.problem.problemId,
         difficulty: submission.problem.difficulty
       }
     : undefined,
@@ -208,7 +208,7 @@ export const createSubmission = async (req, res, next) => {
     });
 
     const populated = await Submission.findById(submission._id)
-      .populate('problem', 'title slug difficulty')
+      .populate('problem', 'title problemId difficulty')
       .populate('user', 'username');
 
     res.status(201).json({ submission: sanitizeSubmission(populated) });
@@ -233,7 +233,7 @@ export const listMySubmissions = async (req, res, next) => {
     }
 
     const submissions = await Submission.find(filters)
-      .populate('problem', 'title slug difficulty')
+      .populate('problem', 'title problemId difficulty')
       .sort({ submittedAt: -1 })
       .limit(limit);
 
@@ -261,7 +261,7 @@ export const listSubmissions = async (req, res, next) => {
     }
 
     const submissions = await Submission.find(filters)
-      .populate('problem', 'title slug difficulty')
+      .populate('problem', 'title problemId difficulty')
       .populate('user', 'username email role')
       .sort({ submittedAt: -1 })
       .limit(limit);
@@ -276,7 +276,7 @@ export const getSubmission = async (req, res, next) => {
   try {
     const { id } = req.validated?.params || req.params;
     const submission = await Submission.findById(id)
-      .populate('problem', 'title slug difficulty')
+      .populate('problem', 'title problemId difficulty')
       .populate('user', 'username');
 
     if (!submission) {

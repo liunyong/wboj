@@ -8,6 +8,7 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "seed": "node scripts/seed.js",
+    "backfill:problem-ids": "node scripts/backfill-problem-ids.js",
     "test": "vitest run"
   },
   "dependencies": {

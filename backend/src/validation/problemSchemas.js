@@ -1,7 +1,4 @@
-import mongoose from 'mongoose';
 import { z } from 'zod';
-
-const isObjectId = (value) => mongoose.isValidObjectId(value);
 
 const sampleSchema = z.object({
   input: z.string().min(1, 'Sample input is required'),
@@ -52,28 +49,24 @@ export const listProblemsQuerySchema = z
   })
   .strict();
 
-export const problemIdentifierParamSchema = z
+export const problemIdParamSchema = z
   .object({
-    idOrSlug: z.string().min(1, 'Problem identifier is required')
+    problemId: z
+      .coerce.number()
+      .int()
+      .min(1, 'Problem id must be a positive integer')
   })
   .strict();
 
-export const problemIdParamSchema = z
+export const legacySlugParamSchema = z
   .object({
-    id: z
-      .string()
-      .min(1, 'Problem id is required')
-      .refine((value) => isObjectId(value), 'Problem id must be a valid ObjectId')
+    slug: z.string().min(1, 'Problem slug is required')
   })
   .strict();
 
 export const createProblemSchema = z
   .object({
     title: z.string().min(1, 'Title is required'),
-    slug: z
-      .string()
-      .min(1, 'Slug is required')
-      .regex(/^[a-z0-9-]+$/, 'Slug may only contain lowercase letters, numbers, and hyphens'),
     statement: z.string().min(1, 'Statement is required'),
     inputFormat: z.string().optional().transform((value) => value || undefined),
     outputFormat: z.string().optional().transform((value) => value || undefined),
@@ -85,44 +78,29 @@ export const createProblemSchema = z
     testCases: z
       .array(testCaseSchema)
       .min(1, 'At least one test case is required'),
-    isPublic: z.boolean().optional().default(true)
+    isPublic: z.boolean().optional().default(true),
+    algorithms: z
+      .array(z.string().min(1, 'Algorithm name is required').max(60, 'Algorithm name is too long'))
+      .max(10, 'A maximum of 10 algorithms is supported')
+      .optional()
+      .default([])
+      .transform((value) =>
+        Array.from(new Set(value.map((item) => item.trim()).filter((item) => item !== '')))
+      )
   })
   .strict();
-
-export const updateProblemSchema = z
-  .object({
-    title: z.string().min(1, 'Title is required').optional(),
-    slug: z
-      .string()
-      .min(1, 'Slug is required')
-      .regex(/^[a-z0-9-]+$/, 'Slug may only contain lowercase letters, numbers, and hyphens')
-      .optional(),
-    statement: z.string().min(1, 'Statement is required').optional(),
-    inputFormat: z.string().optional().transform((value) => value || undefined),
-    outputFormat: z.string().optional().transform((value) => value || undefined),
-    constraints: z.string().optional().transform((value) => value || undefined),
-    difficulty: z.enum(['BASIC', 'EASY', 'MEDIUM', 'HARD']).optional(),
-    tags: tagsArraySchema.optional(),
-    samples: z.array(sampleSchema).optional(),
-    judge0LanguageIds: judge0LanguageIdsSchema.optional(),
-    testCases: z.array(testCaseSchema).optional(),
-    isPublic: z.boolean().optional()
-  })
-  .strict()
-  .refine((data) => Object.keys(data).length > 0, {
-    message: 'Provide at least one field to update'
-  })
-  .refine(
-    (data) => !(data.testCases && data.testCases.length === 0),
-    'testCases cannot be empty when provided'
-  )
-  .refine(
-    (data) => !(data.judge0LanguageIds && data.judge0LanguageIds.length === 0),
-    'judge0LanguageIds cannot be empty when provided'
-  );
 
 export const getProblemQuerySchema = z
   .object({
     includePrivate: z.coerce.boolean().optional().default(false)
+  })
+  .strict();
+
+export const updateVisibilitySchema = z
+  .object({
+    isPublic: z.boolean({
+      required_error: 'isPublic is required',
+      invalid_type_error: 'isPublic must be a boolean'
+    })
   })
   .strict();

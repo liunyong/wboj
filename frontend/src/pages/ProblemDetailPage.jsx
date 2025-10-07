@@ -1,25 +1,28 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
 import { formatDateTime } from '../utils/date.js';
+import ConfirmDialog from '../components/ConfirmDialog.jsx';
 
 function ProblemDetailPage() {
-  const { slug } = useParams();
+  const { problemId } = useParams();
   const { authFetch, user } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [languageId, setLanguageId] = useState('');
   const [sourceCode, setSourceCode] = useState('');
   const [message, setMessage] = useState(null);
+  const [pendingDeletion, setPendingDeletion] = useState(false);
 
   const includePrivate = user?.role === 'admin' ? 'true' : 'false';
 
   const problemQuery = useQuery({
-    queryKey: ['problem', slug, includePrivate],
+    queryKey: ['problem', problemId, includePrivate],
     queryFn: async () => {
       const suffix = includePrivate === 'true' ? '?includePrivate=true' : '';
-      const response = await authFetch(`/api/problems/${slug}${suffix}`);
+      const response = await authFetch(`/api/problems/${problemId}${suffix}`);
       if (!response) {
         throw new Error('Problem not found');
       }
@@ -33,7 +36,7 @@ function ProblemDetailPage() {
   });
 
   const submissionsQuery = useQuery({
-    queryKey: ['submissions', 'mine', slug],
+    queryKey: ['submissions', 'mine', problemId],
     queryFn: async () => {
       const response = await authFetch('/api/submissions/mine');
       return response?.items ?? [];
@@ -64,6 +67,29 @@ function ProblemDetailPage() {
     }
   });
 
+  const toggleVisibilityMutation = useMutation({
+    mutationFn: ({ problemId: targetProblemId, isPublic }) =>
+      authFetch(`/api/problems/${targetProblemId}/visibility`, {
+        method: 'PATCH',
+        body: { isPublic }
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['problem', problemId] });
+      queryClient.invalidateQueries({ queryKey: ['problems'] });
+    }
+  });
+
+  const deleteProblemMutation = useMutation({
+    mutationFn: (targetProblemId) =>
+      authFetch(`/api/problems/${targetProblemId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      setPendingDeletion(false);
+      queryClient.invalidateQueries({ queryKey: ['problems'] });
+      navigate('/');
+    }
+  });
+
+  const isAdmin = user?.role === 'admin';
   const problem = problemQuery.data;
   const languages = languagesQuery.data ?? [];
 
@@ -88,7 +114,10 @@ function ProblemDetailPage() {
         <div className="problem-detail">
           <header className="problem-detail__header">
             <div>
-              <h1>{problem.title}</h1>
+              <h1>
+                {problem.title}
+                <span className="problem-detail__id">#{problem.problemId}</span>
+              </h1>
               <div className="problem-labels">
                 <span className={`difficulty-tag difficulty-${problem.difficulty?.toLowerCase()}`}>
                   {problem.difficulty}
@@ -96,9 +125,36 @@ function ProblemDetailPage() {
                 {!problem.isPublic && <span className="problem-card__badge">Private</span>}
               </div>
             </div>
-            <div className="problem-stats">
-              <span>{problem.submissionCount ?? 0} submissions</span>
-              <span>{problem.acceptedSubmissionCount ?? 0} accepted</span>
+            <div className="problem-detail__meta">
+              <div className="problem-stats">
+                <span>{problem.submissionCount ?? 0} submissions</span>
+                <span>{problem.acceptedSubmissionCount ?? 0} accepted</span>
+              </div>
+              {isAdmin && (
+                <div className="problem-detail__actions">
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={toggleVisibilityMutation.isLoading}
+                    onClick={() =>
+                      toggleVisibilityMutation.mutate({
+                        problemId: problem.problemId,
+                        isPublic: !problem.isPublic
+                      })
+                    }
+                  >
+                    {problem.isPublic ? 'Make Private' : 'Make Public'}
+                  </button>
+                  <button
+                    type="button"
+                    className="danger"
+                    onClick={() => setPendingDeletion(true)}
+                    disabled={deleteProblemMutation.isLoading}
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
             </div>
           </header>
 
@@ -244,7 +300,10 @@ function ProblemDetailPage() {
                   <tbody>
                     {submissionsQuery.data.map((submission) => (
                       <tr key={submission.id}>
-                        <td>{submission.problem?.title || problem.title}</td>
+                        <td>
+                          {submission.problem?.title || problem.title} (
+                          #{submission.problem?.problemId ?? problem.problemId})
+                        </td>
                         <td className={`verdict verdict-${submission.verdict?.toLowerCase()}`}>
                           {submission.verdict}
                         </td>
@@ -259,6 +318,24 @@ function ProblemDetailPage() {
           )}
         </div>
       )}
+      <ConfirmDialog
+        open={pendingDeletion}
+        title="Delete this problem?"
+        confirmLabel="Delete"
+        onCancel={() => setPendingDeletion(false)}
+        onConfirm={() => {
+          if (problem) {
+            deleteProblemMutation.mutate(problem.problemId);
+          }
+        }}
+        isConfirming={deleteProblemMutation.isLoading}
+      >
+        {problem ? (
+          <p>
+            This cannot be undone. <strong>{problem.title}</strong> (#{problem.problemId})
+          </p>
+        ) : null}
+      </ConfirmDialog>
     </section>
   );
 }

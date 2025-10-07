@@ -29,23 +29,27 @@ import { authenticateAsAdmin, authenticateAsUser, authHeader } from './utils.js'
 
 let mongoServer;
 
-let problemNumberCounter = 1;
+let problemIdCounter = 100000;
 
-const buildProblem = (overrides = {}) => ({
-  title: 'Submission Problem',
-  slug: `submission-problem-${Math.random().toString(36).slice(2, 8)}`,
-  statement: 'Sum two numbers.',
-  difficulty: 'BASIC',
-  problemNumber: problemNumberCounter++,
-  judge0LanguageIds: [71],
-  author: new mongoose.Types.ObjectId(),
-  isPublic: true,
-  testCases: [
-    { input: '1 2', expectedOutput: '3', isPublic: true },
-    { input: '5 7', expectedOutput: '12', isPublic: false }
-  ],
-  ...overrides
-});
+const buildProblem = (overrides = {}) => {
+  const problemId = overrides.problemId ?? problemIdCounter++;
+
+  return {
+    title: 'Submission Problem',
+    statement: 'Sum two numbers.',
+    difficulty: 'BASIC',
+    problemId,
+    judge0LanguageIds: [71],
+    author: new mongoose.Types.ObjectId(),
+    isPublic: true,
+    algorithms: ['Arithmetic'],
+    testCases: [
+      { input: '1 2', expectedOutput: '3', isPublic: true },
+      { input: '5 7', expectedOutput: '12', isPublic: false }
+    ],
+    ...overrides
+  };
+};
 
 beforeAll(async () => {
   mongoServer = await MongoMemoryServer.create({ instance: { ip: '127.0.0.1', port: 0 } });
@@ -64,13 +68,13 @@ beforeEach(async () => {
   await Submission.deleteMany({});
   await UserStatsDaily.deleteMany({});
   vi.clearAllMocks();
-  problemNumberCounter = 1;
+  problemIdCounter = 100000;
 });
 
 describe('Submission routes with auth', () => {
   it('creates a submission for an authenticated user', async () => {
     const { user, tokens } = await authenticateAsUser();
-    const problem = await Problem.create(buildProblem({ problemNumber: 1, slug: 'sum-problem' }));
+    const problem = await Problem.create(buildProblem({ problemId: 100000 }));
 
     const response = await request(app)
       .post('/api/submissions')
@@ -122,7 +126,8 @@ describe('Submission routes with auth', () => {
 
     expect(myResponse.status).toBe(200);
     expect(myResponse.body.items).toHaveLength(1);
-    expect(myResponse.body.items[0].problem.slug).toBe(problem.slug);
+    expect(myResponse.body.items[0].problem.problemId).toBe(problem.problemId);
+    expect(myResponse.body.items[0].problem.title).toBe(problem.title);
     expect(myResponse.body.items[0].user).toBeUndefined();
 
     const adminSession = await authenticateAsAdmin();

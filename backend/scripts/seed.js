@@ -5,6 +5,8 @@ import { fileURLToPath } from 'url';
 
 import connectDatabase from '../src/config/database.js';
 import Problem from '../src/models/Problem.js';
+import Counter from '../src/models/Counter.js';
+import { getNextSequence } from '../src/services/idService.js';
 import User from '../src/models/User.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -41,22 +43,24 @@ const seed = async () => {
     console.log(`Admin user ${adminEmail} already exists`);
   }
 
-  await Problem.deleteMany({});
+  await Promise.all([Problem.deleteMany({}), Counter.deleteMany({ _id: { $in: ['problemId'] } })]);
+
+  const problemId = await getNextSequence('problemId');
 
   const problem = await Problem.create({
     title: 'A+B Problem',
-    slug: 'a-plus-b',
     statement: 'Given two integers, output their sum.',
     inputFormat: 'Two integers a and b (|a|, |b| \le 10^9).',
     outputFormat: 'Print a single integer, the sum of a and b.',
     constraints: '0 < |a|, |b| \le 10^9',
     difficulty: 'BASIC',
     tags: ['math', 'introduction'],
+    algorithms: ['Arithmetic', 'Ad-hoc'],
     samples: [
       { input: '1 2', output: '3', explanation: '1 + 2 = 3' },
       { input: '4 5', output: '9', explanation: '4 + 5 = 9' }
     ],
-    problemNumber: 1,
+    problemId,
     judge0LanguageIds: [71, 63, 52],
     author: adminUser?._id ?? null,
     isPublic: true,

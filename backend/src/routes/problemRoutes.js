@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import {
   getProblems,
-  getProblem,
+  getProblemById,
+  getProblemBySlug,
   createProblem,
-  updateProblem,
-  deleteProblem
+  updateProblemVisibility,
+  deleteProblem,
+  getProblemAlgorithms
 } from '../controllers/problemController.js';
 import { authenticateOptional, requireAuth, requireRole } from '../middlewares/auth.js';
 import validate from '../middlewares/validate.js';
@@ -13,18 +15,25 @@ import {
   getProblemQuerySchema,
   listProblemsQuerySchema,
   problemIdParamSchema,
-  problemIdentifierParamSchema,
-  updateProblemSchema
+  legacySlugParamSchema,
+  updateVisibilitySchema
 } from '../validation/problemSchemas.js';
 
 const router = Router();
 
 router.get('/', authenticateOptional, validate({ query: listProblemsQuerySchema }), getProblems);
 router.get(
-  '/:idOrSlug',
+  '/algorithms',
+  requireAuth,
+  requireRole('admin'),
+  getProblemAlgorithms
+);
+router.get('/slug/:slug', validate({ params: legacySlugParamSchema }), getProblemBySlug);
+router.get(
+  '/:problemId',
   authenticateOptional,
-  validate({ params: problemIdentifierParamSchema, query: getProblemQuerySchema }),
-  getProblem
+  validate({ params: problemIdParamSchema, query: getProblemQuerySchema }),
+  getProblemById
 );
 router.post(
   '/',
@@ -34,14 +43,14 @@ router.post(
   createProblem
 );
 router.patch(
-  '/:id',
+  '/:problemId/visibility',
   requireAuth,
   requireRole('admin'),
-  validate({ params: problemIdParamSchema, body: updateProblemSchema }),
-  updateProblem
+  validate({ params: problemIdParamSchema, body: updateVisibilitySchema }),
+  updateProblemVisibility
 );
 router.delete(
-  '/:id',
+  '/:problemId',
   requireAuth,
   requireRole('admin'),
   validate({ params: problemIdParamSchema }),

@@ -3,7 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout.jsx';
 import RequireAdmin from './components/RequireAdmin.jsx';
 import RequireAuth from './components/RequireAuth.jsx';
-import AdminProblemsPage from './pages/AdminProblemsPage.jsx';
+import AdminCreatePage from './pages/AdminCreatePage.jsx';
 import AdminUsersPage from './pages/AdminUsersPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import HomePage from './pages/HomePage.jsx';
@@ -19,7 +19,7 @@ function App() {
         <Route index element={<HomePage />} />
         <Route path="login" element={<LoginPage />} />
         <Route path="register" element={<RegisterPage />} />
-        <Route path="problems/:slug" element={<ProblemDetailPage />} />
+        <Route path="problems/:problemId" element={<ProblemDetailPage />} />
 
         <Route
           path="dashboard"
@@ -40,10 +40,10 @@ function App() {
         />
 
         <Route
-          path="admin"
+          path="admin/create"
           element={
             <RequireAdmin>
-              <AdminProblemsPage />
+              <AdminCreatePage />
             </RequireAdmin>
           }
         />

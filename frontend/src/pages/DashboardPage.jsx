@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 
 import Heatmap from '../components/Heatmap.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -92,7 +93,15 @@ function DashboardPage() {
             <tbody>
               {submissionsQuery.data.map((submission) => (
                 <tr key={submission.id}>
-                  <td>{submission.problem?.title ?? submission.problem?.slug ?? '—'}</td>
+                  <td>
+                    {submission.problem?.title && submission.problem?.problemId ? (
+                      <Link to={`/problems/${submission.problem.problemId}`}>
+                        {submission.problem.title} (#{submission.problem.problemId})
+                      </Link>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
                   <td className={`verdict verdict-${submission.verdict?.toLowerCase()}`}>
                     {submission.verdict}
                   </td>

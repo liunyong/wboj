@@ -38,6 +38,20 @@ button:hover {
   background: #1d4ed8;
 }
 
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+button.secondary {
+  background: rgba(15, 23, 42, 0.08);
+  color: #0f172a;
+}
+
+button.secondary:hover {
+  background: rgba(15, 23, 42, 0.16);
+}
+
 button.danger {
   background: #ef4444;
 }
@@ -133,53 +147,55 @@ textarea {
   color: #0f172a;
 }
 
-.user-menu {
+.user-popover {
   position: relative;
 }
 
-.user-menu summary {
-  list-style: none;
-  cursor: pointer;
+.user-popover__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(148, 163, 184, 0.15);
+  color: inherit;
+  padding: 0.45rem 0.85rem;
+  border-radius: 0.5rem;
   font-weight: 600;
 }
 
-.user-menu summary::-webkit-details-marker {
-  display: none;
+.user-popover__trigger:hover {
+  background: rgba(148, 163, 184, 0.3);
 }
 
-.user-menu[open] summary::after {
-  content: '▲';
-  margin-left: 0.5rem;
-  font-size: 0.75rem;
+.user-popover__caret {
+  font-size: 0.8rem;
 }
 
-.user-menu summary::after {
-  content: '▼';
-  margin-left: 0.5rem;
-  font-size: 0.75rem;
-}
-
-.user-menu__items {
+.user-popover__menu {
   position: absolute;
   right: 0;
   top: calc(100% + 0.5rem);
   background: #fff;
   color: #0f172a;
-  border-radius: 0.65rem;
+  border-radius: 0.75rem;
   padding: 0.75rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18);
-  min-width: 180px;
+  min-width: 200px;
+  box-shadow: 0 20px 38px rgba(15, 23, 42, 0.18);
+  z-index: 20;
 }
 
-.user-menu__items button {
+.user-popover__menu a {
+  font-weight: 500;
+}
+
+.user-popover__logout {
   background: transparent;
   color: #ef4444;
   padding: 0;
-  justify-content: flex-start;
   text-align: left;
+  justify-content: flex-start;
 }
 
 .app-main {
@@ -244,6 +260,82 @@ textarea {
   gap: 1.25rem;
 }
 
+.problem-table-wrapper {
+  background: #fff;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+  overflow-x: auto;
+}
+
+.problem-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+
+.problem-table th,
+.problem-table td {
+  padding: 0.85rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  background: #fff;
+}
+
+.problem-table th {
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+.problem-table tr:nth-child(even) td {
+  background: #f8fafc;
+}
+
+.problem-table__id {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.problem-table__title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.problem-table__badge {
+  display: inline-flex;
+  align-items: center;
+  background: #f97316;
+  color: #fff;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.problem-table__algorithms {
+  font-size: 0.85rem;
+  color: #475569;
+  margin-top: 0.1rem;
+}
+
+.problem-table__actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.problem-table__empty {
+  padding: 1.5rem 0;
+  text-align: center;
+  color: #475569;
+}
+
 .problem-card {
   position: relative;
   background: #fff;
@@ -271,6 +363,15 @@ textarea {
   font-weight: 600;
   font-size: 0.9rem;
   text-transform: uppercase;
+}
+
+.difficulty-tag {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  gap: 0.25rem;
 }
 
 .problem-card__meta {
@@ -323,10 +424,29 @@ textarea {
   flex-wrap: wrap;
 }
 
+.problem-detail__id {
+  margin-left: 0.5rem;
+  font-size: 1rem;
+  color: #64748b;
+}
+
 .problem-labels {
   display: flex;
   gap: 0.75rem;
   align-items: center;
+}
+
+.problem-detail__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.problem-detail__actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .problem-stats {
@@ -622,6 +742,92 @@ textarea {
   font-weight: 500;
 }
 
+.algorithm-field {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.algorithm-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.35rem;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  border-radius: 0.5rem;
+  background: #fff;
+  min-height: 2.5rem;
+  align-items: center;
+}
+
+.algorithm-chips input {
+  flex: 1;
+  min-width: 160px;
+  border: none;
+  padding: 0.4rem;
+  box-shadow: none;
+  outline: none;
+}
+
+.algorithm-chips input:focus {
+  box-shadow: none;
+}
+
+.algorithm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #e2e8f0;
+  color: #0f172a;
+  border-radius: 999px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+.algorithm-chip button {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  line-height: 1;
+}
+
+.algorithm-suggestions {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  background: #fff;
+  border-radius: 0.65rem;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.14);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 220px;
+  z-index: 12;
+}
+
+.algorithm-suggestions button {
+  background: transparent;
+  color: #0f172a;
+  padding: 0.6rem 0.85rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 0;
+}
+
+.algorithm-suggestions button:hover {
+  background: #f1f5f9;
+}
+
+.algorithm-suggestions button:last-child {
+  border-bottom: none;
+}
+
+.algorithm-helper {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
 .admin-page .admin-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -668,6 +874,41 @@ textarea {
 .admin-actions {
   display: flex;
   gap: 0.5rem;
+}
+
+.confirm-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  z-index: 40;
+}
+
+.confirm-modal {
+  background: #fff;
+  border-radius: 0.9rem;
+  padding: 1.5rem;
+  max-width: 420px;
+  width: min(420px, 100%);
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.18);
+}
+
+.confirm-modal h3 {
+  margin: 0 0 0.75rem;
+}
+
+.confirm-modal__content {
+  color: #475569;
+}
+
+.confirm-modal__actions {
+  margin-top: 1.5rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
 }
 
 .users-table button {
