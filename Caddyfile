@@ -1,0 +1,20 @@
+{
+  email liunyong@gmail.com
+}
+
+wboj.app {
+  encode zstd gzip
+
+  header {
+    Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    Referrer-Policy "no-referrer-when-downgrade"
+    Permissions-Policy "geolocation=(), microphone=(), camera=()"
+  }
+
+  @api path /api/*
+  reverse_proxy @api backend:4000
+
+  reverse_proxy frontend:80
+}
