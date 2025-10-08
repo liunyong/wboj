@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import app from '../src/app.js';
 import Problem from '../src/models/Problem.js';
+import Submission from '../src/models/Submission.js';
 import { authenticateAsAdmin, authenticateAsUser, authHeader } from './utils.js';
 
 let mongoServer;
@@ -53,7 +54,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  await Problem.deleteMany({});
+  await Promise.all([Problem.deleteMany({}), Submission.deleteMany({})]);
   problemIdCounter = 100000;
   problemNumberCounter = 1;
 });
@@ -135,5 +136,125 @@ describe('Problem routes with auth', () => {
     expect(adminResponse.status).toBe(200);
     expect(adminResponse.body.testCases).toHaveLength(2);
     expect(adminResponse.body.totalPoints).toBe(3);
+  });
+
+  it('allows admins to update problems via PUT while keeping identifiers immutable', async () => {
+    const original = await Problem.create(
+      buildProblem({
+        title: 'Original Title',
+        statement: 'Original statement.',
+        tags: ['math'],
+        algorithms: ['Arithmetic']
+      })
+    );
+
+    const { tokens: adminTokens } = await authenticateAsAdmin();
+
+    const response = await request(app)
+      .put(`/api/problems/${original.problemId}`)
+      .set(authHeader(adminTokens.accessToken))
+      .send({
+        title: ' Updated Title ',
+        statement: '<script>alert(1)</script>Safe statement',
+        inputFormat: '  Updated input format ',
+        outputFormat: 'Updated output format',
+        constraints: 'Updated constraints',
+        difficulty: 'MEDIUM',
+        tags: ['graphs', ' shortest path '],
+        algorithms: ['Graph Theory'],
+        isPublic: false,
+        judge0LanguageIds: [71, 75],
+        samples: [{ input: '1', output: '1', explanation: '  Example ' }],
+        testCases: [
+          { input: '1', output: '1', points: 10 },
+          { input: '2', output: '2', points: 5 }
+        ],
+        cpuTimeLimit: 1.5,
+        memoryLimit: 256
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.problemId).toBe(original.problemId);
+    expect(response.body.title).toBe('Updated Title');
+    expect(response.body.statement).toContain('&lt;script&gt;alert(1)&lt;/script&gt;Safe statement');
+    expect(response.body.inputFormat).toBe('Updated input format');
+    expect(response.body.tags).toEqual(['graphs', 'shortest path']);
+    expect(response.body.algorithms).toEqual(['Graph Theory']);
+    expect(response.body.judge0LanguageIds).toEqual([71, 75]);
+    expect(response.body.testCases).toHaveLength(2);
+    expect(response.body.samples[0].explanation).toBe('Example');
+  });
+
+  it('allows problem authors to update their own problems', async () => {
+    const session = await authenticateAsUser();
+    const authorId = new mongoose.Types.ObjectId(session.user.id);
+
+    const problem = await Problem.create(
+      buildProblem({
+        author: authorId,
+        title: 'Author Problem'
+      })
+    );
+
+    const response = await request(app)
+      .put(`/api/problems/${problem.problemId}`)
+      .set(authHeader(session.tokens.accessToken))
+      .send({
+        title: 'Author Updated',
+        statement: 'Updated by owner.',
+        difficulty: 'HARD'
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.title).toBe('Author Updated');
+    expect(response.body.difficulty).toBe('HARD');
+  });
+
+  it('rejects updates from users who are neither admin nor owner', async () => {
+    const owner = new mongoose.Types.ObjectId();
+    const problem = await Problem.create(buildProblem({ author: owner }));
+    const { tokens } = await authenticateAsUser();
+
+    const response = await request(app)
+      .put(`/api/problems/${problem.problemId}`)
+      .set(authHeader(tokens.accessToken))
+      .send({
+        title: 'Nope',
+        statement: 'Should be blocked'
+      });
+
+    expect(response.status).toBe(403);
+    expect(response.body.code).toBe('FORBIDDEN');
+  });
+
+  it('cascades submissions when a problem is deleted', async () => {
+    const { tokens: adminTokens } = await authenticateAsAdmin();
+    const author = new mongoose.Types.ObjectId();
+    const problem = await Problem.create(buildProblem({ author }));
+
+    await Submission.create([
+      {
+        user: author,
+        problem: problem._id,
+        languageId: 71,
+        sourceCode: 'print(1)',
+        verdict: 'AC'
+      },
+      {
+        user: author,
+        problem: problem._id,
+        languageId: 71,
+        sourceCode: 'print(2)',
+        verdict: 'WA'
+      }
+    ]);
+
+    const response = await request(app)
+      .delete(`/api/problems/${problem.problemId}`)
+      .set(authHeader(adminTokens.accessToken));
+
+    expect(response.status).toBe(204);
+    const remaining = await Submission.countDocuments({ problem: problem._id });
+    expect(remaining).toBe(0);
   });
 });

@@ -16,6 +16,7 @@ export const createUser = async ({
     username,
     email: email.toLowerCase(),
     passwordHash,
+    passwordChangedAt: new Date(),
     role,
     isActive
   });

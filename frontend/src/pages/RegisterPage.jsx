@@ -6,7 +6,12 @@ import { useAuth } from '../context/AuthContext.jsx';
 function RegisterPage() {
   const navigate = useNavigate();
   const { register } = useAuth();
-  const [form, setForm] = useState({ username: '', email: '', password: '' });
+  const [form, setForm] = useState({
+    username: '',
+    email: '',
+    password: '',
+    confirmPassword: ''
+  });
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -18,6 +23,10 @@ function RegisterPage() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
+    if (form.password !== form.confirmPassword) {
+      setError('Passwords must match.');
+      return;
+    }
     setIsSubmitting(true);
     try {
       await register(form);
@@ -68,6 +77,22 @@ function RegisterPage() {
               autoComplete="new-password"
             />
           </label>
+          <label>
+            Confirm Password
+            <input
+              type="password"
+              name="confirmPassword"
+              value={form.confirmPassword}
+              onChange={handleChange}
+              required
+              autoComplete="new-password"
+            />
+          </label>
+          {form.confirmPassword &&
+            form.password &&
+            form.password !== form.confirmPassword && (
+              <div className="form-message error">Passwords do not match.</div>
+            )}
           <button type="submit" disabled={isSubmitting}>
             {isSubmitting ? 'Creating…' : 'Register'}
           </button>

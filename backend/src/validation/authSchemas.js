@@ -1,23 +1,48 @@
 import { z } from 'zod';
 
+import { getPasswordStrengthIssues } from './passwordRules.js';
+
 const usernameSchema = z
   .string()
   .min(3, 'Username must be at least 3 characters')
   .max(32, 'Username must be 32 characters or fewer')
   .regex(/^[a-zA-Z0-9_]+$/, 'Username may only contain letters, numbers, and underscores');
 
-const passwordSchema = z
-  .string()
-  .min(8, 'Password must be at least 8 characters')
-  .max(128, 'Password must be 128 characters or fewer');
+const passwordFieldSchema = z.string({ required_error: 'Password is required' });
+const confirmPasswordFieldSchema = z.string({
+  required_error: 'Confirm password is required'
+});
 
 export const registerSchema = z
   .object({
     username: usernameSchema,
     email: z.string().email('Provide a valid email address'),
-    password: passwordSchema
+    password: passwordFieldSchema,
+    confirmPassword: confirmPasswordFieldSchema
   })
-  .strict();
+  .strict()
+  .superRefine((data, ctx) => {
+    const issues = getPasswordStrengthIssues(data.password, {
+      username: data.username,
+      email: data.email
+    });
+
+    issues.forEach((message) =>
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message,
+        path: ['password']
+      })
+    );
+
+    if (data.password !== data.confirmPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Passwords do not match',
+        path: ['confirmPassword']
+      });
+    }
+  });
 
 export const loginSchema = z
   .object({
@@ -63,10 +88,27 @@ export const profileUpdateSchema = z
 
 export const passwordUpdateSchema = z
   .object({
-    currentPassword: passwordSchema,
-    newPassword: passwordSchema
+    currentPassword: passwordFieldSchema,
+    newPassword: passwordFieldSchema,
+    confirmNewPassword: z.string({
+      required_error: 'Confirm new password is required'
+    })
   })
   .strict()
-  .refine((data) => data.currentPassword !== data.newPassword, {
-    message: 'New password must differ from current password'
+  .superRefine((data, ctx) => {
+    if (data.currentPassword === data.newPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'New password must differ from current password',
+        path: ['newPassword']
+      });
+    }
+
+    if (data.newPassword !== data.confirmNewPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'New password and confirmation must match',
+        path: ['confirmNewPassword']
+      });
+    }
   });

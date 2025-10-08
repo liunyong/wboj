@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
 import { formatDateTime } from '../utils/date.js';
@@ -11,6 +11,7 @@ function ProblemDetailPage() {
   const { authFetch, user } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
   const [languageId, setLanguageId] = useState('');
   const [sourceCode, setSourceCode] = useState('');
   const [message, setMessage] = useState(null);
@@ -97,11 +98,26 @@ function ProblemDetailPage() {
     ? languages.filter((item) => problem.judge0LanguageIds.includes(item.id))
     : languages;
 
+  const problemAuthorRaw = problem?.author;
+  const problemAuthorId =
+    typeof problemAuthorRaw === 'object' && problemAuthorRaw !== null
+      ? problemAuthorRaw._id ?? problemAuthorRaw.toString?.()
+      : problemAuthorRaw;
+  const isOwner =
+    problemAuthorId && user?.id ? String(problemAuthorId) === String(user.id) : false;
+
   useEffect(() => {
     if (!languageId && allowedLanguages.length) {
       setLanguageId(String(allowedLanguages[0].id));
     }
   }, [allowedLanguages, languageId]);
+
+  useEffect(() => {
+    if (location.state?.flash) {
+      setMessage(location.state.flash);
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location, navigate]);
 
   const selectedLanguageId = languageId || (allowedLanguages[0]?.id ?? '');
   const testCaseCount = problem?.testCaseCount ?? problem?.testCases?.length ?? 0;
@@ -138,29 +154,40 @@ function ProblemDetailPage() {
                   {totalPoints ? ` · ${totalPoints} points` : ''}
                 </span>
               </div>
-              {isAdmin && (
+              {(isAdmin || isOwner) && (
                 <div className="problem-detail__actions">
                   <button
                     type="button"
                     className="secondary"
-                    disabled={toggleVisibilityMutation.isLoading}
-                    onClick={() =>
-                      toggleVisibilityMutation.mutate({
-                        problemId: problem.problemId,
-                        isPublic: !problem.isPublic
-                      })
-                    }
+                    onClick={() => navigate(`/problems/${problem.problemId}/edit`)}
                   >
-                    {problem.isPublic ? 'Make Private' : 'Make Public'}
+                    Edit
                   </button>
-                  <button
-                    type="button"
-                    className="danger"
-                    onClick={() => setPendingDeletion(true)}
-                    disabled={deleteProblemMutation.isLoading}
-                  >
-                    Delete
-                  </button>
+                  {isAdmin && (
+                    <>
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={toggleVisibilityMutation.isLoading}
+                        onClick={() =>
+                          toggleVisibilityMutation.mutate({
+                            problemId: problem.problemId,
+                            isPublic: !problem.isPublic
+                          })
+                        }
+                      >
+                        {problem.isPublic ? 'Make Private' : 'Make Public'}
+                      </button>
+                      <button
+                        type="button"
+                        className="danger"
+                        onClick={() => setPendingDeletion(true)}
+                        disabled={deleteProblemMutation.isLoading}
+                      >
+                        Delete
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -347,7 +374,9 @@ function ProblemDetailPage() {
       >
         {problem ? (
           <p>
-            This cannot be undone. <strong>{problem.title}</strong> (#{problem.problemId})
+            This will also remove all submissions for this problem. This action cannot be undone.
+            <br />
+            <strong>{problem.title}</strong> (#{problem.problemId})
           </p>
         ) : null}
       </ConfirmDialog>

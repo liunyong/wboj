@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import Submission from './Submission.js';
 
 const testCaseSchema = new mongoose.Schema(
   {
@@ -78,6 +79,37 @@ problemSchema.virtual('acceptanceRate').get(function acceptanceRateGetter() {
 
 problemSchema.set('toJSON', { virtuals: true });
 problemSchema.set('toObject', { virtuals: true });
+
+const deleteRelatedSubmissions = async (problemId) => {
+  if (!problemId) {
+    return;
+  }
+  await Submission.deleteMany({ problem: problemId });
+};
+
+problemSchema.pre('deleteOne', { document: true, query: false }, async function cascadeDelete(next) {
+  try {
+    await deleteRelatedSubmissions(this._id);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+const cascadeDeleteForQuery = async function cascadeDeleteForQuery(next) {
+  try {
+    const doc = await this.model.findOne(this.getFilter()).select('_id');
+    if (doc?._id) {
+      await deleteRelatedSubmissions(doc._id);
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+problemSchema.pre('deleteOne', { document: false, query: true }, cascadeDeleteForQuery);
+problemSchema.pre('findOneAndDelete', cascadeDeleteForQuery);
 
 const Problem = mongoose.model('Problem', problemSchema);
 

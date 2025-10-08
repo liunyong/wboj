@@ -9,6 +9,7 @@ import DashboardPage from './pages/DashboardPage.jsx';
 import HomePage from './pages/HomePage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import ProblemDetailPage from './pages/ProblemDetailPage.jsx';
+import ProblemEditPage from './pages/ProblemEditPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 
@@ -20,6 +21,14 @@ function App() {
         <Route path="login" element={<LoginPage />} />
         <Route path="register" element={<RegisterPage />} />
         <Route path="problems/:problemId" element={<ProblemDetailPage />} />
+        <Route
+          path="problems/:problemId/edit"
+          element={
+            <RequireAuth>
+              <ProblemEditPage />
+            </RequireAuth>
+          }
+        />
 
         <Route
           path="dashboard"

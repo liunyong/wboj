@@ -3,6 +3,7 @@ import { getNextSequence } from '../services/idService.js';
 import { ensureProblemNumbersBackfilled } from '../services/problemNumberService.js';
 import { parseTestCasesFromZip } from '../services/testCaseZipService.js';
 import { buildProblemSlug } from '../utils/problemSlug.js';
+import { sanitizeOptionalRichText, sanitizeRichText } from '../utils/sanitizeHtml.js';
 
 const sanitizeTestCases = (testCases = []) => {
   const sanitized = (testCases ?? [])
@@ -27,6 +28,19 @@ const sanitizeTestCases = (testCases = []) => {
   return sanitized.slice(0, 500);
 };
 
+const sanitizeSamples = (samples = []) =>
+  (Array.isArray(samples) ? samples : []).map((sample) => {
+    const normalized = {
+      input: sample.input,
+      output: sample.output
+    };
+    const explanation = sanitizeOptionalRichText(sample.explanation);
+    if (explanation) {
+      normalized.explanation = explanation;
+    }
+    return normalized;
+  });
+
 const normalizeTags = (tags = []) =>
   Array.from(new Set((Array.isArray(tags) ? tags : []).map((tag) => tag.trim()).filter(Boolean)));
 
@@ -36,6 +50,12 @@ const normalizeAlgorithms = (algorithms = []) =>
   );
 
 const isAdmin = (user) => user?.role === 'admin';
+
+const assignIfDefined = (target, key, value) => {
+  if (value !== undefined) {
+    target[key] = value;
+  }
+};
 
 export const getProblems = async (req, res, next) => {
   try {
@@ -166,6 +186,13 @@ export const createProblem = async (req, res, next) => {
     }
     const tags = normalizeTags(clientPayload.tags);
     const algorithms = normalizeAlgorithms(clientPayload.algorithms);
+    const sanitizedSamples = sanitizeSamples(clientPayload.samples);
+    const sanitizedInputFormat = sanitizeOptionalRichText(clientPayload.inputFormat);
+    const sanitizedOutputFormat = sanitizeOptionalRichText(clientPayload.outputFormat);
+    const sanitizedConstraints = sanitizeOptionalRichText(clientPayload.constraints);
+    const sanitizedStatement = sanitizeRichText(clientPayload.statement);
+    const normalizedTitle =
+      typeof clientPayload.title === 'string' ? clientPayload.title.trim() : clientPayload.title;
 
     await ensureProblemNumbersBackfilled();
 
@@ -174,19 +201,32 @@ export const createProblem = async (req, res, next) => {
     for (let attempt = 0; attempt < MAX_RETRIES; attempt += 1) {
       const problemId = await getNextSequence('problemId');
       const problemNumber = await getNextSequence('problemNumber');
-      const slug = buildProblemSlug(clientPayload.title, problemId);
+      const slug = buildProblemSlug(normalizedTitle, problemId);
 
       try {
-        const problem = await Problem.create({
-          ...clientPayload,
+        const problemData = {
+          title: normalizedTitle,
+          statement: sanitizedStatement,
+          difficulty: clientPayload.difficulty,
+          isPublic: typeof clientPayload.isPublic === 'boolean' ? clientPayload.isPublic : true,
           tags,
           algorithms,
+          samples: sanitizedSamples,
+          judge0LanguageIds: clientPayload.judge0LanguageIds,
+          testCases: sanitizedTestCases,
           author: req.user?.id ?? null,
           problemId,
           problemNumber,
-          slug,
-          testCases: sanitizedTestCases
-        });
+          slug
+        };
+
+        assignIfDefined(problemData, 'inputFormat', sanitizedInputFormat);
+        assignIfDefined(problemData, 'outputFormat', sanitizedOutputFormat);
+        assignIfDefined(problemData, 'constraints', sanitizedConstraints);
+        assignIfDefined(problemData, 'cpuTimeLimit', clientPayload.cpuTimeLimit);
+        assignIfDefined(problemData, 'memoryLimit', clientPayload.memoryLimit);
+
+        const problem = await Problem.create(problemData);
 
         const created = problem.toObject();
         created.testCaseCount = sanitizedTestCases.length;
@@ -228,30 +268,36 @@ export const updateProblem = async (req, res, next) => {
       return res.status(404).json({ message: 'Problem not found' });
     }
 
-    const nextUpdates = {};
+    const user = req.user;
+    const isOwner = problem.author?.toString() === user?.id;
+    const isUserAdmin = isAdmin(user);
 
-    if (Object.prototype.hasOwnProperty.call(updates, 'title')) {
-      const title = typeof updates.title === 'string' ? updates.title.trim() : updates.title;
-      if (typeof title === 'string' && title) {
-        nextUpdates.title = title;
-        nextUpdates.slug = buildProblemSlug(title, problem.problemId);
-      }
+    if (!isUserAdmin && !isOwner) {
+      return res.status(403).json({
+        code: 'FORBIDDEN',
+        message: 'You do not have permission to edit this problem'
+      });
     }
 
-    if (Object.prototype.hasOwnProperty.call(updates, 'statement')) {
-      nextUpdates.statement = updates.statement;
-    }
+    const normalizedTitle =
+      typeof updates.title === 'string' ? updates.title.trim() : problem.title;
+
+    const nextUpdates = {
+      title: normalizedTitle,
+      statement: sanitizeRichText(updates.statement),
+      slug: buildProblemSlug(normalizedTitle, problem.problemId)
+    };
 
     if (Object.prototype.hasOwnProperty.call(updates, 'inputFormat')) {
-      nextUpdates.inputFormat = updates.inputFormat;
+      assignIfDefined(nextUpdates, 'inputFormat', sanitizeOptionalRichText(updates.inputFormat));
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, 'outputFormat')) {
-      nextUpdates.outputFormat = updates.outputFormat;
+      assignIfDefined(nextUpdates, 'outputFormat', sanitizeOptionalRichText(updates.outputFormat));
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, 'constraints')) {
-      nextUpdates.constraints = updates.constraints;
+      assignIfDefined(nextUpdates, 'constraints', sanitizeOptionalRichText(updates.constraints));
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, 'difficulty')) {
@@ -263,7 +309,7 @@ export const updateProblem = async (req, res, next) => {
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, 'samples')) {
-      nextUpdates.samples = updates.samples;
+      nextUpdates.samples = sanitizeSamples(updates.samples);
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, 'judge0LanguageIds')) {
@@ -279,11 +325,11 @@ export const updateProblem = async (req, res, next) => {
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, 'cpuTimeLimit')) {
-      nextUpdates.cpuTimeLimit = updates.cpuTimeLimit;
+      assignIfDefined(nextUpdates, 'cpuTimeLimit', updates.cpuTimeLimit);
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, 'memoryLimit')) {
-      nextUpdates.memoryLimit = updates.memoryLimit;
+      assignIfDefined(nextUpdates, 'memoryLimit', updates.memoryLimit);
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, 'testCases')) {
@@ -292,15 +338,6 @@ export const updateProblem = async (req, res, next) => {
         return res.status(400).json({ message: 'At least one valid test case is required' });
       }
       nextUpdates.testCases = sanitized;
-    }
-
-    if (Object.keys(nextUpdates).length === 0) {
-      const payload = problem.toObject();
-      payload.testCaseCount = Array.isArray(problem.testCases) ? problem.testCases.length : 0;
-      payload.totalPoints = Array.isArray(problem.testCases)
-        ? problem.testCases.reduce((sum, testCase) => sum + (testCase.points || 0), 0)
-        : 0;
-      return res.json(payload);
     }
 
     problem.set(nextUpdates);

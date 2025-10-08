@@ -11,9 +11,14 @@ function SettingsPage() {
     bio: user?.profile?.bio ?? '',
     avatarUrl: user?.profile?.avatarUrl ?? ''
   });
-  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '' });
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmNewPassword: ''
+  });
   const [profileMessage, setProfileMessage] = useState('');
   const [passwordMessage, setPasswordMessage] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [isPasswordSaving, setIsPasswordSaving] = useState(false);
 
@@ -25,6 +30,8 @@ function SettingsPage() {
   const handlePasswordChange = (event) => {
     const { name, value } = event.target;
     setPasswordForm((prev) => ({ ...prev, [name]: value }));
+    setPasswordError('');
+    setPasswordMessage('');
   };
 
   const submitProfile = async (event) => {
@@ -48,6 +55,11 @@ function SettingsPage() {
   const submitPassword = async (event) => {
     event.preventDefault();
     setPasswordMessage('');
+    setPasswordError('');
+    if (passwordForm.newPassword !== passwordForm.confirmNewPassword) {
+      setPasswordError('New passwords must match.');
+      return;
+    }
     setIsPasswordSaving(true);
     try {
       await authFetch('/api/auth/me/password', {
@@ -55,9 +67,9 @@ function SettingsPage() {
         body: passwordForm
       });
       setPasswordMessage('Password updated. Please log in again on other devices.');
-      setPasswordForm({ currentPassword: '', newPassword: '' });
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmNewPassword: '' });
     } catch (error) {
-      setPasswordMessage(error.message || 'Failed to update password.');
+      setPasswordError(error.message || 'Failed to update password.');
     } finally {
       setIsPasswordSaving(false);
     }
@@ -132,9 +144,26 @@ function SettingsPage() {
               autoComplete="new-password"
             />
           </label>
+          <label>
+            Confirm New Password
+            <input
+              type="password"
+              name="confirmNewPassword"
+              value={passwordForm.confirmNewPassword}
+              onChange={handlePasswordChange}
+              required
+              autoComplete="new-password"
+            />
+          </label>
+          {passwordForm.newPassword &&
+            passwordForm.confirmNewPassword &&
+            passwordForm.newPassword !== passwordForm.confirmNewPassword && (
+              <div className="form-message error">New passwords do not match.</div>
+            )}
           <button type="submit" disabled={isPasswordSaving}>
             {isPasswordSaving ? 'Updating…' : 'Update password'}
           </button>
+          {passwordError && <div className="form-message error">{passwordError}</div>}
           {passwordMessage && <div className="form-message info">{passwordMessage}</div>}
         </form>
       </div>

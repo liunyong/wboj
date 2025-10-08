@@ -178,12 +178,12 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
-  const register = async ({ username, email, password }) => {
+  const register = async ({ username, email, password, confirmPassword }) => {
     const data = await authFetch(
       '/api/auth/register',
       {
         method: 'POST',
-        body: { username, email, password }
+        body: { username, email, password, confirmPassword }
       },
       { skipAuth: true }
     );

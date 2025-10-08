@@ -6,6 +6,7 @@ import {
   revokeRefreshToken,
   verifyPassword
 } from '../services/authService.js';
+import { getPasswordStrengthIssues } from '../validation/passwordRules.js';
 
 const sanitizeUser = (user) => ({
   id: user._id.toString(),
@@ -41,7 +42,8 @@ export const register = async (req, res, next) => {
       username: normalizedUsername,
       email: normalizedEmail,
       passwordHash,
-      role: 'user'
+      role: 'user',
+      passwordChangedAt: new Date()
     });
 
     const tokens = await createAuthTokens(user);
@@ -149,8 +151,22 @@ export const updatePassword = async (req, res, next) => {
       return res.status(400).json({ code: 'INVALID_CREDENTIALS', message: 'Current password is incorrect' });
     }
 
+    const issues = getPasswordStrengthIssues(newPassword, {
+      username: user.username,
+      email: user.email
+    });
+
+    if (issues.length) {
+      return res.status(400).json({
+        code: 'WEAK_PASSWORD',
+        message: issues[0],
+        details: issues
+      });
+    }
+
     user.passwordHash = await hashPassword(newPassword);
     user.sessions = [];
+    user.passwordChangedAt = new Date();
     await user.save();
 
     res.status(204).send();

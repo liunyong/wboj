@@ -7,7 +7,13 @@ const sampleSchema = z.object({
     .string()
     .max(2000, 'Explanation must be 2000 characters or fewer')
     .optional()
-    .transform((value) => value || undefined)
+    .transform((value) => {
+      if (!value) {
+        return undefined;
+      }
+      const trimmed = value.trim();
+      return trimmed ? trimmed : undefined;
+    })
 });
 
 export const testCaseSchema = z.object({
@@ -22,6 +28,9 @@ export const testCaseSchema = z.object({
     .default(1)
 });
 
+const normalizeTagsArray = (value = []) =>
+  Array.from(new Set(value.map((tag) => tag.trim()).filter((tag) => tag !== '')));
+
 const tagsArraySchema = z
   .array(
     z
@@ -30,7 +39,7 @@ const tagsArraySchema = z
       .max(50, 'Tag must be 50 characters or fewer')
   )
   .max(20, 'A maximum of 20 tags is supported')
-  .transform((value) => value.map((tag) => tag.trim()).filter((tag) => tag !== ''));
+  .transform((value) => normalizeTagsArray(value));
 
 const judge0LanguageIdsSchema = z
   .array(z.coerce.number().int().positive('Language id must be positive'))
@@ -62,11 +71,44 @@ export const legacySlugParamSchema = z
 
 export const createProblemSchema = z
   .object({
-    title: z.string().min(1, 'Title is required'),
-    statement: z.string().min(1, 'Statement is required'),
-    inputFormat: z.string().optional().transform((value) => value || undefined),
-    outputFormat: z.string().optional().transform((value) => value || undefined),
-    constraints: z.string().optional().transform((value) => value || undefined),
+    title: z
+      .string()
+      .trim()
+      .min(1, 'Title is required'),
+    statement: z
+      .string()
+      .min(1, 'Statement is required')
+      .refine((value) => value.trim().length > 0, 'Statement is required'),
+    inputFormat: z
+      .string()
+      .optional()
+      .transform((value) => {
+        if (!value) {
+          return undefined;
+        }
+        const trimmed = value.trim();
+        return trimmed ? trimmed : undefined;
+      }),
+    outputFormat: z
+      .string()
+      .optional()
+      .transform((value) => {
+        if (!value) {
+          return undefined;
+        }
+        const trimmed = value.trim();
+        return trimmed ? trimmed : undefined;
+      }),
+    constraints: z
+      .string()
+      .optional()
+      .transform((value) => {
+        if (!value) {
+          return undefined;
+        }
+        const trimmed = value.trim();
+        return trimmed ? trimmed : undefined;
+      }),
     difficulty: z.enum(['BASIC', 'EASY', 'MEDIUM', 'HARD']).default('BASIC'),
     tags: tagsArraySchema.optional().default([]),
     samples: z.array(sampleSchema).optional().default([]),
@@ -77,13 +119,15 @@ export const createProblemSchema = z
       .max(500, 'A maximum of 500 test cases is supported'),
     isPublic: z.boolean().optional().default(true),
     algorithms: z
-      .array(z.string().min(1, 'Algorithm name is required').max(60, 'Algorithm name is too long'))
+      .array(
+        z.string().min(1, 'Algorithm name is required').max(60, 'Algorithm name is too long')
+      )
       .max(10, 'A maximum of 10 algorithms is supported')
-      .optional()
-      .default([])
       .transform((value) =>
         Array.from(new Set(value.map((item) => item.trim()).filter((item) => item !== '')))
-      ),
+      )
+      .optional()
+      .default([]),
     cpuTimeLimit: z
       .coerce.number()
       .min(0.1, 'CPU time limit must be at least 0.1 seconds')
@@ -98,13 +142,78 @@ export const createProblemSchema = z
   })
   .strict();
 
-export const updateProblemSchema = createProblemSchema.partial().extend({
-  testCases: z
-    .array(testCaseSchema)
-    .min(1, 'At least one test case is required')
-    .max(500, 'A maximum of 500 test cases is supported')
-    .optional()
-});
+export const updateProblemSchema = z
+  .object({
+    title: z
+      .string()
+      .trim()
+      .min(1, 'Title is required'),
+    statement: z
+      .string()
+      .min(1, 'Statement is required')
+      .refine((value) => value.trim().length > 0, 'Statement is required'),
+    inputFormat: z
+      .string()
+      .optional()
+      .transform((value) => {
+        if (!value) {
+          return undefined;
+        }
+        const trimmed = value.trim();
+        return trimmed ? trimmed : undefined;
+      }),
+    outputFormat: z
+      .string()
+      .optional()
+      .transform((value) => {
+        if (!value) {
+          return undefined;
+        }
+        const trimmed = value.trim();
+        return trimmed ? trimmed : undefined;
+      }),
+    constraints: z
+      .string()
+      .optional()
+      .transform((value) => {
+        if (!value) {
+          return undefined;
+        }
+        const trimmed = value.trim();
+        return trimmed ? trimmed : undefined;
+      }),
+    difficulty: z.enum(['BASIC', 'EASY', 'MEDIUM', 'HARD']).optional(),
+    tags: tagsArraySchema.optional(),
+    samples: z.array(sampleSchema).optional(),
+    judge0LanguageIds: judge0LanguageIdsSchema.optional(),
+    testCases: z
+      .array(testCaseSchema)
+      .min(1, 'At least one test case is required')
+      .max(500, 'A maximum of 500 test cases is supported')
+      .optional(),
+    isPublic: z.boolean().optional(),
+    algorithms: z
+      .array(
+        z.string().min(1, 'Algorithm name is required').max(60, 'Algorithm name is too long')
+      )
+      .max(10, 'A maximum of 10 algorithms is supported')
+      .transform((value) =>
+        Array.from(new Set(value.map((item) => item.trim()).filter((item) => item !== '')))
+      )
+      .optional(),
+    cpuTimeLimit: z
+      .coerce.number()
+      .min(0.1, 'CPU time limit must be at least 0.1 seconds')
+      .max(30, 'CPU time limit must be at most 30 seconds')
+      .optional(),
+    memoryLimit: z
+      .coerce.number()
+      .int('Memory limit must be an integer in megabytes')
+      .min(16, 'Memory limit must be at least 16 MB')
+      .max(1024, 'Memory limit must be at most 1024 MB')
+      .optional()
+  })
+  .strict();
 
 export const getProblemQuerySchema = z
   .object({

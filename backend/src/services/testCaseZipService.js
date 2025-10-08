@@ -1,4 +1,4 @@
-import AdmZip from 'adm-zip';
+import AdmZip from '../utils/zipAdapter.js';
 
 const MAX_ZIP_BYTES = 50 * 1024 * 1024;
 const MAX_FILE_BYTES = 2 * 1024 * 1024;

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import multer from 'multer';
+import multer from '../utils/multerAdapter.js';
 import {
   getProblems,
   getProblemById,
@@ -47,10 +47,9 @@ router.post(
   validate({ body: createProblemSchema }),
   createProblem
 );
-router.patch(
+router.put(
   '/:problemId',
   requireAuth,
-  requireRole('admin'),
   validate({ params: problemIdParamSchema, body: updateProblemSchema }),
   updateProblem
 );
