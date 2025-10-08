@@ -9,9 +9,11 @@ import { authenticateAsAdmin, authenticateAsUser, authHeader } from './utils.js'
 
 let mongoServer;
 let problemIdCounter = 100000;
+let problemNumberCounter = 1;
 
 const buildProblem = (overrides = {}) => {
   const problemId = overrides.problemId ?? problemIdCounter++;
+  const problemNumber = overrides.problemNumber ?? problemNumberCounter++;
 
   return {
     title: 'Sample Problem',
@@ -24,12 +26,13 @@ const buildProblem = (overrides = {}) => {
     algorithms: ['Arithmetic'],
     samples: [{ input: '1 2', output: '3', explanation: '1 + 2 = 3' }],
     problemId,
+    problemNumber,
     judge0LanguageIds: [71],
     author: new mongoose.Types.ObjectId(),
     isPublic: true,
     testCases: [
-      { input: '1 2', expectedOutput: '3', isPublic: true },
-      { input: '5 7', expectedOutput: '12', isPublic: false }
+      { input: '1 2', output: '3', points: 1 },
+      { input: '5 7', output: '12', points: 2 }
     ],
     ...overrides
   };
@@ -52,6 +55,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await Problem.deleteMany({});
   problemIdCounter = 100000;
+  problemNumberCounter = 1;
 });
 
 describe('Problem routes with auth', () => {
@@ -89,7 +93,7 @@ describe('Problem routes with auth', () => {
         algorithms: ['Math'],
         judge0LanguageIds: [71],
         samples: [{ input: '5 3', output: '2' }],
-        testCases: [{ input: '5 3', expectedOutput: '2', isPublic: true }]
+        testCases: [{ input: '5 3', output: '2', points: 1 }]
       });
 
     expect(response.status).toBe(201);
@@ -108,7 +112,7 @@ describe('Problem routes with auth', () => {
         statement: 'Nope',
         judge0LanguageIds: [71],
         samples: [{ input: '1', output: '1' }],
-        testCases: [{ input: '1', expectedOutput: '1', isPublic: true }]
+        testCases: [{ input: '1', output: '1', points: 1 }]
       });
 
     expect(response.status).toBe(403);
@@ -120,7 +124,8 @@ describe('Problem routes with auth', () => {
 
     const guestResponse = await request(app).get(`/api/problems/${problem.problemId}`);
     expect(guestResponse.status).toBe(200);
-    expect(guestResponse.body.testCases).toHaveLength(1);
+    expect(guestResponse.body.testCases).toBeUndefined();
+    expect(guestResponse.body.testCaseCount).toBe(2);
 
     const { tokens: adminTokens } = await authenticateAsAdmin();
     const adminResponse = await request(app)
@@ -129,5 +134,6 @@ describe('Problem routes with auth', () => {
 
     expect(adminResponse.status).toBe(200);
     expect(adminResponse.body.testCases).toHaveLength(2);
+    expect(adminResponse.body.totalPoints).toBe(3);
   });
 });

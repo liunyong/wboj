@@ -1,53 +1,8 @@
 import mongoose from 'mongoose';
 import Problem from '../models/Problem.js';
 import Submission from '../models/Submission.js';
-import { runJudge0Submission } from '../services/judge0Service.js';
+import { executeTestCases, buildCaseSummary } from '../services/testCaseRunnerService.js';
 import { incrementUserDailyStats } from '../services/statsService.js';
-
-const decodeBase64 = (value) => {
-  if (!value) {
-    return '';
-  }
-  try {
-    return Buffer.from(value, 'base64').toString('utf8');
-  } catch (error) {
-    return value;
-  }
-};
-
-const normalizeOutput = (value) => value?.toString().trim() ?? '';
-
-const mapStatusToVerdict = (statusId) => {
-  switch (statusId) {
-    case 3:
-      return 'AC';
-    case 4:
-      return 'WA';
-    case 5:
-      return 'TLE';
-    case 6:
-      return 'CE';
-    case 7:
-    case 8:
-    case 9:
-    case 10:
-    case 11:
-    case 12:
-      return 'RTE';
-    case 13:
-      return 'WA';
-    case 14:
-      return 'WA';
-    case 15:
-      return 'CE';
-    case 16:
-    case 17:
-    case 18:
-      return 'IE';
-    default:
-      return 'PENDING';
-  }
-};
 
 const canSubmitProblem = (problem, user) => {
   if (!problem) {
@@ -83,11 +38,13 @@ const sanitizeSubmission = (submission) => ({
     : undefined,
   languageId: submission.languageId,
   verdict: submission.verdict,
+  score: submission.score,
   execTimeMs: submission.execTimeMs,
   memoryKb: submission.memoryKb,
   sourceLen: submission.sourceLen,
   submittedAt: submission.submittedAt,
   testCaseResults: submission.testCaseResults,
+  resultSummary: submission.resultSummary,
   judge0: submission.judge0
 });
 
@@ -113,6 +70,12 @@ export const createSubmission = async (req, res, next) => {
       return res.status(400).json({ code: 'INVALID_LANGUAGE', message: 'Language not allowed' });
     }
 
+    if (!Array.isArray(problem.testCases) || problem.testCases.length === 0) {
+      return res
+        .status(400)
+        .json({ code: 'TEST_CASES_MISSING', message: 'Problem has no test cases configured' });
+    }
+
     const submission = new Submission({
       user: userId,
       problem: problem._id,
@@ -122,72 +85,58 @@ export const createSubmission = async (req, res, next) => {
       submittedAt: new Date()
     });
 
-    const testCaseResults = [];
-    let overallVerdict = 'AC';
-    let maxExecTimeMs = 0;
-    let maxMemoryKb = 0;
+    const { results, score, maxExecTimeMs, maxMemoryKb } = await executeTestCases({
+      sourceCode,
+      languageId,
+      testCases: problem.testCases,
+      cpuTimeLimit: problem.cpuTimeLimit,
+      memoryLimit: problem.memoryLimit
+    });
 
-    for (const testCase of problem.testCases) {
-      const judgeResult = await runJudge0Submission({
-        languageId,
-        sourceCode,
-        stdin: testCase.input
-      });
+    const summaryCases = buildCaseSummary(results);
 
-      const stdout = decodeBase64(judgeResult.stdout);
-      const stderr = decodeBase64(judgeResult.stderr);
-      const compileOutput = decodeBase64(judgeResult.compile_output);
-      const message = decodeBase64(judgeResult.message);
-      const status = judgeResult.status || {};
-      const statusId = Number.isFinite(status.id) ? status.id : 0;
+    const hasCompileError = results.some((result) => [6, 15].includes(result.statusId));
+    const hasRuntimeError = results.some((result) => result.statusId >= 7 && result.statusId <= 12);
+    const hasTimeLimit = results.some((result) => result.statusId === 5);
+    const hasWrongAnswer = results.some((result) => [4, 13, 14].includes(result.statusId));
 
-      let verdict = mapStatusToVerdict(statusId);
-
-      const expected = normalizeOutput(testCase.expectedOutput);
-      const actual = normalizeOutput(stdout);
-
-      if (verdict === 'AC' && expected !== actual) {
-        verdict = 'WA';
-      }
-
-      if (compileOutput && verdict === 'AC') {
-        verdict = 'CE';
-      }
-
-      if (stderr && verdict === 'AC') {
-        verdict = 'RTE';
-      }
-
-      const execTime = Number.parseFloat(judgeResult.time ?? '0');
-      const memory = Number.isFinite(judgeResult.memory) ? judgeResult.memory : 0;
-
-      maxExecTimeMs = Math.max(maxExecTimeMs, Number.isFinite(execTime) ? execTime * 1000 : 0);
-      maxMemoryKb = Math.max(maxMemoryKb, memory);
-
-      testCaseResults.push({
-        input: testCase.input,
-        expectedOutput: testCase.expectedOutput,
-        stdout,
-        stderr,
-        compileOutput,
-        message,
-        status,
-        verdict,
-        time: judgeResult.time,
-        memory: judgeResult.memory
-      });
-
-      if (verdict !== 'AC') {
-        overallVerdict = verdict;
-        break;
-      }
+    let overallVerdict = 'WA';
+    if (hasCompileError) {
+      overallVerdict = 'CE';
+    } else if (hasRuntimeError) {
+      overallVerdict = 'RTE';
+    } else if (hasTimeLimit) {
+      overallVerdict = 'TLE';
+    } else if (score === 100) {
+      overallVerdict = 'AC';
+    } else if (score > 0) {
+      overallVerdict = 'PARTIAL';
+    } else if (hasWrongAnswer) {
+      overallVerdict = 'WA';
+    } else {
+      overallVerdict = 'WA';
     }
 
     submission.verdict = overallVerdict;
-    submission.execTimeMs = Number.isFinite(maxExecTimeMs) ? Math.round(maxExecTimeMs) : null;
-    submission.memoryKb = Number.isFinite(maxMemoryKb) ? Math.round(maxMemoryKb) : null;
-    submission.testCaseResults = testCaseResults;
-    submission.judge0 = { rawPayload: testCaseResults };
+    submission.score = score;
+    submission.execTimeMs = Number.isFinite(maxExecTimeMs) ? maxExecTimeMs : null;
+    submission.memoryKb = Number.isFinite(maxMemoryKb) ? maxMemoryKb : null;
+    submission.testCaseResults = results.map((result) => ({
+      index: result.index,
+      input: result.input,
+      output: result.output,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      compileOutput: result.compileOutput,
+      message: result.message,
+      status: result.status,
+      time: result.time,
+      memory: result.memory,
+      points: result.points,
+      passed: result.passed
+    }));
+    submission.resultSummary = { score, cases: summaryCases };
+    submission.judge0 = { rawPayload: results };
 
     await submission.save();
 

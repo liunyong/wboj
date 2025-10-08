@@ -8,6 +8,7 @@ import Problem from '../src/models/Problem.js';
 import Counter from '../src/models/Counter.js';
 import { getNextSequence } from '../src/services/idService.js';
 import User from '../src/models/User.js';
+import { buildProblemSlug } from '../src/utils/problemSlug.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,12 +44,21 @@ const seed = async () => {
     console.log(`Admin user ${adminEmail} already exists`);
   }
 
-  await Promise.all([Problem.deleteMany({}), Counter.deleteMany({ _id: { $in: ['problemId'] } })]);
+  await Promise.all([
+    Problem.deleteMany({}),
+    Counter.deleteMany({ _id: { $in: ['problemId', 'problemNumber'] } })
+  ]);
 
   const problemId = await getNextSequence('problemId');
+  const problemNumber = await getNextSequence('problemNumber');
+
+  const title = 'A+B Problem';
+  const slug = buildProblemSlug(title, problemId);
 
   const problem = await Problem.create({
-    title: 'A+B Problem',
+    title,
+    slug,
+    problemNumber,
     statement: 'Given two integers, output their sum.',
     inputFormat: 'Two integers a and b (|a|, |b| \le 10^9).',
     outputFormat: 'Print a single integer, the sum of a and b.',
@@ -64,10 +74,12 @@ const seed = async () => {
     judge0LanguageIds: [71, 63, 52],
     author: adminUser?._id ?? null,
     isPublic: true,
+    cpuTimeLimit: 2,
+    memoryLimit: 128,
     testCases: [
-      { input: '1 2', expectedOutput: '3', isPublic: true },
-      { input: '10 20', expectedOutput: '30', isPublic: true },
-      { input: '100 -5', expectedOutput: '95', isPublic: false }
+      { input: '1 2', output: '3', points: 1 },
+      { input: '10 20', output: '30', points: 1 },
+      { input: '100 -5', output: '95', points: 2 }
     ]
   });
 

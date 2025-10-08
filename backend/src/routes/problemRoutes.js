@@ -1,12 +1,15 @@
 import { Router } from 'express';
+import multer from 'multer';
 import {
   getProblems,
   getProblemById,
   getProblemBySlug,
   createProblem,
+  updateProblem,
   updateProblemVisibility,
   deleteProblem,
-  getProblemAlgorithms
+  getProblemAlgorithms,
+  parseProblemTestCasesZip
 } from '../controllers/problemController.js';
 import { authenticateOptional, requireAuth, requireRole } from '../middlewares/auth.js';
 import validate from '../middlewares/validate.js';
@@ -16,10 +19,12 @@ import {
   listProblemsQuerySchema,
   problemIdParamSchema,
   legacySlugParamSchema,
-  updateVisibilitySchema
+  updateVisibilitySchema,
+  updateProblemSchema
 } from '../validation/problemSchemas.js';
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 router.get('/', authenticateOptional, validate({ query: listProblemsQuerySchema }), getProblems);
 router.get(
@@ -43,6 +48,13 @@ router.post(
   createProblem
 );
 router.patch(
+  '/:problemId',
+  requireAuth,
+  requireRole('admin'),
+  validate({ params: problemIdParamSchema, body: updateProblemSchema }),
+  updateProblem
+);
+router.patch(
   '/:problemId/visibility',
   requireAuth,
   requireRole('admin'),
@@ -55,6 +67,13 @@ router.delete(
   requireRole('admin'),
   validate({ params: problemIdParamSchema }),
   deleteProblem
+);
+router.post(
+  '/testcases/zip-parse',
+  requireAuth,
+  requireRole('admin'),
+  upload.single('file'),
+  parseProblemTestCasesZip
 );
 
 export default router;

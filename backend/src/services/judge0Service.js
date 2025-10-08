@@ -98,7 +98,15 @@ const getJudge0Client = () => {
 
 const encode = (value) => Buffer.from(value ?? '', 'utf8').toString('base64');
 
-export const runJudge0Submission = async ({ languageId, sourceCode, stdin }) => {
+export const runJudge0Submission = async ({
+  languageId,
+  sourceCode,
+  stdin,
+  expectedOutput,
+  cpuTimeLimit,
+  memoryLimit,
+  enableNetwork = false
+}) => {
   const client = getJudge0Client();
 
   return enqueue(() =>
@@ -106,11 +114,28 @@ export const runJudge0Submission = async ({ languageId, sourceCode, stdin }) => 
       async () => {
         const response = await client.post(
           '/submissions?base64_encoded=true&wait=true&fields=stdout,stderr,status_id,status,compile_output,time,memory,message',
-          {
-            language_id: languageId,
-            source_code: encode(sourceCode),
-            stdin: encode(stdin)
-          }
+          (() => {
+            const payload = {
+              language_id: languageId,
+              source_code: encode(sourceCode),
+              stdin: encode(stdin),
+              enable_network: Boolean(enableNetwork)
+            };
+
+            if (expectedOutput !== undefined) {
+              payload.expected_output = encode(expectedOutput);
+            }
+
+            if (cpuTimeLimit !== undefined) {
+              payload.cpu_time_limit = cpuTimeLimit;
+            }
+
+            if (memoryLimit !== undefined) {
+              payload.memory_limit = memoryLimit;
+            }
+
+            return payload;
+          })()
         );
 
         return response.data;

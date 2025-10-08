@@ -9,6 +9,7 @@ import languageRoutes from './routes/languageRoutes.js';
 import problemRoutes from './routes/problemRoutes.js';
 import submissionRoutes from './routes/submissionRoutes.js';
 import userRoutes from './routes/userRoutes.js';
+import judgeRoutes from './routes/judgeRoutes.js';
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use('/api/problems', problemRoutes);
 app.use('/api/submissions', submissionRoutes);
 app.use('/api/languages', languageRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/judge', judgeRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);

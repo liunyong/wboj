@@ -104,6 +104,10 @@ function ProblemDetailPage() {
   }, [allowedLanguages, languageId]);
 
   const selectedLanguageId = languageId || (allowedLanguages[0]?.id ?? '');
+  const testCaseCount = problem?.testCaseCount ?? problem?.testCases?.length ?? 0;
+  const totalPoints = problem?.totalPoints ??
+    (problem?.testCases?.reduce((sum, testCase) => sum + (testCase.points || 0), 0) ?? 0);
+  const showAdminTestCases = isAdmin && problem?.testCases?.length > 0;
 
   return (
     <section className="page">
@@ -129,6 +133,10 @@ function ProblemDetailPage() {
               <div className="problem-stats">
                 <span>{problem.submissionCount ?? 0} submissions</span>
                 <span>{problem.acceptedSubmissionCount ?? 0} accepted</span>
+                <span>
+                  {testCaseCount} test cases
+                  {totalPoints ? ` · ${totalPoints} points` : ''}
+                </span>
               </div>
               {isAdmin && (
                 <div className="problem-detail__actions">
@@ -211,20 +219,23 @@ function ProblemDetailPage() {
             </article>
           ) : null}
 
-          {problem.testCases?.length ? (
+          {showAdminTestCases ? (
             <article className="problem-section">
-              <h3>Public Test Cases</h3>
+              <h3>Test Cases (admin)</h3>
               <div className="testcase-list">
                 {problem.testCases.map((testCase, index) => (
                   <div key={`${testCase.input}-${index}`} className="testcase-card">
-                    <strong>Case {index + 1}</strong>
+                    <strong>
+                      Case {index + 1} · {testCase.points ?? 1} pt
+                      {testCase.points === 1 ? '' : 's'}
+                    </strong>
                     <div>
                       <span>Input</span>
                       <pre>{testCase.input}</pre>
                     </div>
                     <div>
-                      <span>Expected Output</span>
-                      <pre>{testCase.expectedOutput}</pre>
+                      <span>Output</span>
+                      <pre>{testCase.output}</pre>
                     </div>
                   </div>
                 ))}
@@ -293,6 +304,7 @@ function ProblemDetailPage() {
                     <tr>
                       <th>Problem</th>
                       <th>Verdict</th>
+                      <th>Score</th>
                       <th>Language</th>
                       <th>Submitted</th>
                     </tr>
@@ -307,6 +319,9 @@ function ProblemDetailPage() {
                         <td className={`verdict verdict-${submission.verdict?.toLowerCase()}`}>
                           {submission.verdict}
                         </td>
+                        <td>{
+                          typeof submission.score === 'number' ? `${submission.score}%` : '—'
+                        }</td>
                         <td>{submission.languageId}</td>
                         <td>{formatDateTime(submission.submittedAt)}</td>
                       </tr>

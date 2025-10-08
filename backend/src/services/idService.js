@@ -1,7 +1,8 @@
 import Counter from '../models/Counter.js';
 
 const DEFAULT_SEEDS = {
-  problemId: 99999
+  problemId: 99999,
+  problemNumber: 0
 };
 
 export const getNextSequence = async (name) => {
@@ -13,13 +14,21 @@ export const getNextSequence = async (name) => {
 
   const counter = await Counter.findOneAndUpdate(
     { _id: name },
+    [
+      {
+        $set: {
+          seq: {
+            $add: [
+              { $ifNull: ['$seq', seed] },
+              1
+            ]
+          }
+        }
+      }
+    ],
     {
-      $inc: { seq: 1 },
-      $setOnInsert: { seq: seed }
-    },
-    {
-      new: true,
-      upsert: true
+      upsert: true,
+      returnDocument: 'after'
     }
   );
 

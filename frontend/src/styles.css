@@ -583,6 +583,10 @@ textarea {
   color: #6366f1;
 }
 
+.verdict-partial {
+  color: #0ea5e9;
+}
+
 .page.auth-page {
   align-items: center;
   justify-content: center;
@@ -845,6 +849,143 @@ textarea {
   gap: 1rem;
 }
 
+.grid-two-columns {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.language-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.language-picker h3 {
+  margin: 0;
+}
+
+.language-picker__content {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.language-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.language-chips .algorithm-chip {
+  background: rgba(37, 99, 235, 0.12);
+}
+
+.helper-text {
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.testcase-section {
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  padding-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.testcase-section__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.testcase-section__header h3 {
+  margin: 0;
+}
+
+.testcase-section__stats {
+  display: flex;
+  gap: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.testcase-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.zip-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.zip-warnings {
+  background: #fff7ed;
+  color: #9a3412;
+  border: 1px solid #fed7aa;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+}
+
+.zip-warnings ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.testcase-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.testcase-table th,
+.testcase-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  vertical-align: top;
+}
+
+.testcase-table th {
+  text-align: left;
+  font-weight: 600;
+  background: rgba(15, 23, 42, 0.03);
+}
+
+.testcase-table pre {
+  margin: 0;
+  background: rgba(15, 23, 42, 0.05);
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  max-height: 140px;
+  overflow: auto;
+}
+
+.testcase-table__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.testcase-table tr:last-child td {
+  border-bottom: none;
+}
+
+.testcase-empty {
+  padding: 1.5rem;
+  border: 1px dashed rgba(15, 23, 42, 0.2);
+  border-radius: 0.75rem;
+  text-align: center;
+  color: #475569;
+  background: #f8fafc;
+}
+
 .checkbox {
   flex-direction: row;
   align-items: center;
@@ -894,6 +1035,62 @@ textarea {
   max-width: 420px;
   width: min(420px, 100%);
   box-shadow: 0 24px 48px rgba(15, 23, 42, 0.18);
+}
+
+.test-case-modal,
+.validate-modal {
+  max-width: 680px;
+  width: min(680px, 100%);
+}
+
+.test-case-modal__form,
+.validate-modal__form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.validate-modal__form textarea {
+  min-height: 200px;
+}
+
+.test-case-modal textarea {
+  min-height: 140px;
+}
+
+.validate-modal__results {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.validate-modal__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-weight: 600;
+}
+
+.validate-modal__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.validate-modal__table th,
+.validate-modal__table td {
+  border-bottom: 1px solid rgba(15, 23, 42, 0.1);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.validate-modal__table th {
+  background: rgba(15, 23, 42, 0.05);
+}
+
+.validate-modal__table tr:last-child td {
+  border-bottom: none;
 }
 
 .confirm-modal h3 {

@@ -10,20 +10,16 @@ const sampleSchema = z.object({
     .transform((value) => value || undefined)
 });
 
-const testCaseSchema = z.object({
+export const testCaseSchema = z.object({
   input: z.string().min(1, 'Input is required'),
-  expectedOutput: z.string().min(1, 'Expected output is required'),
-  isPublic: z.boolean().optional().default(false),
-  inputFileName: z
-    .string()
-    .max(255, 'inputFileName must be 255 characters or fewer')
+  output: z.string().min(1, 'Output is required'),
+  points: z
+    .coerce.number()
+    .int('Points must be an integer')
+    .min(1, 'Points must be at least 1')
+    .max(1000, 'Points must be at most 1000')
     .optional()
-    .transform((value) => value || undefined),
-  outputFileName: z
-    .string()
-    .max(255, 'outputFileName must be 255 characters or fewer')
-    .optional()
-    .transform((value) => value || undefined)
+    .default(1)
 });
 
 const tagsArraySchema = z
@@ -77,7 +73,8 @@ export const createProblemSchema = z
     judge0LanguageIds: judge0LanguageIdsSchema.optional().default([71]),
     testCases: z
       .array(testCaseSchema)
-      .min(1, 'At least one test case is required'),
+      .min(1, 'At least one test case is required')
+      .max(500, 'A maximum of 500 test cases is supported'),
     isPublic: z.boolean().optional().default(true),
     algorithms: z
       .array(z.string().min(1, 'Algorithm name is required').max(60, 'Algorithm name is too long'))
@@ -86,9 +83,28 @@ export const createProblemSchema = z
       .default([])
       .transform((value) =>
         Array.from(new Set(value.map((item) => item.trim()).filter((item) => item !== '')))
-      )
+      ),
+    cpuTimeLimit: z
+      .coerce.number()
+      .min(0.1, 'CPU time limit must be at least 0.1 seconds')
+      .max(30, 'CPU time limit must be at most 30 seconds')
+      .optional(),
+    memoryLimit: z
+      .coerce.number()
+      .int('Memory limit must be an integer in megabytes')
+      .min(16, 'Memory limit must be at least 16 MB')
+      .max(1024, 'Memory limit must be at most 1024 MB')
+      .optional()
   })
   .strict();
+
+export const updateProblemSchema = createProblemSchema.partial().extend({
+  testCases: z
+    .array(testCaseSchema)
+    .min(1, 'At least one test case is required')
+    .max(500, 'A maximum of 500 test cases is supported')
+    .optional()
+});
 
 export const getProblemQuerySchema = z
   .object({

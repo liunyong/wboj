@@ -30,22 +30,25 @@ import { authenticateAsAdmin, authenticateAsUser, authHeader } from './utils.js'
 let mongoServer;
 
 let problemIdCounter = 100000;
+let problemNumberCounter = 1;
 
 const buildProblem = (overrides = {}) => {
   const problemId = overrides.problemId ?? problemIdCounter++;
+  const problemNumber = overrides.problemNumber ?? problemNumberCounter++;
 
   return {
     title: 'Submission Problem',
     statement: 'Sum two numbers.',
     difficulty: 'BASIC',
     problemId,
+    problemNumber,
     judge0LanguageIds: [71],
     author: new mongoose.Types.ObjectId(),
     isPublic: true,
     algorithms: ['Arithmetic'],
     testCases: [
-      { input: '1 2', expectedOutput: '3', isPublic: true },
-      { input: '5 7', expectedOutput: '12', isPublic: false }
+      { input: '1 2', output: '3', points: 1 },
+      { input: '5 7', output: '12', points: 1 }
     ],
     ...overrides
   };
@@ -69,6 +72,7 @@ beforeEach(async () => {
   await UserStatsDaily.deleteMany({});
   vi.clearAllMocks();
   problemIdCounter = 100000;
+  problemNumberCounter = 1;
 });
 
 describe('Submission routes with auth', () => {
@@ -87,6 +91,7 @@ describe('Submission routes with auth', () => {
 
     expect(response.status).toBe(201);
     expect(response.body.submission.verdict).toBe('AC');
+    expect(response.body.submission.score).toBe(100);
     expect(runJudge0Submission).toHaveBeenCalledTimes(2);
 
     const updatedProblem = await Problem.findById(problem._id);
