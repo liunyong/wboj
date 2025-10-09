@@ -43,7 +43,7 @@ function Header() {
   return (
     <header className="app-header">
       <div className="app-header__brand">
-        <Link to="/">Online Judge</Link>
+        <Link to="/">WB Online Judge</Link>
       </div>
       <nav className="app-header__nav">
         <NavLink to="/" className={({ isActive }) => (isActive ? 'active' : '')}>
