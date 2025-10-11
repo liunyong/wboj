@@ -35,6 +35,9 @@ npm run dev               # start the API on http://localhost:4000
 - `POST /api/problems` — Admin-only creation with difficulty, tags, samples, visibility.
 - `POST /api/submissions` — Authenticated submission `{ problemId, languageId, sourceCode }`.
 - `GET /api/submissions/mine` — Personal submission history.
+- `GET /api/submissions` — Global submissions list (metadata only) for any authenticated user.
+- `GET /api/problems/:problemId/submissions` — Problem-scoped submissions with `scope=mine|all` pagination.
+- `GET /api/submissions/:id` — Submission detail with source gated to the owner or administrators.
 - `GET /api/dashboard/me/summary` + `/me/heatmap` — Yearly stats for dashboards.
 - `GET /api/users` — Admin search, plus role/status management via `PATCH` endpoints.
 
@@ -57,7 +60,8 @@ The UI wraps React Router with TanStack Query and an auth context to offer:
 - Dashboard heatmap + summary cards powered by `/api/dashboard` endpoints.
 - Profile + password update flows under Settings.
 - Admin panel with problem CRUD/visibility toggles and user role/status management.
-- Problem detail pages with submission forms, samples, and personal submission history.
+- Problem detail pages with submission forms, samples, and scoped submissions tabs (My vs All) that respect source-code privacy.
+- Global submissions view (`/submissions`) for signed-in users with filters, pagination, and live updates; admin-only actions remain role-locked.
 
 ## Running with Docker Compose
 

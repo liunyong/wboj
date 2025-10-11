@@ -18,6 +18,14 @@ const normalizeOutput = (value) => value?.toString().trim() ?? '';
 
 const DEFAULT_TIME_LIMIT = Number.parseFloat(process.env.DEFAULT_PROBLEM_TIME_LIMIT ?? '2');
 const DEFAULT_MEMORY_LIMIT = Number.parseInt(process.env.DEFAULT_PROBLEM_MEMORY_LIMIT ?? '128', 10);
+const MB_TO_KB = 1024;
+
+const toJudgeMemoryLimitKb = (memoryLimitMb) => {
+  if (!Number.isFinite(memoryLimitMb) || memoryLimitMb <= 0) {
+    return undefined;
+  }
+  return Math.round(memoryLimitMb * MB_TO_KB);
+};
 
 export const executeTestCases = async ({
   sourceCode,
@@ -33,6 +41,7 @@ export const executeTestCases = async ({
 
   const effectiveTimeLimit = Number.isFinite(cpuTimeLimit) ? cpuTimeLimit : DEFAULT_TIME_LIMIT;
   const effectiveMemoryLimit = Number.isFinite(memoryLimit) ? memoryLimit : DEFAULT_MEMORY_LIMIT;
+  const judgeMemoryLimit = toJudgeMemoryLimitKb(effectiveMemoryLimit);
 
   let index = 0;
 
@@ -44,7 +53,7 @@ export const executeTestCases = async ({
       stdin: testCase.input,
       expectedOutput: testCase.output,
       cpuTimeLimit: effectiveTimeLimit,
-      memoryLimit: effectiveMemoryLimit,
+      memoryLimit: judgeMemoryLimit,
       enableNetwork: false
     });
 

@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
-import { formatDateTime } from '../utils/date.js';
+import { buildOptimisticSubmission } from '../utils/submissions.js';
+import { useResubmitSubmission } from '../hooks/useResubmitSubmission.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
+import ProblemSubmissionsPanel from '../components/ProblemSubmissionsPanel.jsx';
+import SubmissionViewerModal from '../components/SubmissionViewerModal.jsx';
 
 function ProblemDetailPage() {
   const { problemId } = useParams();
@@ -16,6 +19,18 @@ function ProblemDetailPage() {
   const [sourceCode, setSourceCode] = useState('');
   const [message, setMessage] = useState(null);
   const [pendingDeletion, setPendingDeletion] = useState(false);
+  const [activeSubmissionId, setActiveSubmissionId] = useState(null);
+  const [resubmittingId, setResubmittingId] = useState(null);
+
+  const updatePersonalHistory = useCallback(
+    (mutator) => {
+      queryClient.setQueryData(['submissions', 'mine', 'dashboard'], (existing) => {
+        const current = Array.isArray(existing) ? existing : [];
+        return mutator(current);
+      });
+    },
+    [queryClient]
+  );
 
   const includePrivate = user?.role === 'admin' ? 'true' : 'false';
 
@@ -35,16 +50,6 @@ function ProblemDetailPage() {
     queryKey: ['languages'],
     queryFn: async () => authFetch('/api/languages', {}, { skipAuth: true })
   });
-
-  const submissionsQuery = useQuery({
-    queryKey: ['submissions', 'mine', problemId],
-    queryFn: async () => {
-      const response = await authFetch('/api/submissions/mine');
-      return response?.items ?? [];
-    },
-    enabled: Boolean(user)
-  });
-
   const submissionMutation = useMutation({
     mutationFn: async () => {
       if (!problemQuery.data?._id) {
@@ -55,16 +60,73 @@ function ProblemDetailPage() {
         languageId: Number(languageId),
         sourceCode
       };
-      const response = await authFetch('/api/submissions', { method: 'POST', body: payload });
-      return response?.submission;
+      return authFetch('/api/submissions', { method: 'POST', body: payload });
     },
-    onSuccess: () => {
-      setMessage({ type: 'success', text: 'Submission created successfully.' });
+    onSuccess: (data) => {
+      const submissionId = data?.submissionId;
+      const numericLanguageId = Number(languageId);
+      const languageName =
+        allowedLanguages.find((lang) => lang.id === numericLanguageId)?.name ??
+        (Number.isFinite(numericLanguageId) ? `language-${numericLanguageId}` : null);
+
+      if (submissionId && problem) {
+        const optimistic = buildOptimisticSubmission({
+          submissionId,
+          problem,
+          languageId: numericLanguageId,
+          language: languageName,
+          sourceLen: sourceCode.length
+        });
+        updatePersonalHistory((entries) => {
+          const filtered = entries.filter((item) => (item.id ?? item._id) !== submissionId);
+          return [optimistic, ...filtered];
+        });
+      }
+
+      if (problem?.problemId) {
+        queryClient.invalidateQueries({ queryKey: ['problemSubmissions', problem.problemId] });
+      }
+
+      setMessage({ type: 'info', text: 'Submitted. Grading…' });
       setSourceCode('');
-      queryClient.invalidateQueries({ queryKey: ['submissions', 'mine'] });
     },
     onError: (error) => {
       setMessage({ type: 'error', text: error.message || 'Failed to submit solution.' });
+    }
+  });
+
+  const resubmitMutation = useResubmitSubmission({
+    onSuccess: (data, variables) => {
+      setResubmittingId(null);
+      const newSubmissionId = data?.submissionId;
+      const baseSubmission = variables?.baseSubmission;
+      const languageFromBase = baseSubmission?.language;
+      const languageIdFromBase = baseSubmission?.languageId;
+
+      if (newSubmissionId && problem) {
+        const optimistic = buildOptimisticSubmission({
+          submissionId: newSubmissionId,
+          base: baseSubmission,
+          problem,
+          languageId: languageIdFromBase,
+          language: languageFromBase,
+          sourceLen: baseSubmission?.sourceLen ?? 0
+        });
+        updatePersonalHistory((entries) => {
+          const filtered = entries.filter((item) => (item.id ?? item._id) !== newSubmissionId);
+          return [optimistic, ...filtered];
+        });
+      }
+
+      if (problem?.problemId) {
+        queryClient.invalidateQueries({ queryKey: ['problemSubmissions', problem.problemId] });
+      }
+
+      setMessage({ type: 'info', text: 'Re-submitted. Grading…' });
+    },
+    onError: (error) => {
+      setResubmittingId(null);
+      setMessage({ type: 'error', text: error.message || 'Failed to re-submit solution.' });
     }
   });
 
@@ -98,6 +160,37 @@ function ProblemDetailPage() {
     ? languages.filter((item) => problem.judge0LanguageIds.includes(item.id))
     : languages;
 
+  const getSubmissionFromCaches = useCallback(
+    (submissionId) => {
+      if (!submissionId) {
+        return null;
+      }
+      const problemJudgeId = problem?.problemId ?? null;
+      if (problemJudgeId) {
+        const cachedLists = queryClient.getQueriesData({
+          queryKey: ['problemSubmissions', problemJudgeId]
+        });
+        for (const [, cacheData] of cachedLists) {
+          const items = cacheData?.items;
+          if (Array.isArray(items)) {
+            const found = items.find((item) => (item.id ?? item._id) === submissionId);
+            if (found) {
+              return found;
+            }
+          }
+        }
+      }
+      const dashboardEntries = queryClient.getQueryData(['submissions', 'mine', 'dashboard']);
+      if (Array.isArray(dashboardEntries)) {
+        return (
+          dashboardEntries.find((item) => (item.id ?? item._id) === submissionId) ?? null
+        );
+      }
+      return null;
+    },
+    [problem?.problemId, queryClient]
+  );
+
   const problemAuthorRaw = problem?.author;
   const problemAuthorId =
     typeof problemAuthorRaw === 'object' && problemAuthorRaw !== null
@@ -119,11 +212,48 @@ function ProblemDetailPage() {
     }
   }, [location, navigate]);
 
+  const handleVerdictClick = useCallback((submissionId) => {
+    if (!submissionId) {
+      return;
+    }
+    setActiveSubmissionId(submissionId);
+  }, []);
+
+  const handleResubmit = useCallback(
+    (submission) => {
+      const submissionId = submission?.id ?? submission?._id;
+      if (!submissionId) {
+        return;
+      }
+      setMessage(null);
+      setResubmittingId(submissionId);
+      resubmitMutation.mutate({ submissionId, baseSubmission: submission });
+    },
+    [resubmitMutation]
+  );
+
+  const closeSubmissionModal = useCallback(() => {
+    setActiveSubmissionId(null);
+  }, []);
+
   const selectedLanguageId = languageId || (allowedLanguages[0]?.id ?? '');
   const testCaseCount = problem?.testCaseCount ?? problem?.testCases?.length ?? 0;
   const totalPoints = problem?.totalPoints ??
     (problem?.testCases?.reduce((sum, testCase) => sum + (testCase.points || 0), 0) ?? 0);
   const showAdminTestCases = isAdmin && problem?.testCases?.length > 0;
+  const canResubmitActiveSubmission = useMemo(() => {
+    if (!activeSubmissionId || !user) {
+      return false;
+    }
+    if (isAdmin) {
+      return true;
+    }
+    const cached = getSubmissionFromCaches(activeSubmissionId);
+    if (cached?.userId && user?.id) {
+      return String(cached.userId) === String(user.id);
+    }
+    return false;
+  }, [activeSubmissionId, getSubmissionFromCaches, isAdmin, user]);
 
   return (
     <section className="page">
@@ -314,50 +444,21 @@ function ProblemDetailPage() {
             </article>
           ) : (
             <article className="problem-section callout">
-              <p>Please log in to submit solutions.</p>
+              <p>Please log in to submit solutions and view submissions for this problem.</p>
             </article>
           )}
 
-          {user && (
-            <article className="problem-section">
-              <h3>Recent Submissions</h3>
-              {submissionsQuery.isLoading && <div>Loading…</div>}
-              {!submissionsQuery.isLoading && !submissionsQuery.data?.length && (
-                <div>No submissions yet.</div>
-              )}
-              {submissionsQuery.data?.length ? (
-                <table className="submissions-table">
-                  <thead>
-                    <tr>
-                      <th>Problem</th>
-                      <th>Verdict</th>
-                      <th>Score</th>
-                      <th>Language</th>
-                      <th>Submitted</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {submissionsQuery.data.map((submission) => (
-                      <tr key={submission.id}>
-                        <td>
-                          {submission.problem?.title || problem.title} (
-                          #{submission.problem?.problemId ?? problem.problemId})
-                        </td>
-                        <td className={`verdict verdict-${submission.verdict?.toLowerCase()}`}>
-                          {submission.verdict}
-                        </td>
-                        <td>{
-                          typeof submission.score === 'number' ? `${submission.score}%` : '—'
-                        }</td>
-                        <td>{submission.languageId}</td>
-                        <td>{formatDateTime(submission.submittedAt)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : null}
-            </article>
-          )}
+          {user ? (
+            <ProblemSubmissionsPanel
+              problem={problem}
+              currentUserId={user.id}
+              isAdmin={isAdmin}
+              onVerdictClick={handleVerdictClick}
+              onResubmit={handleResubmit}
+              resubmittingId={resubmittingId}
+              isResubmitPending={resubmitMutation.isPending}
+            />
+          ) : null}
         </div>
       )}
       <ConfirmDialog
@@ -380,6 +481,22 @@ function ProblemDetailPage() {
           </p>
         ) : null}
       </ConfirmDialog>
+      {activeSubmissionId ? (
+        <SubmissionViewerModal
+          submissionId={activeSubmissionId}
+          onClose={closeSubmissionModal}
+          allowResubmit={canResubmitActiveSubmission}
+          onResubmit={(submissionId) => {
+            const baseSubmission = getSubmissionFromCaches(submissionId);
+            if (baseSubmission) {
+              handleResubmit(baseSubmission);
+            }
+          }}
+          isResubmitting={
+            resubmitMutation.isPending && resubmittingId === activeSubmissionId
+          }
+        />
+      ) : null}
     </section>
   );
 }

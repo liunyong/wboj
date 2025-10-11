@@ -1,4 +1,5 @@
 import Problem from '../models/Problem.js';
+import ProblemUpdate from '../models/ProblemUpdate.js';
 import { getNextSequence } from '../services/idService.js';
 import { ensureProblemNumbersBackfilled } from '../services/problemNumberService.js';
 import { parseTestCasesFromZip } from '../services/testCaseZipService.js';
@@ -228,6 +229,17 @@ export const createProblem = async (req, res, next) => {
 
         const problem = await Problem.create(problemData);
 
+        try {
+          await ProblemUpdate.create({
+            problem: problem._id,
+            problemId,
+            titleSnapshot: problem.title,
+            summary: `Created by ${req.user?.username ?? 'system'}`
+          });
+        } catch (updateError) {
+          console.error('Failed to record problem creation update', updateError);
+        }
+
         const created = problem.toObject();
         created.testCaseCount = sanitizedTestCases.length;
         created.totalPoints = sanitizedTestCases.reduce((sum, item) => sum + (item.points || 0), 0);
@@ -342,6 +354,26 @@ export const updateProblem = async (req, res, next) => {
 
     problem.set(nextUpdates);
     await problem.save();
+
+    try {
+      const changedFields = Object.keys(updates || {}).filter(
+        (key) => key !== 'problemId' && key !== 'problemNumber'
+      );
+      const actor = req.user?.username ?? 'system';
+      const summary =
+        changedFields.length > 0
+          ? `Updated by ${actor} (${changedFields.slice(0, 4).join(', ')})`
+          : `Updated by ${actor}`;
+
+      await ProblemUpdate.create({
+        problem: problem._id,
+        problemId: problem.problemId,
+        titleSnapshot: problem.title,
+        summary
+      });
+    } catch (updateError) {
+      console.error('Failed to record problem update entry', updateError);
+    }
 
     const payload = problem.toObject();
     payload.testCaseCount = Array.isArray(problem.testCases) ? problem.testCases.length : 0;

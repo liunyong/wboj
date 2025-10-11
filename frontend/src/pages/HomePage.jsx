@@ -1,229 +1,360 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
-import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
-
-const difficulties = ['BASIC', 'EASY', 'MEDIUM', 'HARD'];
+import { formatDateTime } from '../utils/date.js';
 
 function HomePage() {
   const { authFetch, user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState('');
-  const [visibility, setVisibility] = useState(user?.role === 'admin' ? 'all' : 'public');
-  const [difficulty, setDifficulty] = useState('');
-  const [pendingDeletion, setPendingDeletion] = useState(null);
-  const [visibilityTarget, setVisibilityTarget] = useState(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [createDraft, setCreateDraft] = useState({ title: '', body: '', pinned: false });
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState({ title: '', body: '', pinned: false });
+  const [formError, setFormError] = useState('');
 
-  useEffect(() => {
-    setVisibility(user?.role === 'admin' ? 'all' : 'public');
-  }, [user?.role]);
-
-  const problemsQuery = useQuery({
-    queryKey: ['problems', visibility, difficulty],
+  const announcementsQuery = useQuery({
+    queryKey: ['announcements'],
     queryFn: async () => {
-      const params = new URLSearchParams({ limit: '100', visibility });
-      if (difficulty) {
-        params.set('difficulty', difficulty);
-      }
-      const response = await authFetch(`/api/problems?${params.toString()}`);
+      const response = await authFetch('/api/announcements?limit=20&pinnedFirst=true', {}, { skipAuth: true });
       return response?.items ?? [];
     }
   });
 
-  const toggleVisibilityMutation = useMutation({
-    mutationFn: ({ problemId, isPublic }) =>
-      authFetch(`/api/problems/${problemId}/visibility`, {
-        method: 'PATCH',
-        body: { isPublic }
-      }),
-    onMutate: ({ problemId }) => {
-      setVisibilityTarget(problemId);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['problems'] });
-    },
-    onSettled: () => {
-      setVisibilityTarget(null);
+  const updatesQuery = useQuery({
+    queryKey: ['problem-updates'],
+    queryFn: async () => {
+      const response = await authFetch('/api/problem-updates?limit=20', {}, { skipAuth: true });
+      return response?.items ?? [];
     }
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (problemId) => authFetch(`/api/problems/${problemId}`, { method: 'DELETE' }),
+  const createAnnouncementMutation = useMutation({
+    mutationFn: ({ title, body, pinned }) =>
+      authFetch(
+        '/api/announcements',
+        {
+          method: 'POST',
+          body: { title, body, pinned }
+        },
+        { retry: false }
+      ),
     onSuccess: () => {
-      setPendingDeletion(null);
-      queryClient.invalidateQueries({ queryKey: ['problems'] });
+      queryClient.invalidateQueries({ queryKey: ['announcements'] });
+      setCreateDraft({ title: '', body: '', pinned: false });
+      setIsCreating(false);
+      setFormError('');
+    },
+    onError: (error) => {
+      setFormError(error.message || 'Failed to create announcement.');
     }
   });
 
-  const filtered = useMemo(() => {
-    const items = problemsQuery.data ?? [];
-    const trimmed = search.trim().toLowerCase();
-    if (!trimmed) {
-      return items;
+  const updateAnnouncementMutation = useMutation({
+    mutationFn: ({ id, updates }) =>
+      authFetch(
+        `/api/announcements/${id}`,
+        {
+          method: 'PUT',
+          body: updates
+        },
+        { retry: false }
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['announcements'] });
+      setEditingId(null);
+      setEditDraft({ title: '', body: '', pinned: false });
+      setFormError('');
+    },
+    onError: (error) => {
+      setFormError(error.message || 'Failed to update announcement.');
     }
+  });
 
-    return items.filter((problem) => {
-      const fields = [
-        problem.title,
-        problem.problemId ? `#${problem.problemId}` : '',
-        ...(problem.algorithms ?? []),
-        ...(problem.tags ?? [])
-      ];
-      return fields
-        .filter(Boolean)
-        .map((value) => value.toString().toLowerCase())
-        .some((value) => value.includes(trimmed));
-    });
-  }, [problemsQuery.data, search]);
+  const deleteAnnouncementMutation = useMutation({
+    mutationFn: (id) =>
+      authFetch(
+        `/api/announcements/${id}`,
+        {
+          method: 'DELETE'
+        },
+        { retry: false }
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['announcements'] });
+    }
+  });
 
-  const isAdmin = user?.role === 'admin';
+  const announcements = announcementsQuery.data ?? [];
+  const problemUpdates = updatesQuery.data ?? [];
 
-  const handleDeleteConfirm = () => {
-    if (!pendingDeletion) {
+  const isEditing = (id) => editingId === id;
+
+  const handleCreateSubmit = (event) => {
+    event.preventDefault();
+    if (!createDraft.title.trim() || !createDraft.body.trim()) {
+      setFormError('Title and body are required.');
       return;
     }
-    deleteMutation.mutate(pendingDeletion.problemId);
+    createAnnouncementMutation.mutate({
+      title: createDraft.title.trim(),
+      body: createDraft.body.trim(),
+      pinned: Boolean(createDraft.pinned)
+    });
+  };
+
+  const handleEditSubmit = (event) => {
+    event.preventDefault();
+    if (!editingId) {
+      return;
+    }
+    if (!editDraft.title.trim() || !editDraft.body.trim()) {
+      setFormError('Title and body are required.');
+      return;
+    }
+    updateAnnouncementMutation.mutate({
+      id: editingId,
+      updates: {
+        title: editDraft.title.trim(),
+        body: editDraft.body.trim(),
+        pinned: Boolean(editDraft.pinned)
+      }
+    });
   };
 
   return (
-    <section className="page">
+    <section className="page home-page">
       <header className="page-header">
         <div>
-          <h1>Problem Archive</h1>
-          <p>Browse challenges and sharpen your coding skills.</p>
-        </div>
-        <div className="page-controls">
-          <input
-            type="search"
-            placeholder="Search problems"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-          <select value={difficulty} onChange={(event) => setDifficulty(event.target.value)}>
-            <option value="">All difficulties</option>
-            {difficulties.map((level) => (
-              <option key={level} value={level}>
-                {level}
-              </option>
-            ))}
-          </select>
-          {isAdmin && (
-            <select value={visibility} onChange={(event) => setVisibility(event.target.value)}>
-              <option value="all">All</option>
-              <option value="public">Public</option>
-              <option value="private">Private</option>
-            </select>
-          )}
+          <h1>Welcome</h1>
+          <p>Catch up on platform announcements and recent problem changes.</p>
         </div>
       </header>
 
-      {problemsQuery.isLoading && <div className="page-message">Loading problems…</div>}
-      {problemsQuery.isError && (
-        <div className="page-message error">Failed to load problems.</div>
-      )}
+      <div className="home-grid">
+        <div className="home-announcements">
+          <div className="section-header">
+            <h2>Announcements</h2>
+            {isAdmin && !isCreating && (
+              <button type="button" className="primary" onClick={() => setIsCreating(true)}>
+                New Announcement
+              </button>
+            )}
+          </div>
 
-      {!problemsQuery.isLoading && !problemsQuery.isError && (
-        <div className="problem-table-wrapper">
-          <table className="problem-table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Title</th>
-                <th>Difficulty</th>
-                <th>Submissions</th>
-                <th>AC Rate</th>
-                {isAdmin && <th>Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((problem) => {
-                const total = problem.submissionCount ?? 0;
-                const accepted = problem.acceptedSubmissionCount ?? 0;
-                const acceptanceRate =
-                  total > 0 ? `${Math.round((accepted / total) * 100)}%` : '—';
+          {isAdmin && isCreating && (
+            <form className="announcement-form" onSubmit={handleCreateSubmit}>
+              <label>
+                Title
+                <input
+                  type="text"
+                  value={createDraft.title}
+                  onChange={(event) =>
+                    setCreateDraft((prev) => ({ ...prev, title: event.target.value }))
+                  }
+                  required
+                />
+              </label>
+              <label>
+                Body
+                <textarea
+                  value={createDraft.body}
+                  onChange={(event) =>
+                    setCreateDraft((prev) => ({ ...prev, body: event.target.value }))
+                  }
+                  rows={4}
+                  required
+                />
+              </label>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={createDraft.pinned}
+                  onChange={(event) =>
+                    setCreateDraft((prev) => ({ ...prev, pinned: event.target.checked }))
+                  }
+                />
+                Pin announcement
+              </label>
+              {formError && <div className="form-message error">{formError}</div>}
+              <div className="form-actions">
+                <button type="submit" className="primary" disabled={createAnnouncementMutation.isLoading}>
+                  {createAnnouncementMutation.isLoading ? 'Creating…' : 'Publish'}
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    setIsCreating(false);
+                    setFormError('');
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
 
-                return (
-                  <tr key={problem._id}>
-                    <td className="problem-table__id">#{problem.problemId}</td>
-                    <td>
-                      <div className="problem-table__title">
-                        <Link to={`/problems/${problem.problemId}`}>{problem.title}</Link>
-                        {!problem.isPublic && <span className="problem-table__badge">Private</span>}
-                      </div>
-                      {problem.algorithms?.length ? (
-                        <div className="problem-table__algorithms">
-                          {problem.algorithms.join(', ')}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td>
-                      <span
-                        className={`difficulty-tag difficulty-${problem.difficulty?.toLowerCase()}`}
-                      >
-                        {problem.difficulty || 'BASIC'}
-                      </span>
-                    </td>
-                    <td>{total}</td>
-                    <td>{acceptanceRate}</td>
-                    {isAdmin && (
-                      <td className="problem-table__actions">
+          {announcementsQuery.isLoading && <div className="page-message">Loading announcements…</div>}
+          {announcementsQuery.isError && (
+            <div className="page-message error">Failed to load announcements.</div>
+          )}
+
+          {!announcementsQuery.isLoading && announcements.length === 0 && (
+            <div className="page-message">No announcements yet.</div>
+          )}
+
+          <ul className="announcement-list">
+            {announcements.map((announcement) => {
+              const isEditingCurrent = isEditing(announcement.id);
+              return (
+                <li key={announcement.id} className={announcement.pinned ? 'pinned' : ''}>
+                  {isEditingCurrent ? (
+                    <form className="announcement-form" onSubmit={handleEditSubmit}>
+                      <label>
+                        Title
+                        <input
+                          type="text"
+                          value={editDraft.title}
+                          onChange={(event) =>
+                            setEditDraft((prev) => ({ ...prev, title: event.target.value }))
+                          }
+                          required
+                        />
+                      </label>
+                      <label>
+                        Body
+                        <textarea
+                          value={editDraft.body}
+                          onChange={(event) =>
+                            setEditDraft((prev) => ({ ...prev, body: event.target.value }))
+                          }
+                          rows={4}
+                          required
+                        />
+                      </label>
+                      <label className="checkbox">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(editDraft.pinned)}
+                          onChange={(event) =>
+                            setEditDraft((prev) => ({ ...prev, pinned: event.target.checked }))
+                          }
+                        />
+                        Pin announcement
+                      </label>
+                      {formError && <div className="form-message error">{formError}</div>}
+                      <div className="form-actions">
+                        <button
+                          type="submit"
+                          className="primary"
+                          disabled={updateAnnouncementMutation.isLoading}
+                        >
+                          {updateAnnouncementMutation.isLoading ? 'Saving…' : 'Save'}
+                        </button>
                         <button
                           type="button"
                           className="secondary"
-                          disabled={
-                            toggleVisibilityMutation.isLoading &&
-                            visibilityTarget === problem.problemId
-                          }
-                          onClick={() =>
-                            toggleVisibilityMutation.mutate({
-                              problemId: problem.problemId,
-                              isPublic: !problem.isPublic
-                            })
-                          }
+                          onClick={() => {
+                            setEditingId(null);
+                            setFormError('');
+                          }}
                         >
-                          {problem.isPublic ? 'Make Private' : 'Make Public'}
+                          Cancel
                         </button>
-                        <button
-                          type="button"
-                          className="danger"
-                          onClick={() => setPendingDeletion(problem)}
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-              {!filtered.length && (
-                <tr>
-                  <td colSpan={isAdmin ? 6 : 5}>
-                    <div className="problem-table__empty">No problems found.</div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                      </div>
+                    </form>
+                  ) : (
+                    <article className="announcement-card">
+                      <header>
+                        <div>
+                          <h3>{announcement.title}</h3>
+                          <p className="announcement-meta">
+                            {announcement.pinned ? <span className="badge">Pinned</span> : null}
+                            <span>{formatDateTime(announcement.createdAt)}</span>
+                          </p>
+                        </div>
+                        {isAdmin && (
+                          <div className="announcement-actions">
+                            <button
+                              type="button"
+                              className="secondary"
+                              onClick={() => {
+                                setEditingId(announcement.id);
+                                setFormError('');
+                                setEditDraft({
+                                  title: announcement.title,
+                                  body: announcement.body,
+                                  pinned: announcement.pinned
+                                });
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary"
+                              onClick={() =>
+                                updateAnnouncementMutation.mutate({
+                                  id: announcement.id,
+                                  updates: { pinned: !announcement.pinned }
+                                })
+                              }
+                            >
+                              {announcement.pinned ? 'Unpin' : 'Pin'}
+                            </button>
+                            <button
+                              type="button"
+                              className="danger"
+                              onClick={() => deleteAnnouncementMutation.mutate(announcement.id)}
+                              disabled={deleteAnnouncementMutation.isLoading}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </header>
+                      <p className="announcement-body">{announcement.body}</p>
+                    </article>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         </div>
-      )}
 
-      <ConfirmDialog
-        open={Boolean(pendingDeletion)}
-        title="Delete this problem?"
-        confirmLabel="Delete"
-        onCancel={() => setPendingDeletion(null)}
-        onConfirm={handleDeleteConfirm}
-        isConfirming={deleteMutation.isLoading}
-      >
-        {pendingDeletion ? (
-          <p>
-            This cannot be undone. <strong>{pendingDeletion.title}</strong> (
-            #{pendingDeletion.problemId})
-          </p>
-        ) : null}
-      </ConfirmDialog>
+        <aside className="home-updates">
+          <div className="section-header">
+            <h2>Problem Updates</h2>
+            <Link to="/problems" className="secondary">
+              Browse Problems
+            </Link>
+          </div>
+
+          {updatesQuery.isLoading && <div className="page-message">Loading updates…</div>}
+          {updatesQuery.isError && (
+            <div className="page-message error">Failed to load problem updates.</div>
+          )}
+
+          {!updatesQuery.isLoading && problemUpdates.length === 0 && (
+            <div className="page-message">No recent updates.</div>
+          )}
+
+          <ul className="updates-list">
+            {problemUpdates.map((update) => (
+              <li key={update.id}>
+                <h3>
+                  <Link to={`/problems/${update.problemId}`}>{update.titleSnapshot}</Link>
+                </h3>
+                <p>{update.summary}</p>
+                <span className="update-date">{formatDateTime(update.createdAt)}</span>
+              </li>
+            ))}
+          </ul>
+        </aside>
+      </div>
     </section>
   );
 }

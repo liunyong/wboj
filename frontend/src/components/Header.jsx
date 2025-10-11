@@ -46,14 +46,22 @@ function Header() {
         <Link to="/">WB Online Judge</Link>
       </div>
       <nav className="app-header__nav">
-        <NavLink to="/" className={({ isActive }) => (isActive ? 'active' : '')}>
+        <NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : '')}>
+          Home
+        </NavLink>
+        <NavLink to="/problems" className={({ isActive }) => (isActive ? 'active' : '')}>
           Problems
         </NavLink>
-        {user && (
-          <NavLink to="/dashboard" className={({ isActive }) => (isActive ? 'active' : '')}>
-            Dashboard
-          </NavLink>
-        )}
+        {user ? (
+          <>
+            <NavLink to="/submissions" className={({ isActive }) => (isActive ? 'active' : '')}>
+              Submissions
+            </NavLink>
+            <NavLink to="/dashboard" className={({ isActive }) => (isActive ? 'active' : '')}>
+              Dashboard
+            </NavLink>
+          </>
+        ) : null}
         {user?.role === 'admin' && (
           <NavLink to="/admin/create" className={({ isActive }) => (isActive ? 'active' : '')}>
             Create Problem
@@ -88,6 +96,9 @@ function Header() {
               <div className="user-popover__menu" role="menu" ref={menuRef}>
                 <Link to="/dashboard" role="menuitem" onClick={closeMenu}>
                   Dashboard
+                </Link>
+                <Link to="/submissions" role="menuitem" onClick={closeMenu}>
+                  Submissions
                 </Link>
                 <Link to="/settings" role="menuitem" onClick={closeMenu}>
                   Settings

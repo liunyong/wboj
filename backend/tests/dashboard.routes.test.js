@@ -11,7 +11,9 @@ import { authHeader, authenticateAsUser } from './utils.js';
 let mongoServer;
 
 beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create({ instance: { ip: '127.0.0.1', port: 0 } });
+  mongoServer = await MongoMemoryServer.create({
+    instance: { ip: '127.0.0.1', bindIp: '127.0.0.1', port: 0 }
+  });
   await mongoose.connect(mongoServer.getUri());
 });
 

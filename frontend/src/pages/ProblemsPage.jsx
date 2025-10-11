@@ -1,0 +1,231 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+
+import ConfirmDialog from '../components/ConfirmDialog.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
+
+const difficulties = ['BASIC', 'EASY', 'MEDIUM', 'HARD'];
+
+function ProblemsPage() {
+  const { authFetch, user } = useAuth();
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState('');
+  const [visibility, setVisibility] = useState(user?.role === 'admin' ? 'all' : 'public');
+  const [difficulty, setDifficulty] = useState('');
+  const [pendingDeletion, setPendingDeletion] = useState(null);
+  const [visibilityTarget, setVisibilityTarget] = useState(null);
+
+  useEffect(() => {
+    setVisibility(user?.role === 'admin' ? 'all' : 'public');
+  }, [user?.role]);
+
+  const problemsQuery = useQuery({
+    queryKey: ['problems', visibility, difficulty],
+    queryFn: async () => {
+      const params = new URLSearchParams({ limit: '100', visibility });
+      if (difficulty) {
+        params.set('difficulty', difficulty);
+      }
+      const response = await authFetch(`/api/problems?${params.toString()}`);
+      return response?.items ?? [];
+    }
+  });
+
+  const toggleVisibilityMutation = useMutation({
+    mutationFn: ({ problemId, isPublic }) =>
+      authFetch(`/api/problems/${problemId}/visibility`, {
+        method: 'PATCH',
+        body: { isPublic }
+      }),
+    onMutate: ({ problemId }) => {
+      setVisibilityTarget(problemId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['problems'] });
+    },
+    onSettled: () => {
+      setVisibilityTarget(null);
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (problemId) => authFetch(`/api/problems/${problemId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      setPendingDeletion(null);
+      queryClient.invalidateQueries({ queryKey: ['problems'] });
+    }
+  });
+
+  const filtered = useMemo(() => {
+    const items = problemsQuery.data ?? [];
+    const trimmed = search.trim().toLowerCase();
+    if (!trimmed) {
+      return items;
+    }
+
+    return items.filter((problem) => {
+      const fields = [
+        problem.title,
+        problem.problemId ? `#${problem.problemId}` : '',
+        ...(problem.algorithms ?? []),
+        ...(problem.tags ?? [])
+      ];
+      return fields
+        .filter(Boolean)
+        .map((value) => value.toString().toLowerCase())
+        .some((value) => value.includes(trimmed));
+    });
+  }, [problemsQuery.data, search]);
+
+  const isAdmin = user?.role === 'admin';
+
+  const handleDeleteConfirm = () => {
+    if (!pendingDeletion) {
+      return;
+    }
+    deleteMutation.mutate(pendingDeletion.problemId);
+  };
+
+  return (
+    <section className="page">
+      <header className="page-header">
+        <div>
+          <h1>Problem Archive</h1>
+          <p>Browse challenges and sharpen your coding skills.</p>
+        </div>
+        <div className="page-controls">
+          <input
+            type="search"
+            placeholder="Search problems"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <select value={difficulty} onChange={(event) => setDifficulty(event.target.value)}>
+            <option value="">All difficulties</option>
+            {difficulties.map((level) => (
+              <option key={level} value={level}>
+                {level}
+              </option>
+            ))}
+          </select>
+          {isAdmin && (
+            <select value={visibility} onChange={(event) => setVisibility(event.target.value)}>
+              <option value="all">All</option>
+              <option value="public">Public</option>
+              <option value="private">Private</option>
+            </select>
+          )}
+        </div>
+      </header>
+
+      {problemsQuery.isLoading && <div className="page-message">Loading problems…</div>}
+      {problemsQuery.isError && (
+        <div className="page-message error">Failed to load problems.</div>
+      )}
+
+      {!problemsQuery.isLoading && !problemsQuery.isError && (
+        <div className="problem-table-wrapper">
+          <table className="problem-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Difficulty</th>
+                <th>Submissions</th>
+                <th>AC Rate</th>
+                {isAdmin && <th>Actions</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((problem) => {
+                const total = problem.submissionCount ?? 0;
+                const accepted = problem.acceptedSubmissionCount ?? 0;
+                const acceptanceRate =
+                  total > 0 ? `${Math.round((accepted / total) * 100)}%` : '—';
+
+                return (
+                  <tr key={problem._id}>
+                    <td className="problem-table__id">#{problem.problemId}</td>
+                    <td>
+                      <div className="problem-table__title">
+                        <Link to={`/problems/${problem.problemId}`}>{problem.title}</Link>
+                        {!problem.isPublic && <span className="problem-table__badge">Private</span>}
+                      </div>
+                      {problem.algorithms?.length ? (
+                        <div className="problem-table__algorithms">
+                          {problem.algorithms.join(', ')}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td>
+                      <span
+                        className={`difficulty-tag difficulty-${problem.difficulty?.toLowerCase()}`}
+                      >
+                        {problem.difficulty || 'BASIC'}
+                      </span>
+                    </td>
+                    <td>{total}</td>
+                    <td>{acceptanceRate}</td>
+                    {isAdmin && (
+                      <td className="problem-table__actions">
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={
+                            toggleVisibilityMutation.isLoading &&
+                            visibilityTarget === problem.problemId
+                          }
+                          onClick={() =>
+                            toggleVisibilityMutation.mutate({
+                              problemId: problem.problemId,
+                              isPublic: !problem.isPublic
+                            })
+                          }
+                        >
+                          {problem.isPublic ? 'Make Private' : 'Make Public'}
+                        </button>
+                        <button
+                          type="button"
+                          className="danger"
+                          onClick={() => setPendingDeletion(problem)}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+              {!filtered.length && (
+                <tr>
+                  <td colSpan={isAdmin ? 6 : 5}>
+                    <div className="problem-table__empty">No problems found.</div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={Boolean(pendingDeletion)}
+        title="Delete this problem?"
+        confirmLabel="Delete"
+        onCancel={() => setPendingDeletion(null)}
+        onConfirm={handleDeleteConfirm}
+        isConfirming={deleteMutation.isLoading}
+      >
+        {pendingDeletion ? (
+          <p>
+            This cannot be undone. <strong>{pendingDeletion.title}</strong> (
+            #{pendingDeletion.problemId})
+          </p>
+        ) : null}
+      </ConfirmDialog>
+    </section>
+  );
+}
+
+export default ProblemsPage;

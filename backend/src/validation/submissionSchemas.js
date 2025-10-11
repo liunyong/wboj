@@ -3,7 +3,40 @@ import { z } from 'zod';
 
 const isObjectId = (value) => mongoose.isValidObjectId(value);
 
-const verdictEnum = z.enum(['PENDING', 'AC', 'WA', 'TLE', 'RTE', 'CE', 'MLE', 'PE', 'IE']);
+const verdictEnum = z.enum(['PENDING', 'AC', 'WA', 'TLE', 'RTE', 'CE', 'MLE', 'PE', 'IE', 'PARTIAL']);
+const statusEnum = z.enum([
+  'queued',
+  'running',
+  'accepted',
+  'wrong_answer',
+  'tle',
+  'rte',
+  'ce',
+  'failed'
+]);
+
+const statusFilterSchema = z
+  .preprocess((value) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    const values = Array.isArray(value) ? value : [value];
+    const flattened = values
+      .flatMap((item) =>
+        typeof item === 'string'
+          ? item
+              .split(',')
+              .map((part) => part.trim())
+              .filter(Boolean)
+          : []
+      )
+      .filter(Boolean);
+    if (!flattened.length) {
+      return undefined;
+    }
+    return flattened;
+  }, z.array(statusEnum).nonempty())
+  .optional();
 
 const coerceLanguageId = z.union([
   z.coerce.number().int().positive('languageId must be a positive integer'),
@@ -63,17 +96,59 @@ export const mySubmissionsQuerySchema = z
   })
   .strict();
 
-export const adminListSubmissionsQuerySchema = z
+const listSubmissionsQuerySchemaBase = z
   .object({
-    limit: z.coerce.number().int().min(1).max(200).optional().default(100),
+    page: z.coerce.number().int().min(1).optional().default(1),
+    limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+    status: statusFilterSchema,
+    user: z
+      .string()
+      .trim()
+      .min(1, 'user filter cannot be empty')
+      .optional(),
     problemId: z
-      .string()
-      .refine((value) => !value || isObjectId(value), 'problemId must be a valid ObjectId')
+      .coerce.number()
+      .int()
+      .positive('problemId must be positive')
       .optional(),
-    userId: z
+    dateFrom: z
       .string()
-      .refine((value) => !value || isObjectId(value), 'userId must be a valid ObjectId')
-      .optional(),
-    verdict: verdictEnum.optional()
+      .optional()
+      .refine(
+        (value) => !value || !Number.isNaN(Date.parse(value)),
+        'dateFrom must be a valid ISO date'
+      ),
+    dateTo: z
+      .string()
+      .optional()
+      .refine(
+        (value) => !value || !Number.isNaN(Date.parse(value)),
+        'dateTo must be a valid ISO date'
+      ),
+    sort: z.enum(['createdAt', '-createdAt']).optional().default('-createdAt')
+  })
+  .strict();
+
+export const listSubmissionsQuerySchema = listSubmissionsQuerySchemaBase;
+export const adminListSubmissionsQuerySchema = listSubmissionsQuerySchemaBase;
+
+export const problemSubmissionsQuerySchema = z
+  .object({
+    scope: z.enum(['mine', 'all']).optional().default('mine'),
+    page: z.coerce.number().int().min(1).optional().default(1),
+    limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+    sort: z.enum(['createdAt', '-createdAt']).optional().default('-createdAt')
+  })
+  .strict();
+
+export const submissionUpdatesQuerySchema = z
+  .object({
+    since: z
+      .string()
+      .optional()
+      .refine(
+        (value) => !value || !Number.isNaN(Date.parse(value)),
+        'since must be a valid ISO date'
+      )
   })
   .strict();

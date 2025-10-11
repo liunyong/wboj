@@ -11,7 +11,12 @@ import {
   getProblemAlgorithms,
   parseProblemTestCasesZip
 } from '../controllers/problemController.js';
+import {
+  listProblemSubmissions,
+  streamProblemSubmissions
+} from '../controllers/submissionController.js';
 import { authenticateOptional, requireAuth, requireRole } from '../middlewares/auth.js';
+import { listRateLimiter } from '../middlewares/rateLimiters.js';
 import validate from '../middlewares/validate.js';
 import {
   createProblemSchema,
@@ -22,6 +27,10 @@ import {
   updateVisibilitySchema,
   updateProblemSchema
 } from '../validation/problemSchemas.js';
+import {
+  problemSubmissionsQuerySchema,
+  submissionUpdatesQuerySchema
+} from '../validation/submissionSchemas.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
@@ -39,6 +48,19 @@ router.get(
   authenticateOptional,
   validate({ params: problemIdParamSchema, query: getProblemQuerySchema }),
   getProblemById
+);
+router.get(
+  '/:problemId/submissions',
+  requireAuth,
+  listRateLimiter,
+  validate({ params: problemIdParamSchema, query: problemSubmissionsQuerySchema }),
+  listProblemSubmissions
+);
+router.get(
+  '/:problemId/submissions/stream',
+  requireAuth,
+  validate({ params: problemIdParamSchema, query: submissionUpdatesQuerySchema }),
+  streamProblemSubmissions
 );
 router.post(
   '/',

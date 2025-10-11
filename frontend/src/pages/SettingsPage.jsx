@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '../context/AuthContext.jsx';
@@ -21,6 +21,13 @@ function SettingsPage() {
   const [passwordError, setPasswordError] = useState('');
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [isPasswordSaving, setIsPasswordSaving] = useState(false);
+  const [profilePublic, setProfilePublic] = useState(Boolean(user?.profilePublic));
+  const [visibilityMessage, setVisibilityMessage] = useState('');
+  const [isVisibilitySaving, setIsVisibilitySaving] = useState(false);
+
+  useEffect(() => {
+    setProfilePublic(Boolean(user?.profilePublic));
+  }, [user?.profilePublic]);
 
   const handleProfileChange = (event) => {
     const { name, value } = event.target;
@@ -49,6 +56,33 @@ function SettingsPage() {
       setProfileMessage(error.message || 'Failed to update profile.');
     } finally {
       setIsProfileSaving(false);
+    }
+  };
+
+  const toggleProfileVisibility = async (event) => {
+    const nextValue = event.target.checked;
+    setProfilePublic(nextValue);
+    setVisibilityMessage('');
+    setIsVisibilitySaving(true);
+    try {
+      const response = await authFetch('/api/users/me/profile', {
+        method: 'PUT',
+        body: { profilePublic: nextValue }
+      });
+      queryClient.setQueryData(['me'], (prev) => ({
+        ...(prev ?? {}),
+        profilePublic: response?.profilePublic ?? nextValue
+      }));
+      setVisibilityMessage(
+        response?.profilePublic
+          ? 'Your profile is now public.'
+          : 'Your profile is now private.'
+      );
+    } catch (error) {
+      setVisibilityMessage(error.message || 'Failed to update profile visibility.');
+      setProfilePublic((prev) => !prev);
+    } finally {
+      setIsVisibilitySaving(false);
     }
   };
 
@@ -166,6 +200,24 @@ function SettingsPage() {
           {passwordError && <div className="form-message error">{passwordError}</div>}
           {passwordMessage && <div className="form-message info">{passwordMessage}</div>}
         </form>
+
+        <div className="settings-card">
+          <h2>Privacy</h2>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={profilePublic}
+              onChange={toggleProfileVisibility}
+              disabled={isVisibilitySaving}
+            />
+            Make my profile public
+          </label>
+          <p className="muted">
+            Public profiles can be viewed by anyone. Private profiles are visible only to you and
+            administrators.
+          </p>
+          {visibilityMessage && <div className="form-message info">{visibilityMessage}</div>}
+        </div>
       </div>
     </section>
   );

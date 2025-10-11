@@ -19,7 +19,7 @@ const resolveUserFromToken = async (token) => {
     return null;
   }
   const user = await User.findById(payload.sub).select(
-    'username email role isActive profile createdAt updatedAt'
+    'username email role isActive profile profilePublic createdAt updatedAt'
   );
   if (!user || !user.isActive) {
     return null;
@@ -31,6 +31,7 @@ const resolveUserFromToken = async (token) => {
     role: user.role,
     isActive: user.isActive,
     profile: user.profile,
+    profilePublic: user.profilePublic ?? false,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt
   };

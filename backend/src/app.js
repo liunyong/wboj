@@ -10,6 +10,9 @@ import problemRoutes from './routes/problemRoutes.js';
 import submissionRoutes from './routes/submissionRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import judgeRoutes from './routes/judgeRoutes.js';
+import announcementRoutes from './routes/announcementRoutes.js';
+import problemUpdateRoutes from './routes/problemUpdateRoutes.js';
+import adminUserRoutes from './routes/adminUserRoutes.js';
 
 const app = express();
 
@@ -24,10 +27,13 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/announcements', announcementRoutes);
+app.use('/api/problem-updates', problemUpdateRoutes);
 app.use('/api/problems', problemRoutes);
 app.use('/api/submissions', submissionRoutes);
 app.use('/api/languages', languageRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/judge', judgeRoutes);
 
 app.use((err, req, res, next) => {

@@ -15,6 +15,7 @@ const sanitizeUser = (user) => ({
   role: user.role,
   isActive: user.isActive,
   profile: user.profile ?? {},
+  profilePublic: user.profilePublic ?? false,
   createdAt: user.createdAt,
   updatedAt: user.updatedAt
 });

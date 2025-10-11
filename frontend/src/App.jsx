@@ -6,12 +6,15 @@ import RequireAuth from './components/RequireAuth.jsx';
 import AdminCreatePage from './pages/AdminCreatePage.jsx';
 import AdminUsersPage from './pages/AdminUsersPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
+import SubmissionsPage from './pages/SubmissionsPage.jsx';
 import HomePage from './pages/HomePage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import ProblemDetailPage from './pages/ProblemDetailPage.jsx';
 import ProblemEditPage from './pages/ProblemEditPage.jsx';
+import ProblemsPage from './pages/ProblemsPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
+import UserDashboardPage from './pages/UserDashboardPage.jsx';
 
 function App() {
   return (
@@ -20,6 +23,7 @@ function App() {
         <Route index element={<HomePage />} />
         <Route path="login" element={<LoginPage />} />
         <Route path="register" element={<RegisterPage />} />
+        <Route path="problems" element={<ProblemsPage />} />
         <Route path="problems/:problemId" element={<ProblemDetailPage />} />
         <Route
           path="problems/:problemId/edit"
@@ -37,6 +41,21 @@ function App() {
               <DashboardPage />
             </RequireAuth>
           }
+        />
+        <Route path="u/:username" element={<UserDashboardPage />} />
+
+        <Route
+          path="submissions"
+          element={
+            <RequireAuth>
+              <SubmissionsPage />
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="dashboard/submissions"
+          element={<Navigate to="/submissions" replace />}
         />
 
         <Route

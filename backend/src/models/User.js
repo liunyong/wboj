@@ -37,7 +37,8 @@ const userSchema = new mongoose.Schema(
         )
       ],
       default: []
-    }
+    },
+    profilePublic: { type: Boolean, default: false }
   },
   {
     timestamps: true

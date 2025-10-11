@@ -9,6 +9,7 @@
     "dev": "nodemon src/server.js",
     "seed": "node scripts/seed.js",
     "backfill:problem-ids": "node scripts/backfill-problem-ids.js",
+    "migrate:submissions": "node scripts/migrate-submissions.js",
     "test": "vitest run"
   },
   "dependencies": {

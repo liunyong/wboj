@@ -12,6 +12,15 @@ export const userIdParamSchema = z
   })
   .strict();
 
+export const usernameParamSchema = z
+  .object({
+    username: z
+      .string()
+      .min(1, 'Username is required')
+      .max(64, 'Username is too long')
+  })
+  .strict();
+
 export const updateUserRoleSchema = z
   .object({
     role: z.enum(['admin', 'user'])
@@ -30,5 +39,11 @@ export const listUsersQuerySchema = z
     role: z.enum(['admin', 'user']).optional(),
     isActive: z.coerce.boolean().optional(),
     limit: z.coerce.number().int().min(1).max(200).optional().default(50)
+  })
+  .strict();
+
+export const profileVisibilitySchema = z
+  .object({
+    profilePublic: z.coerce.boolean()
   })
   .strict();

@@ -9,20 +9,25 @@ function AdminUsersPage() {
   const usersQuery = useQuery({
     queryKey: ['admin', 'users'],
     queryFn: async () => {
-      const response = await authFetch('/api/users');
+      const response = await authFetch('/api/admin/users');
       return response?.items ?? [];
     }
   });
 
   const roleMutation = useMutation({
     mutationFn: ({ id, role }) =>
-      authFetch(`/api/users/${id}/role`, { method: 'PATCH', body: { role } }),
+      authFetch(`/api/admin/users/${id}/role`, { method: 'PATCH', body: { role } }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
   });
 
   const statusMutation = useMutation({
     mutationFn: ({ id, isActive }) =>
-      authFetch(`/api/users/${id}/status`, { method: 'PATCH', body: { isActive } }),
+      authFetch(`/api/admin/users/${id}/status`, { method: 'PATCH', body: { isActive } }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => authFetch(`/api/admin/users/${id}`, { method: 'DELETE' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
   });
 
@@ -47,6 +52,7 @@ function AdminUsersPage() {
                 <th>Email</th>
                 <th>Role</th>
                 <th>Status</th>
+                <th>Profile</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -57,6 +63,7 @@ function AdminUsersPage() {
                   <td>{user.email}</td>
                   <td>{user.role}</td>
                   <td>{user.isActive ? 'Active' : 'Inactive'}</td>
+                  <td>{user.profilePublic ? 'Public' : 'Private'}</td>
                   <td className="admin-actions">
                     <button
                       type="button"
@@ -76,6 +83,14 @@ function AdminUsersPage() {
                       }
                     >
                       {user.isActive ? 'Deactivate' : 'Activate'}
+                    </button>
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={() => deleteMutation.mutate(user.id)}
+                      disabled={deleteMutation.isLoading}
+                    >
+                      Delete
                     </button>
                   </td>
                 </tr>
