@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import User from '../models/User.js';
 import {
   createAuthTokens,
@@ -20,6 +21,24 @@ const sanitizeUser = (user) => ({
   updatedAt: user.updatedAt
 });
 
+const debugAuth = () => process.env.DEBUG_AUTH === '1';
+const logAuth = (level, message, meta) => {
+  if (!debugAuth()) {
+    return;
+  }
+  const payload = meta ? ` ${JSON.stringify(meta)}` : '';
+  const method = level === 'warn' ? console.warn : console.log;
+  method(`[auth] ${message}${payload}`);
+};
+
+const anonymizeIdentifier = (value) => {
+  if (!value) {
+    return 'unknown';
+  }
+  const hash = crypto.createHash('sha256').update(String(value)).digest('hex').slice(0, 12);
+  return `hash:${hash}`;
+};
+
 export const register = async (req, res, next) => {
   try {
     const { username, email, password } = req.validated?.body || req.body;
@@ -31,9 +50,24 @@ export const register = async (req, res, next) => {
     });
 
     if (existingUser) {
+      const field =
+        existingUser.email === normalizedEmail
+          ? 'email'
+          : existingUser.username === normalizedUsername
+          ? 'username'
+          : 'username';
+      const meta = {
+        field,
+        usernameHash: anonymizeIdentifier(normalizedUsername)
+      };
+      if (field === 'email') {
+        meta.emailHash = anonymizeIdentifier(normalizedEmail);
+      }
+      logAuth('warn', 'registration duplicate detected', meta);
       return res.status(409).json({
-        code: 'USER_EXISTS',
-        message: 'Username or email already taken'
+        code: 'DUPLICATE',
+        field,
+        message: field === 'email' ? 'Email already registered' : 'Username already taken'
       });
     }
 
@@ -47,6 +81,12 @@ export const register = async (req, res, next) => {
       passwordChangedAt: new Date()
     });
 
+    logAuth('info', 'user registered', {
+      userId: user._id.toString(),
+      usernameHash: anonymizeIdentifier(user.username),
+      emailHash: anonymizeIdentifier(user.email)
+    });
+
     const tokens = await createAuthTokens(user);
 
     res.status(201).json({
@@ -54,6 +94,24 @@ export const register = async (req, res, next) => {
       tokens
     });
   } catch (error) {
+    if (error?.code === 11000) {
+      const field =
+        error.keyPattern?.email ? 'email' : error.keyPattern?.username ? 'username' : 'unknown';
+      logAuth('warn', 'registration duplicate error', {
+        field,
+        usernameHash: req.validated?.body?.username
+          ? anonymizeIdentifier(req.validated.body.username)
+          : undefined,
+        emailHash: req.validated?.body?.email
+          ? anonymizeIdentifier(req.validated.body.email)
+          : undefined
+      });
+      return res.status(409).json({
+        code: 'DUPLICATE',
+        field,
+        message: field === 'email' ? 'Email already registered' : 'Username already taken'
+      });
+    }
     next(error);
   }
 };
@@ -69,19 +127,26 @@ export const login = async (req, res, next) => {
     });
 
     if (!user) {
+      logAuth('warn', 'login failed: user not found', {
+        identifierHash: anonymizeIdentifier(trimmedIdentifier)
+      });
       return res.status(401).json({ code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' });
     }
 
     if (!user.isActive) {
+      logAuth('warn', 'login blocked: inactive user', { userId: user._id.toString() });
       return res.status(403).json({ code: 'ACCOUNT_INACTIVE', message: 'Account is inactive' });
     }
 
     const isValid = await verifyPassword(password, user.passwordHash);
     if (!isValid) {
+      logAuth('warn', 'login failed: wrong password', { userId: user._id.toString() });
       return res.status(401).json({ code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' });
     }
 
     const tokens = await createAuthTokens(user);
+
+    logAuth('info', 'user logged in', { userId: user._id.toString() });
 
     res.json({
       user: sanitizeUser(user),

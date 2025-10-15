@@ -8,6 +8,7 @@ import User from '../src/models/User.js';
 import { authHeader, authenticateAsUser, createUser, loginUser } from './utils.js';
 
 let mongoServer;
+const originalNodeEnv = process.env.NODE_ENV;
 
 beforeAll(async () => {
   mongoServer = await MongoMemoryServer.create({
@@ -17,6 +18,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  process.env.NODE_ENV = originalNodeEnv;
   await mongoose.disconnect();
   if (mongoServer) {
     await mongoServer.stop();
@@ -58,8 +60,9 @@ describe('Auth routes', () => {
     });
 
     expect(response.status).toBe(400);
-    expect(response.body.errors[0].path).toBe('confirmPassword');
-    expect(response.body.errors[0].message).toBe('Passwords do not match');
+    expect(response.body.code).toBe('VALIDATION_ERROR');
+    expect(response.body.details[0].path).toBe('confirmPassword');
+    expect(response.body.details[0].message).toBe('Passwords do not match');
   });
 
   it('rejects weak passwords during registration', async () => {
@@ -71,8 +74,78 @@ describe('Auth routes', () => {
     });
 
     expect(response.status).toBe(400);
-    expect(response.body.errors[0].path).toBe('password');
-    expect(response.body.errors[0].message).toContain('Password must include at least three');
+    expect(response.body.code).toBe('VALIDATION_ERROR');
+    expect(response.body.details[0].path).toBe('password');
+    expect(response.body.details[0].message).toContain('Password must include at least three');
+  });
+
+  it('returns duplicate error when registering with an existing email', async () => {
+    await request(app).post('/api/auth/register').send({
+      username: 'uniqueuser1',
+      email: 'duplicate@example.com',
+      password: 'Password123!',
+      confirmPassword: 'Password123!'
+    });
+
+    const duplicateResponse = await request(app).post('/api/auth/register').send({
+      username: 'uniqueuser2',
+      email: 'duplicate@example.com',
+      password: 'Password123!',
+      confirmPassword: 'Password123!'
+    });
+
+    expect(duplicateResponse.status).toBe(409);
+    expect(duplicateResponse.body).toMatchObject({
+      code: 'DUPLICATE',
+      field: 'email'
+    });
+  });
+
+  it('rate limits repeated failed logins per user identifier in production mode', async () => {
+    const username = 'limituser';
+    const email = 'limituser@example.com';
+    const password = 'Password123!';
+    const previousEnv = process.env.NODE_ENV;
+
+    try {
+      process.env.NODE_ENV = 'production';
+
+      await request(app).post('/api/auth/register').send({
+        username,
+        email,
+        password,
+        confirmPassword: password
+      });
+
+      for (let i = 0; i < 19; i += 1) {
+        const response = await request(app).post('/api/auth/login').send({
+          usernameOrEmail: email,
+          password: 'WrongPass123!'
+        });
+        expect(response.status).toBe(401);
+      }
+
+      const successResponse = await request(app).post('/api/auth/login').send({
+        usernameOrEmail: email,
+        password
+      });
+      expect(successResponse.status).toBe(200);
+
+      const twentiethFail = await request(app).post('/api/auth/login').send({
+        usernameOrEmail: email,
+        password: 'WrongPass123!'
+      });
+      expect(twentiethFail.status).toBe(401);
+
+      const rateLimited = await request(app).post('/api/auth/login').send({
+        usernameOrEmail: email,
+        password: 'WrongPass123!'
+      });
+      expect(rateLimited.status).toBe(429);
+      expect(rateLimited.body.code).toBe('RATE_LIMITED');
+    } finally {
+      process.env.NODE_ENV = previousEnv;
+    }
   });
 
   it('refreshes tokens and rotates sessions', async () => {

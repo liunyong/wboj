@@ -15,6 +15,12 @@ import problemUpdateRoutes from './routes/problemUpdateRoutes.js';
 import adminUserRoutes from './routes/adminUserRoutes.js';
 
 const app = express();
+const debugAuth = () => process.env.DEBUG_AUTH === '1';
+
+app.set('trust proxy', 1);
+if (debugAuth()) {
+  console.log('[auth] trust proxy enabled');
+}
 
 app.use(helmet());
 app.use(cors());

@@ -1,10 +1,12 @@
 import { ZodError } from 'zod';
 
-const buildErrorResponse = (error) =>
+const buildErrorDetails = (error) =>
   error.issues.map((issue) => ({
     path: issue.path.join('.') || '(root)',
     message: issue.message
   }));
+
+const debugAuth = () => process.env.DEBUG_AUTH === '1';
 
 export const validate = ({ body, query, params }) => (req, res, next) => {
   try {
@@ -26,9 +28,17 @@ export const validate = ({ body, query, params }) => (req, res, next) => {
     next();
   } catch (error) {
     if (error instanceof ZodError) {
+      const details = buildErrorDetails(error);
+      if (debugAuth() && req.originalUrl?.startsWith('/api/auth')) {
+        console.warn('[auth] validation failed', {
+          route: req.originalUrl,
+          details
+        });
+      }
       res.status(400).json({
-        message: 'Validation failed',
-        errors: buildErrorResponse(error)
+        code: 'VALIDATION_ERROR',
+        message: 'Request validation failed',
+        details
       });
       return;
     }

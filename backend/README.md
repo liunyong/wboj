@@ -12,6 +12,9 @@ Copy `.env.example` to `.env` (or create the file manually) and set:
 - `JUDGE0_MAX_CONCURRENCY`: Max concurrent Judge0 submissions processed (default `2`).
 - `JUDGE0_MAX_RETRIES`: Automatic retry attempts for Judge0 requests (default `2`).
 - `JUDGE0_TIMEOUT_MS`: Judge0 HTTP client timeout in milliseconds (default `20000`).
+- `RATE_LIMIT_USE_REDIS`: Set to `true` to back rate limiting with Redis when running multiple instances (default `false`).
+- `REDIS_URL`: Redis connection string used when `RATE_LIMIT_USE_REDIS=true`.
+- `DEBUG_AUTH`: Set to `1` to enable additional auth flow logging useful for debugging rate limiting and validation issues.
 
 ## Scripts
 
@@ -31,6 +34,10 @@ Copy `.env.example` to `.env` (or create the file manually) and set:
 - `GET /api/submissions/:id` — Submission details.
 
 All submissions are evaluated against stored test cases via Judge0.
+
+## Rate Limiting
+
+Login and registration endpoints have dedicated rate limiters that key on user identifiers (email) and IP + user agent, respectively. Limiters only run in production mode (`NODE_ENV=production`). Successful logins do not count against the limit. To coordinate limits across multiple instances, provide Redis credentials and set `RATE_LIMIT_USE_REDIS=true`. Leave it disabled for single-node development.
 
 ## Local Development
 
