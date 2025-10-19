@@ -19,9 +19,9 @@ const resolveUserFromToken = async (token) => {
     return null;
   }
   const user = await User.findById(payload.sub).select(
-    'username email role isActive profile profilePublic createdAt updatedAt'
+    'username email role isActive deletedAt profile profilePublic createdAt updatedAt'
   );
-  if (!user || !user.isActive) {
+  if (!user || !user.isActive || user.deletedAt) {
     return null;
   }
   return {
@@ -30,6 +30,7 @@ const resolveUserFromToken = async (token) => {
     email: user.email,
     role: user.role,
     isActive: user.isActive,
+    deletedAt: user.deletedAt,
     profile: user.profile,
     profilePublic: user.profilePublic ?? false,
     createdAt: user.createdAt,
@@ -72,13 +73,32 @@ export const requireAuth = async (req, res, next) => {
   }
 };
 
+const roleHierarchy = {
+  user: 0,
+  admin: 1,
+  super_admin: 2
+};
+
+const hasRole = (userRole, requiredRole) => {
+  const userRank = roleHierarchy[userRole] ?? -1;
+  const requiredRank = roleHierarchy[requiredRole] ?? Number.POSITIVE_INFINITY;
+  if (requiredRole === 'admin') {
+    return userRank >= roleHierarchy.admin;
+  }
+  return userRank >= requiredRank;
+};
+
 export const requireRole = (role) => async (req, res, next) => {
   try {
     if (!req.user) {
       return res.status(401).json({ code: 'UNAUTHENTICATED', message: 'Authentication required' });
     }
 
-    if (req.user.role !== role) {
+    if (!req.user.isActive || req.user.deletedAt) {
+      return res.status(403).json({ code: 'FORBIDDEN', message: 'Account inactive' });
+    }
+
+    if (!hasRole(req.user.role, role)) {
       return res.status(403).json({ code: 'FORBIDDEN', message: 'Insufficient permissions' });
     }
 

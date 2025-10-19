@@ -1469,23 +1469,6 @@ textarea {
   white-space: pre;
 }
 
-.token.keyword {
-  color: #93c5fd;
-}
-
-.token.string {
-  color: #facc15;
-}
-
-.token.number {
-  color: #f472b6;
-}
-
-.token.comment {
-  color: #94a3b8;
-  font-style: italic;
-}
-
 .submission-modal__actions {
   justify-content: space-between;
   align-items: center;

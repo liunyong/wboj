@@ -1,7 +1,17 @@
 import request from 'supertest';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { fetchLanguagesSpy } = vi.hoisted(() => ({
+  fetchLanguagesSpy: vi.fn(async () => [{ id: 71, name: 'Python (3.10)' }])
+}));
+
+vi.mock('../src/services/judge0Service.js', () => ({
+  fetchJudge0Languages: fetchLanguagesSpy,
+  clearLanguageCache: vi.fn(),
+  runJudge0Submission: vi.fn()
+}));
 
 import app from '../src/app.js';
 import Problem from '../src/models/Problem.js';
@@ -12,13 +22,14 @@ import { authenticateAsAdmin, authenticateAsUser, authHeader } from './utils.js'
 let mongoServer;
 
 const buildProblem = (overrides = {}) => {
-  const baseId = overrides.problemId ?? Math.floor(Math.random() * 100000);
+  const baseId = overrides.problemId ?? 100000 + Math.floor(Math.random() * 1000);
   return {
     title: `Problem ${baseId}`,
     statement: 'Sample statement',
     difficulty: 'BASIC',
     problemId: baseId,
     problemNumber: baseId,
+    slug: overrides.slug ?? `problem-${baseId}`,
     judge0LanguageIds: [71],
     author: new mongoose.Types.ObjectId(),
     isPublic: true,

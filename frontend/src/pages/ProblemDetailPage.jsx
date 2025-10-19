@@ -3,11 +3,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
-import { buildOptimisticSubmission } from '../utils/submissions.js';
+import { applyEventToSubmissionList, buildOptimisticSubmission } from '../utils/submissions.js';
 import { useResubmitSubmission } from '../hooks/useResubmitSubmission.js';
+import { useDeleteSubmission } from '../hooks/useDeleteSubmission.js';
+import { useLanguages } from '../hooks/useLanguages.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import ProblemSubmissionsPanel from '../components/ProblemSubmissionsPanel.jsx';
 import SubmissionViewerModal from '../components/SubmissionViewerModal.jsx';
+import { detailToEvent } from '../utils/submissions.js';
 
 function ProblemDetailPage() {
   const { problemId } = useParams();
@@ -21,6 +24,11 @@ function ProblemDetailPage() {
   const [pendingDeletion, setPendingDeletion] = useState(false);
   const [activeSubmissionId, setActiveSubmissionId] = useState(null);
   const [resubmittingId, setResubmittingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+
+  const isAdmin = ['admin', 'super_admin'].includes(user?.role);
+  const isSuperAdmin = user?.role === 'super_admin';
+  const currentUserId = user?.id ?? null;
 
   const updatePersonalHistory = useCallback(
     (mutator) => {
@@ -32,7 +40,7 @@ function ProblemDetailPage() {
     [queryClient]
   );
 
-  const includePrivate = user?.role === 'admin' ? 'true' : 'false';
+  const includePrivate = isAdmin ? 'true' : 'false';
 
   const problemQuery = useQuery({
     queryKey: ['problem', problemId, includePrivate],
@@ -46,10 +54,7 @@ function ProblemDetailPage() {
     }
   });
 
-  const languagesQuery = useQuery({
-    queryKey: ['languages'],
-    queryFn: async () => authFetch('/api/languages', {}, { skipAuth: true })
-  });
+  const languagesQuery = useLanguages();
   const submissionMutation = useMutation({
     mutationFn: async () => {
       if (!problemQuery.data?._id) {
@@ -95,38 +100,58 @@ function ProblemDetailPage() {
     }
   });
 
-  const resubmitMutation = useResubmitSubmission({
-    onSuccess: (data, variables) => {
+const resubmitMutation = useResubmitSubmission({
+  onSuccess: (data, variables) => {
       setResubmittingId(null);
-      const newSubmissionId = data?.submissionId;
-      const baseSubmission = variables?.baseSubmission;
-      const languageFromBase = baseSubmission?.language;
-      const languageIdFromBase = baseSubmission?.languageId;
+      const submission = data?.submission ?? null;
+      if (submission) {
+        const event = detailToEvent(submission);
+        if (event && problem?.problemId) {
+          queryClient.invalidateQueries({ queryKey: ['problemSubmissions', problem.problemId] });
+        }
+        updatePersonalHistory((entries) =>
+          applyEventToSubmissionList(Array.isArray(entries) ? entries : [], event, { problem })
+        );
 
-      if (newSubmissionId && problem) {
-        const optimistic = buildOptimisticSubmission({
-          submissionId: newSubmissionId,
-          base: baseSubmission,
-          problem,
-          languageId: languageIdFromBase,
-          language: languageFromBase,
-          sourceLen: baseSubmission?.sourceLen ?? 0
-        });
-        updatePersonalHistory((entries) => {
-          const filtered = entries.filter((item) => (item.id ?? item._id) !== newSubmissionId);
-          return [optimistic, ...filtered];
-        });
+        const previousVerdict = variables?.baseSubmission?.verdict ?? null;
+        const nextVerdict = submission.verdict ?? null;
+        if (previousVerdict && nextVerdict && previousVerdict !== nextVerdict) {
+          setMessage({ type: 'info', text: `Verdict updated: ${previousVerdict} → ${nextVerdict}` });
+        } else {
+          setMessage({ type: 'info', text: 'Submission re-run.' });
+        }
+      } else {
+        setMessage({ type: 'info', text: 'Submission re-run.' });
       }
-
-      if (problem?.problemId) {
-        queryClient.invalidateQueries({ queryKey: ['problemSubmissions', problem.problemId] });
-      }
-
-      setMessage({ type: 'info', text: 'Re-submitted. Grading…' });
     },
     onError: (error) => {
       setResubmittingId(null);
       setMessage({ type: 'error', text: error.message || 'Failed to re-submit solution.' });
+  }
+});
+
+  const deleteSubmissionMutation = useDeleteSubmission({
+    onSuccess: (data) => {
+      const submissionId = data?.submissionId;
+      setDeletingId(null);
+      setMessage({ type: 'info', text: 'Submission deleted.' });
+      if (problem?.problemId) {
+        queryClient.invalidateQueries({ queryKey: ['problemSubmissions', problem.problemId] });
+      }
+      if (submissionId) {
+        updatePersonalHistory((entries) =>
+          Array.isArray(entries)
+            ? entries.filter((item) => (item.id ?? item._id) !== submissionId)
+            : entries
+        );
+        if (submissionId === activeSubmissionId) {
+          setActiveSubmissionId(null);
+        }
+      }
+    },
+    onError: (error) => {
+      setDeletingId(null);
+      setMessage({ type: 'error', text: error.message || 'Failed to delete submission.' });
     }
   });
 
@@ -152,9 +177,8 @@ function ProblemDetailPage() {
     }
   });
 
-  const isAdmin = user?.role === 'admin';
   const problem = problemQuery.data;
-  const languages = languagesQuery.data ?? [];
+  const languages = languagesQuery.languages ?? [];
 
   const allowedLanguages = problem?.judge0LanguageIds?.length
     ? languages.filter((item) => problem.judge0LanguageIds.includes(item.id))
@@ -225,11 +249,30 @@ function ProblemDetailPage() {
       if (!submissionId) {
         return;
       }
+      const isOwner = submission?.userId && submission.userId === currentUserId;
+      if (!isAdmin && !isOwner) {
+        return;
+      }
       setMessage(null);
       setResubmittingId(submissionId);
       resubmitMutation.mutate({ submissionId, baseSubmission: submission });
     },
-    [resubmitMutation]
+    [currentUserId, isAdmin, resubmitMutation]
+  );
+
+  const handleDeleteSubmission = useCallback(
+    (submission) => {
+      const submissionId = submission?.id ?? submission?._id;
+      if (!submissionId || !isSuperAdmin) {
+        return;
+      }
+      setMessage(null);
+      setDeletingId(submissionId);
+      deleteSubmissionMutation.mutate(submissionId, {
+        onSettled: () => setDeletingId(null)
+      });
+    },
+    [deleteSubmissionMutation, isSuperAdmin]
   );
 
   const closeSubmissionModal = useCallback(() => {
@@ -242,18 +285,21 @@ function ProblemDetailPage() {
     (problem?.testCases?.reduce((sum, testCase) => sum + (testCase.points || 0), 0) ?? 0);
   const showAdminTestCases = isAdmin && problem?.testCases?.length > 0;
   const canResubmitActiveSubmission = useMemo(() => {
-    if (!activeSubmissionId || !user) {
+    if (!activeSubmissionId || !currentUserId) {
       return false;
     }
     if (isAdmin) {
       return true;
     }
     const cached = getSubmissionFromCaches(activeSubmissionId);
-    if (cached?.userId && user?.id) {
-      return String(cached.userId) === String(user.id);
+    if (cached?.userId && currentUserId) {
+      return String(cached.userId) === String(currentUserId);
     }
     return false;
-  }, [activeSubmissionId, getSubmissionFromCaches, isAdmin, user]);
+  }, [activeSubmissionId, currentUserId, getSubmissionFromCaches, isAdmin]);
+  const cachedActiveSubmission = activeSubmissionId
+    ? getSubmissionFromCaches(activeSubmissionId)
+    : null;
 
   return (
     <section className="page">
@@ -451,12 +497,16 @@ function ProblemDetailPage() {
           {user ? (
             <ProblemSubmissionsPanel
               problem={problem}
-              currentUserId={user.id}
+              currentUserId={currentUserId}
               isAdmin={isAdmin}
+              canDelete={isSuperAdmin}
               onVerdictClick={handleVerdictClick}
               onResubmit={handleResubmit}
+              onDelete={handleDeleteSubmission}
               resubmittingId={resubmittingId}
               isResubmitPending={resubmitMutation.isPending}
+              deletingId={deletingId}
+              isDeletePending={deleteSubmissionMutation.isPending}
             />
           ) : null}
         </div>
@@ -494,6 +544,16 @@ function ProblemDetailPage() {
           }}
           isResubmitting={
             resubmitMutation.isPending && resubmittingId === activeSubmissionId
+          }
+          allowDelete={isSuperAdmin}
+          onDelete={(submission) => {
+            const baseSubmission = submission ?? cachedActiveSubmission;
+            if (baseSubmission) {
+              handleDeleteSubmission(baseSubmission);
+            }
+          }}
+          isDeleting={
+            deleteSubmissionMutation.isPending && deletingId === activeSubmissionId
           }
         />
       ) : null}

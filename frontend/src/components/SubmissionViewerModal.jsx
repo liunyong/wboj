@@ -3,14 +3,29 @@ import { Link } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
 import { formatDateTime } from '../utils/date.js';
-import { highlightSource } from '../utils/highlight.js';
+import { useLanguages } from '../hooks/useLanguages.js';
+import CodeBlock from './CodeBlock.jsx';
+
+const RUN_STATUS_LABELS = {
+  accepted: 'Accepted',
+  wrong_answer: 'Wrong Answer',
+  tle: 'Time Limit',
+  rte: 'Runtime Error',
+  ce: 'Compile Error',
+  failed: 'Failed',
+  queued: 'Queued',
+  running: 'Grading…'
+};
 
 function SubmissionViewerModal({
   submissionId,
   onClose,
   allowResubmit = false,
   onResubmit,
-  isResubmitting = false
+  isResubmitting = false,
+  allowDelete = false,
+  onDelete,
+  isDeleting = false
 }) {
   const { authFetch } = useAuth();
 
@@ -24,9 +39,33 @@ function SubmissionViewerModal({
     staleTime: 0
   });
 
+  const { resolveLanguageLabel } = useLanguages();
+
   const submission = submissionQuery.data;
   const canViewSource = submission?.canViewSource ?? Boolean(submission?.source);
-  const codeHtml = canViewSource && submission?.source ? highlightSource(submission.source) : '';
+  const codeText =
+    canViewSource && typeof submission?.source === 'string' && submission.source.length
+      ? submission.source
+      : '';
+  const runHistory = Array.isArray(submission?.runs)
+    ? submission.runs
+        .slice()
+        .sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0))
+    : [];
+  const languageSlug =
+    submission?.language ??
+    (submission?.languageId != null ? `language-${submission.languageId}` : null);
+
+  let displayLanguageLabel = '—';
+  if (submission) {
+    const fallbackLabel =
+      languageSlug ??
+      (submission.languageId != null ? String(submission.languageId) : submission.languageCode ?? null);
+    const resolvedLabel = resolveLanguageLabel(submission.languageId, fallbackLabel);
+    displayLanguageLabel =
+      resolvedLabel ??
+      (submission.languageId != null ? `language-${submission.languageId}` : submission.language ?? '—');
+  }
 
   const handleResubmit = () => {
     if (!submissionId || !onResubmit) {
@@ -66,7 +105,7 @@ function SubmissionViewerModal({
               </div>
               <div>
                 <span className="label">Language</span>
-                <span>{submission.language ?? submission.languageId ?? '—'}</span>
+                <span>{displayLanguageLabel}</span>
               </div>
               <div>
                 <span className="label">Status</span>
@@ -87,19 +126,60 @@ function SubmissionViewerModal({
                 <span>{submission.memoryKB != null ? `${submission.memoryKB} KB` : '—'}</span>
               </div>
               <div>
+                <span className="label">Last Run</span>
+                <span>
+                  {submission.lastRunAt ? formatDateTime(submission.lastRunAt) : '—'}
+                </span>
+              </div>
+              <div>
                 <span className="label">Submitted</span>
                 <span>{formatDateTime(submission.createdAt ?? submission.queuedAt)}</span>
               </div>
             </div>
 
+            {runHistory.length ? (
+              <div className="submission-modal__history">
+                <h3>Run History</h3>
+                <ul>
+                  {runHistory.map((run, index) => {
+                    const runStatus = run.status?.status ?? run.status ?? '';
+                    const statusLabel = RUN_STATUS_LABELS[runStatus] ?? runStatus ?? '—';
+                    return (
+                      <li key={`${run.at ?? index}`}
+                        className="submission-modal__history-item"
+                      >
+                        <div className="history-row">
+                          <span className="history-time">
+                            {run.at ? formatDateTime(run.at) : 'Unknown time'}
+                          </span>
+                          <span className={`status-badge ${runStatus ? `status-${runStatus}` : ''}`}>
+                            {statusLabel}
+                          </span>
+                          {run.status?.verdict && (
+                            <span className="history-verdict">{run.status.verdict}</span>
+                          )}
+                        </div>
+                        <div className="history-metrics">
+                          <span>{run.time != null ? `${run.time} ms` : '—'}</span>
+                          <span>·</span>
+                          <span>{run.memory != null ? `${run.memory} KB` : '—'}</span>
+                          {run.status?.error ? (
+                            <span className="history-error">{run.status.error}</span>
+                          ) : null}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ) : null}
+
             <div className="submission-modal__code">
               {canViewSource ? (
-                <pre>
-                  <code
-                    className="code-block"
-                    dangerouslySetInnerHTML={{ __html: codeHtml || '/* No source available */' }}
-                  />
-                </pre>
+                <CodeBlock
+                  code={codeText || '/* No source available */'}
+                  language={languageSlug}
+                />
               ) : (
                 <div className="submission-modal__private">
                   Source is private to the owner and administrators.
@@ -118,6 +198,16 @@ function SubmissionViewerModal({
               disabled={isResubmitting || submissionQuery.isLoading}
             >
               {isResubmitting ? 'Re-submitting…' : 'Re-submit'}
+            </button>
+          ) : null}
+          {allowDelete && onDelete ? (
+            <button
+              type="button"
+              className="danger"
+              onClick={() => submission && onDelete(submission)}
+              disabled={!submission || isDeleting || submissionQuery.isLoading}
+            >
+              {isDeleting ? 'Deleting…' : 'Delete'}
             </button>
           ) : null}
           <button type="button" className="secondary" onClick={onClose}>

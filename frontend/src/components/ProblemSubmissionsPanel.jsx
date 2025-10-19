@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSubmissionStream } from '../hooks/useSubmissionStream.js';
+import { useLanguages } from '../hooks/useLanguages.js';
 import { applyEventToSubmissionList } from '../utils/submissions.js';
 import { formatDateTime } from '../utils/date.js';
 
@@ -61,14 +62,19 @@ function ProblemSubmissionsPanel({
   problem,
   currentUserId,
   isAdmin,
+  canDelete = false,
   onVerdictClick,
   onResubmit,
+  onDelete = null,
   resubmittingId,
-  isResubmitPending
+  isResubmitPending,
+  deletingId = null,
+  isDeletePending = false
 }) {
   const problemId = problem?.problemId;
   const queryClient = useQueryClient();
   const { authFetch } = useAuth();
+  const { resolveLanguageLabel } = useLanguages();
   const [activeScope, setActiveScope] = useState('mine');
   const [pageByScope, setPageByScope] = useState({ mine: 1, all: 1 });
 
@@ -250,30 +256,43 @@ function ProblemSubmissionsPanel({
           <table className="submissions-table">
             <thead>
               <tr>
-                <th>Time</th>
+                <th>Last Run</th>
                 <th>User</th>
                 <th>Language</th>
                 <th>Status</th>
                 <th>Score</th>
                 <th>Runtime (ms)</th>
                 <th>Memory (KB)</th>
-                {(isAdmin || activeScope === 'mine') && <th className="actions-header">Actions</th>}
+                {(isAdmin || canDelete || activeScope === 'mine') && (
+                  <th className="actions-header">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody>
               {items.map((submission) => {
                 const isOwner = submission.userId === currentUserId;
                 const displayUser = submission.userName || (isOwner ? 'You' : '(unknown)');
-                const languageLabel =
+                const languageSlug =
                   submission.language ??
-                  (submission.languageId != null ? `language-${submission.languageId}` : '—');
+                  (submission.languageId != null ? `language-${submission.languageId}` : null);
+                const languageLabel =
+                  resolveLanguageLabel(
+                    submission.languageId,
+                    languageSlug ?? (submission.languageId != null ? String(submission.languageId) : null)
+                  ) ?? '—';
+                const lastRunAt =
+                  submission.lastRunAt ??
+                  submission.finishedAt ??
+                  submission.startedAt ??
+                  submission.createdAt;
 
                 const allowResubmit =
-                  (isOwner || isAdmin) && (activeScope === 'mine' ? isOwner : true);
+                  submission._id && (isOwner || isAdmin) && (activeScope === 'mine' ? isOwner : true);
+                const allowDelete = Boolean(onDelete) && canDelete && submission._id;
 
                 return (
                   <tr key={submission._id}>
-                    <td>{formatDateTime(submission.createdAt)}</td>
+                    <td>{formatDateTime(lastRunAt)}</td>
                     <td>
                       {submission.userName ? (
                         <Link to={`/u/${submission.userName}`}>{displayUser}</Link>
@@ -300,7 +319,7 @@ function ProblemSubmissionsPanel({
                     </td>
                     <td>{submission.runtimeMs ?? '—'}</td>
                     <td>{submission.memoryKB ?? '—'}</td>
-                    {(isAdmin || activeScope === 'mine') && (
+                    {(isAdmin || canDelete || activeScope === 'mine') && (
                       <td className="submission-actions">
                         {allowResubmit ? (
                           <button
@@ -325,9 +344,21 @@ function ProblemSubmissionsPanel({
                               ? 'Re-submitting…'
                               : 'Re-submit'}
                           </button>
-                        ) : (
+                        ) : !allowDelete ? (
                           <span className="muted">—</span>
-                        )}
+                        ) : null}
+                        {allowDelete ? (
+                          <button
+                            type="button"
+                            className="danger"
+                            onClick={() => onDelete?.(submission)}
+                            disabled={isDeletePending && deletingId === submission._id}
+                          >
+                            {isDeletePending && deletingId === submission._id
+                              ? 'Deleting…'
+                              : 'Delete'}
+                          </button>
+                        ) : null}
                       </td>
                     )}
                   </tr>
@@ -335,7 +366,7 @@ function ProblemSubmissionsPanel({
               })}
               {!items.length && (
                 <tr>
-                  <td colSpan={(isAdmin || activeScope === 'mine') ? 8 : 7}>
+                  <td colSpan={(isAdmin || canDelete || activeScope === 'mine') ? 8 : 7}>
                     <div className="page-message">No submissions to display.</div>
                   </td>
                 </tr>

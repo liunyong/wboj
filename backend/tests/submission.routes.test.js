@@ -3,6 +3,11 @@ import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const mockedLanguages = [
+  { id: 71, name: 'Python (3.10)' },
+  { id: 63, name: 'JavaScript (Node)' }
+];
+
 vi.mock('../src/services/judge0Service.js', async () => ({
   runJudge0Submission: vi.fn(async ({ stdin }) => {
     const [a = '0', b = '0'] = String(stdin).split(/\s+/);
@@ -16,7 +21,9 @@ vi.mock('../src/services/judge0Service.js', async () => ({
       time: '0.01',
       memory: 10_240
     };
-  })
+  }),
+  fetchJudge0Languages: vi.fn(async () => mockedLanguages),
+  clearLanguageCache: vi.fn()
 }));
 
 const { runJudge0Submission } = await import('../src/services/judge0Service.js');
@@ -112,6 +119,7 @@ describe('Submission routes with auth', () => {
     expect(submissionDoc.verdict).toBe('AC');
     expect(submissionDoc.status).toBe('accepted');
     expect(submissionDoc.score).toBe(100);
+    expect(submissionDoc.language).toBe('Python (3.10)');
     expect(runJudge0Submission).toHaveBeenCalledTimes(2);
     for (const [params] of runJudge0Submission.mock.calls) {
       expect(params.memoryLimit).toBe(128 * 1024);
@@ -126,6 +134,40 @@ describe('Submission routes with auth', () => {
     expect(dailyStats.acCount).toBe(1);
   });
 
+  it('sanitizes highlighted HTML artifacts before persisting submissions', async () => {
+    const { tokens } = await authenticateAsUser();
+    const problem = await Problem.create(buildProblem({ problemId: 100001 }));
+
+    const highlighted =
+      'if (m &lt; <span class="token number">3</span>) {\n  <span class="token keyword">return</span> m;\n}';
+
+    const response = await request(app)
+      .post('/api/submissions')
+      .set(authHeader(tokens.accessToken))
+      .send({
+        problemId: problem._id.toString(),
+        languageId: 71,
+        sourceCode: highlighted
+      });
+
+    expect(response.status).toBe(202);
+    const submissionId = response.body.submissionId;
+    expect(submissionId).toBeDefined();
+
+    const storedDoc = await Submission.findById(submissionId).lean();
+    expect(storedDoc.sourceCode).toBe('if (m < 3) {\n  return m;\n}');
+    expect(storedDoc.sourceLen).toBe(storedDoc.sourceCode.length);
+    expect(storedDoc.language).toBe('Python (3.10)');
+
+    const detailResponse = await request(app)
+      .get(`/api/submissions/${submissionId}`)
+      .set(authHeader(tokens.accessToken));
+
+    expect(detailResponse.status).toBe(200);
+    expect(detailResponse.body.submission.source).toBe('if (m < 3) {\n  return m;\n}');
+    expect(detailResponse.body.submission.language).toBe('Python (3.10)');
+  });
+
   it('rejects submissions with disallowed languages', async () => {
     const { tokens } = await authenticateAsUser();
     const problem = await Problem.create(buildProblem({ judge0LanguageIds: [63] }));
@@ -137,6 +179,23 @@ describe('Submission routes with auth', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.code).toBe('INVALID_LANGUAGE');
+  });
+
+  it('rejects submissions that sanitize to empty source', async () => {
+    const { tokens } = await authenticateAsUser();
+    const problem = await Problem.create(buildProblem({ problemId: 100002 }));
+
+    const response = await request(app)
+      .post('/api/submissions')
+      .set(authHeader(tokens.accessToken))
+      .send({
+        problemId: problem._id.toString(),
+        languageId: 71,
+        sourceCode: '<span class="token keyword"></span>'
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe('INVALID_SOURCE');
   });
 
   it('lists submissions for the authenticated user only', async () => {
@@ -160,6 +219,7 @@ describe('Submission routes with auth', () => {
     expect(myResponse.body.items[0].problem.problemId).toBe(problem.problemId);
     expect(myResponse.body.items[0].problem.title).toBe(problem.title);
     expect(myResponse.body.items[0].status).toBe('accepted');
+    expect(myResponse.body.items[0].language).toBe('Python (3.10)');
     expect(myResponse.body.items[0].user).toBeUndefined();
 
     const globalResponse = await request(app)
@@ -172,6 +232,7 @@ describe('Submission routes with auth', () => {
     expect(globalResponse.body.items[0].id).toBeDefined();
     expect(globalResponse.body.items[0].userName).toBeDefined();
     expect(globalResponse.body.items[0].status).toBeDefined();
+    expect(globalResponse.body.items[0].language).toBe('Python (3.10)');
     expect(globalResponse.body.items[0]).not.toHaveProperty('source');
     expect(globalResponse.body.page).toBe(1);
   });
@@ -197,6 +258,7 @@ describe('Submission routes with auth', () => {
     expect(detailResponse.status).toBe(200);
     expect(detailResponse.body.submission._id).toBe(submissionId);
     expect(detailResponse.body.submission.source).toBe('code');
+    expect(detailResponse.body.submission.language).toBe('Python (3.10)');
     expect(detailResponse.body.submission.canViewSource).toBe(true);
   });
 
@@ -252,6 +314,7 @@ describe('Submission routes with auth', () => {
     expect(mineResponse.body.scope).toBe('mine');
     expect(mineResponse.body.items).toHaveLength(1);
     expect(mineResponse.body.items[0].userId).toBe(ownerSession.user.id);
+    expect(mineResponse.body.items[0].language).toBe('Python (3.10)');
     expect(mineResponse.body.items[0]).not.toHaveProperty('source');
 
     const allResponse = await request(app)
@@ -267,6 +330,7 @@ describe('Submission routes with auth', () => {
     allResponse.body.items.forEach((item) => {
       expect(item).not.toHaveProperty('source');
       expect(item.problemId).toBe(problem.problemId);
+      expect(item.language).toBe('Python (3.10)');
     });
   });
 
@@ -309,22 +373,28 @@ describe('Submission routes with auth', () => {
     vi.clearAllMocks();
 
     const resubmitResponse = await request(app)
-      .post(`/api/submissions/${submissionId}/resubmit`)
+      .patch(`/api/submissions/${submissionId}/resubmit`)
       .set(authHeader(userSession.tokens.accessToken));
 
-    expect(resubmitResponse.status).toBe(202);
-    expect(resubmitResponse.body.initialStatus).toBe('queued');
+    expect(resubmitResponse.status).toBe(200);
+    expect(resubmitResponse.body.submission._id).toBe(submissionId);
+    expect(resubmitResponse.body.submission.verdict).toBe('AC');
+    expect(resubmitResponse.body.submission.runs.length).toBe(2);
 
-    const resubmitted = await waitForSubmissionCompletion(resubmitResponse.body.submissionId);
+    const resubmitted = await Submission.findById(submissionId);
     expect(resubmitted.user.toString()).toBe(userSession.user.id);
     expect(resubmitted.problemId).toBe(problem.problemId);
     expect(resubmitted.status).toBe('accepted');
+    expect(resubmitted.runs).toHaveLength(2);
 
     expect(runJudge0Submission).toHaveBeenCalledTimes(2);
 
     const dailyStats = await UserStatsDaily.findOne({ user: userSession.user.id });
-    expect(dailyStats.submitCount).toBe(2);
-    expect(dailyStats.acCount).toBe(2);
+    expect(dailyStats.submitCount).toBe(1);
+    expect(dailyStats.acCount).toBe(1);
+
+    const totalSubmissions = await Submission.countDocuments();
+    expect(totalSubmissions).toBe(1);
   });
 
   it('allows admins to resubmit on behalf of the original user', async () => {
@@ -344,21 +414,28 @@ describe('Submission routes with auth', () => {
     vi.clearAllMocks();
 
     const resubmitResponse = await request(app)
-      .post(`/api/submissions/${submissionId}/resubmit`)
+      .patch(`/api/submissions/${submissionId}/resubmit`)
       .set(authHeader(adminSession.tokens.accessToken));
 
-    expect(resubmitResponse.status).toBe(202);
+    expect(resubmitResponse.status).toBe(200);
+    expect(resubmitResponse.body.submission._id).toBe(submissionId);
+    expect(resubmitResponse.body.submission.verdict).toBe('AC');
+    expect(resubmitResponse.body.submission.runs.length).toBe(2);
 
-    const resubmitted = await waitForSubmissionCompletion(resubmitResponse.body.submissionId);
+    const resubmitted = await Submission.findById(submissionId);
     expect(resubmitted.user.toString()).toBe(ownerSession.user.id);
     expect(resubmitted.problemId).toBe(problem.problemId);
     expect(resubmitted.status).toBe('accepted');
+    expect(resubmitted.runs).toHaveLength(2);
 
     expect(runJudge0Submission).toHaveBeenCalledTimes(2);
 
     const dailyStats = await UserStatsDaily.findOne({ user: ownerSession.user.id });
-    expect(dailyStats.submitCount).toBe(2);
-    expect(dailyStats.acCount).toBe(2);
+    expect(dailyStats.submitCount).toBe(1);
+    expect(dailyStats.acCount).toBe(1);
+
+    const totalSubmissions = await Submission.countDocuments();
+    expect(totalSubmissions).toBe(1);
   });
 
   it("prevents users from resubmitting someone else's submission", async () => {
@@ -376,7 +453,7 @@ describe('Submission routes with auth', () => {
     await waitForSubmissionCompletion(submissionId);
 
     const resubmitResponse = await request(app)
-      .post(`/api/submissions/${submissionId}/resubmit`)
+      .patch(`/api/submissions/${submissionId}/resubmit`)
       .set(authHeader(otherSession.tokens.accessToken));
 
     expect(resubmitResponse.status).toBe(403);

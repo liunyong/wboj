@@ -17,10 +17,11 @@ const userSchema = new mongoose.Schema(
     passwordChangedAt: { type: Date, default: Date.now },
     role: {
       type: String,
-      enum: ['admin', 'user'],
+      enum: ['user', 'admin', 'super_admin'],
       default: 'user'
     },
     isActive: { type: Boolean, default: true },
+    deletedAt: { type: Date, default: null },
     profile: {
       type: profileSchema,
       default: () => ({})
@@ -47,6 +48,7 @@ const userSchema = new mongoose.Schema(
 
 userSchema.index({ username: 1 }, { unique: true });
 userSchema.index({ email: 1 }, { unique: true });
+userSchema.index({ role: 1, deletedAt: 1 });
 
 const User = mongoose.model('User', userSchema);
 

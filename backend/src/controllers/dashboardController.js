@@ -28,7 +28,8 @@ export const getSummary = async (req, res, next) => {
       {
         $match: {
           user: userId,
-          submittedAt: { $gte: start, $lt: end }
+          submittedAt: { $gte: start, $lt: end },
+          deletedAt: null
         }
       },
       {
@@ -97,7 +98,8 @@ export const getHeatmap = async (req, res, next) => {
       {
         $match: {
           user: userId,
-          submittedAt: { $gte: start, $lt: end }
+          submittedAt: { $gte: start, $lt: end },
+          deletedAt: null
         }
       },
       {

@@ -13,7 +13,7 @@ import validate from '../middlewares/validate.js';
 import {
   listUsersQuerySchema,
   updateUserRoleSchema,
-  updateUserStatusSchema,
+  userActivationSchema,
   userIdParamSchema
 } from '../validation/userSchemas.js';
 import { adminListSubmissionsQuerySchema } from '../validation/submissionSchemas.js';
@@ -31,23 +31,23 @@ router.get(
 router.patch(
   '/:id/role',
   requireAuth,
-  requireRole('admin'),
+  requireRole('super_admin'),
   validate({ params: userIdParamSchema, body: updateUserRoleSchema }),
   updateUserRole
 );
 
 router.patch(
-  '/:id/status',
+  '/:id/deactivate',
   requireAuth,
-  requireRole('admin'),
-  validate({ params: userIdParamSchema, body: updateUserStatusSchema }),
+  requireRole('super_admin'),
+  validate({ params: userIdParamSchema, body: userActivationSchema }),
   updateUserStatus
 );
 
 router.delete(
   '/:id',
   requireAuth,
-  requireRole('admin'),
+  requireRole('super_admin'),
   validate({ params: userIdParamSchema }),
   deleteUserKeepSubmissions
 );

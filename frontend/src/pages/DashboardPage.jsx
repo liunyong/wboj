@@ -5,9 +5,10 @@ import { Link } from 'react-router-dom';
 import Heatmap from '../components/Heatmap.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { formatDateTime } from '../utils/date.js';
-import { applyEventToSubmissionList, buildOptimisticSubmission } from '../utils/submissions.js';
+import { applyEventToSubmissionList, detailToEvent } from '../utils/submissions.js';
 import { useSubmissionStream } from '../hooks/useSubmissionStream.js';
 import { useResubmitSubmission } from '../hooks/useResubmitSubmission.js';
+import { useLanguages } from '../hooks/useLanguages.js';
 import SubmissionViewerModal from '../components/SubmissionViewerModal.jsx';
 
 const currentYear = new Date().getUTCFullYear();
@@ -16,6 +17,7 @@ const selectableYears = [currentYear, currentYear - 1, currentYear - 2];
 function DashboardPage() {
   const queryClient = useQueryClient();
   const { authFetch, user } = useAuth();
+  const { resolveLanguageLabel } = useLanguages();
   const [year, setYear] = useState(currentYear);
   const [message, setMessage] = useState(null);
   const [activeSubmissionId, setActiveSubmissionId] = useState(null);
@@ -42,37 +44,22 @@ function DashboardPage() {
   const resubmitMutation = useResubmitSubmission({
     onSuccess: (data, variables) => {
       setResubmittingId(null);
-      setMessage({ type: 'info', text: 'Re-submitted. Grading…' });
-      const newSubmissionId = data?.submissionId;
-      const baseSubmission = variables?.baseSubmission;
+      const submission = data?.submission ?? null;
+      if (submission) {
+        const event = detailToEvent(submission);
+        queryClient.setQueryData(['submissions', 'mine', 'dashboard'], (entries) =>
+          applyEventToSubmissionList(Array.isArray(entries) ? entries : [], event)
+        );
 
-      if (newSubmissionId && baseSubmission) {
-        const optimistic = buildOptimisticSubmission({
-          submissionId: newSubmissionId,
-          base: baseSubmission,
-          problem: baseSubmission.problem,
-          languageId: baseSubmission.languageId,
-          language: baseSubmission.language,
-          sourceLen: baseSubmission.sourceLen ?? 0
-        });
-
-        queryClient.setQueryData(['submissions', 'mine', 'dashboard'], (entries) => {
-          const current = Array.isArray(entries) ? entries : [];
-          const filtered = current.filter((item) => (item.id ?? item._id) !== newSubmissionId);
-          return [optimistic, ...filtered];
-        });
-
-        const targetProblemId =
-          baseSubmission.problem?.problemId ?? baseSubmission.problemId ?? null;
-        if (targetProblemId) {
-          queryClient.setQueryData(['submissions', 'mine', String(targetProblemId)], (entries) => {
-            if (!Array.isArray(entries)) {
-              return entries;
-            }
-            const filtered = entries.filter((item) => (item.id ?? item._id) !== newSubmissionId);
-            return [optimistic, ...filtered];
-          });
+        const previousVerdict = variables?.baseSubmission?.verdict ?? null;
+        const nextVerdict = submission.verdict ?? null;
+        if (previousVerdict && nextVerdict && previousVerdict !== nextVerdict) {
+          setMessage({ type: 'info', text: `Verdict updated: ${previousVerdict} → ${nextVerdict}` });
+        } else {
+          setMessage({ type: 'info', text: 'Submission re-run.' });
         }
+      } else {
+        setMessage({ type: 'info', text: 'Submission re-run.' });
       }
     },
     onError: (error) => {
@@ -118,17 +105,21 @@ function DashboardPage() {
 
   const handleResubmit = useCallback(
     (submission) => {
-      if (!submission?.id) {
+      const submissionId = submission?.id ?? submission?._id;
+      if (!submissionId) {
         return;
       }
       setMessage(null);
-      setResubmittingId(submission.id);
-      resubmitMutation.mutate({ submissionId: submission.id, baseSubmission: submission });
+      setResubmittingId(submissionId);
+      resubmitMutation.mutate({ submissionId, baseSubmission: submission });
     },
     [resubmitMutation]
   );
 
   const closeSubmissionModal = useCallback(() => setActiveSubmissionId(null), []);
+
+  const activeSubmission = activeSubmissionId ? getSubmissionFromCache(activeSubmissionId) : null;
+  const canResubmitActiveSubmission = Boolean(activeSubmission);
 
   const summary = summaryQuery.data ?? {};
   const heatmapData = heatmapQuery.data?.items ?? [];
@@ -192,12 +183,13 @@ function DashboardPage() {
                 <th>Status</th>
                 <th>Score</th>
                 <th>Language</th>
-                <th>Submitted</th>
+                <th>Last Run</th>
                 <th className="actions-header">Actions</th>
               </tr>
             </thead>
             <tbody>
               {submissionsQuery.data.map((submission) => {
+                const submissionKey = submission.id ?? submission._id;
                 const problemLinkId = submission.problem?.problemId;
                 const isProcessing =
                   submission.status === 'queued' || submission.status === 'running';
@@ -207,13 +199,25 @@ function DashboardPage() {
                 const verdictClassKey = submission.verdict
                   ? submission.verdict.toLowerCase()
                   : submission.status ?? 'pending';
-                const displayLanguage = submission.language ?? submission.languageId ?? '—';
+                const languageSlug =
+                  submission.language ??
+                  (submission.languageId != null ? `language-${submission.languageId}` : null);
+                const displayLanguage =
+                  resolveLanguageLabel(
+                    submission.languageId,
+                    languageSlug ?? (submission.languageId != null ? String(submission.languageId) : null)
+                  ) ?? '—';
                 const submittedAt = submission.submittedAt ?? submission.createdAt;
+                const lastRunAt =
+                  submission.lastRunAt ??
+                  submission.finishedAt ??
+                  submission.startedAt ??
+                  submittedAt;
                 const isResubmitPending =
-                  resubmitMutation.isPending && resubmittingId === submission.id;
+                  resubmittingId === submissionKey && resubmitMutation.isPending;
 
                 return (
-                  <tr key={submission.id}>
+                  <tr key={submissionKey}>
                     <td>
                       {submission.problem?.title && problemLinkId ? (
                         <Link to={`/problems/${problemLinkId}`}>
@@ -227,7 +231,7 @@ function DashboardPage() {
                       <button
                         type="button"
                         className="link-button verdict-link"
-                        onClick={() => handleVerdictClick(submission.id)}
+                        onClick={() => handleVerdictClick(submissionKey)}
                       >
                         <span className={`verdict verdict-${verdictClassKey}`}>{displayVerdict}</span>
                       </button>
@@ -236,13 +240,13 @@ function DashboardPage() {
                       typeof submission.score === 'number' ? `${submission.score}%` : '—'
                     }</td>
                     <td>{displayLanguage}</td>
-                    <td>{formatDateTime(submittedAt)}</td>
+                    <td>{formatDateTime(lastRunAt)}</td>
                     <td className="submission-actions">
                       <button
                         type="button"
                         className="secondary"
                         onClick={() => handleResubmit(submission)}
-                        disabled={resubmitMutation.isPending}
+                        disabled={isResubmitPending}
                       >
                         {isResubmitPending ? 'Re-submitting…' : 'Re-submit'}
                       </button>
@@ -258,7 +262,7 @@ function DashboardPage() {
         <SubmissionViewerModal
           submissionId={activeSubmissionId}
           onClose={closeSubmissionModal}
-          allowResubmit={Boolean(user)}
+          allowResubmit={canResubmitActiveSubmission}
           onResubmit={(submissionId) => {
             const baseSubmission = getSubmissionFromCache(submissionId);
             if (baseSubmission) {

@@ -1,4 +1,5 @@
 import { clearLanguageCache, fetchJudge0Languages } from '../services/judge0Service.js';
+import { clearLanguageResolverCache } from '../utils/languageResolver.js';
 
 export const listLanguages = async (req, res, next) => {
   try {
@@ -6,6 +7,7 @@ export const listLanguages = async (req, res, next) => {
 
     if (forceRefresh) {
       clearLanguageCache();
+      clearLanguageResolverCache();
     }
 
     const languages = await fetchJudge0Languages();

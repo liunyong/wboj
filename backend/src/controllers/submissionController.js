@@ -1,13 +1,33 @@
 import mongoose from 'mongoose';
 import Problem from '../models/Problem.js';
 import Submission from '../models/Submission.js';
-import { executeTestCases, buildCaseSummary } from '../services/testCaseRunnerService.js';
 import { incrementUserDailyStats } from '../services/statsService.js';
 import {
   publishSubmissionEvent,
   subscribeSubmissionStream,
   getSubmissionUpdatesSince
 } from '../services/submissionStreamService.js';
+import { sanitizeSourceCode } from '../utils/sourceSanitizer.js';
+import { getLanguageResolver } from '../utils/languageResolver.js';
+import {
+  resubmitAndUpdate,
+  deleteSubmission as deleteSubmissionService,
+  recomputeProblemCounters,
+  verdictToStatus,
+  evaluateSubmissionRun
+} from '../services/submissionService.js';
+
+const loadLanguageResolver = async () => {
+  try {
+    return await getLanguageResolver();
+  } catch (error) {
+    console.warn('Failed to load Judge0 language metadata', error);
+    return null;
+  }
+};
+
+const isAdminLike = (user) => ['admin', 'super_admin'].includes(user?.role);
+const isSuperAdmin = (user) => user?.role === 'super_admin';
 
 const canSubmitProblem = (problem, user) => {
   if (!problem) {
@@ -19,32 +39,10 @@ const canSubmitProblem = (problem, user) => {
   if (!user) {
     return false;
   }
-  if (user.role === 'admin') {
+  if (isAdminLike(user)) {
     return true;
   }
   return problem.author?.toString() === user.id;
-};
-
-const verdictToStatus = (verdict) => {
-  switch (verdict) {
-    case 'AC':
-      return 'accepted';
-    case 'WA':
-      return 'wrong_answer';
-    case 'TLE':
-      return 'tle';
-    case 'RTE':
-      return 'rte';
-    case 'CE':
-      return 'ce';
-    case 'MLE':
-    case 'PE':
-    case 'IE':
-    case 'PARTIAL':
-      return 'failed';
-    default:
-      return 'failed';
-  }
 };
 
 const deriveLanguageLabel = (languageId) => {
@@ -65,8 +63,8 @@ const fetchSubmissionList = async ({
   dateFrom,
   dateTo,
   sort
-}) => {
-  const filters = {};
+} = {}, { resolveLanguageLabel } = {}) => {
+  const filters = { deletedAt: null };
 
   if (Array.isArray(status) && status.length) {
     const uniqueStatuses = Array.from(new Set(status));
@@ -105,13 +103,15 @@ const fetchSubmissionList = async ({
       .skip(skip)
       .limit(limit)
       .select(
-        '_id user userName problemId problemTitle language languageId status score runtimeMs execTimeMs memoryKB memoryKb createdAt queuedAt startedAt finishedAt'
+        '_id user userName problemId problemTitle language languageId status score runtimeMs execTimeMs memoryKB memoryKb createdAt queuedAt startedAt finishedAt lastRunAt'
       )
       .lean(),
     Submission.countDocuments(filters)
   ]);
 
-  const rows = items.map((submission) => sanitizedGlobalSubmission(submission));
+  const rows = items.map((submission) =>
+    sanitizedGlobalSubmission(submission, {}, { resolveLanguageLabel })
+  );
 
   return {
     rows,
@@ -140,7 +140,7 @@ const ensureProblemAccessibleToUser = async ({ problemJudgeId, user }) => {
     };
   }
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminLike(user);
   const isAuthor = problem.author?.toString() === user?.id;
   const isPublic = Boolean(problem.isPublic);
 
@@ -156,15 +156,30 @@ const ensureProblemAccessibleToUser = async ({ problemJudgeId, user }) => {
   return { problem };
 };
 
-const sanitizeSubmission = (submission) => {
+const sanitizeSubmission = (submission, { resolveLanguageLabel } = {}) => {
   const runtimeMs = submission.runtimeMs ?? submission.execTimeMs ?? null;
   const memoryKB = submission.memoryKB ?? submission.memoryKb ?? null;
+  const languageLabel = resolveLanguageLabel
+    ? resolveLanguageLabel(
+        submission.languageId,
+        submission.language ?? deriveLanguageLabel(submission.languageId)
+      )
+    : submission.language ?? deriveLanguageLabel(submission.languageId);
+
+  const populatedUser =
+    submission.user &&
+    typeof submission.user === 'object' &&
+    submission.user !== null &&
+    submission.user.username;
 
   return {
     id: submission._id.toString(),
-    user: submission.user?._id
+    user: populatedUser
       ? {
-          id: submission.user._id.toString(),
+          id:
+            submission.user._id?.toString?.() ??
+            submission.user.id?.toString?.() ??
+            submission.user.toString(),
           username: submission.user.username
         }
       : undefined,
@@ -179,7 +194,7 @@ const sanitizeSubmission = (submission) => {
       : undefined,
     problemTitle: submission.problemTitle,
     languageId: submission.languageId,
-    language: submission.language,
+    language: languageLabel,
     verdict: submission.verdict,
     status: submission.status,
     score: submission.score,
@@ -192,15 +207,23 @@ const sanitizeSubmission = (submission) => {
     queuedAt: submission.queuedAt,
     startedAt: submission.startedAt,
     finishedAt: submission.finishedAt,
+    lastRunAt: submission.lastRunAt,
+    deletedAt: submission.deletedAt ?? null,
     testCaseResults: submission.testCaseResults,
     resultSummary: submission.resultSummary,
     judge0: submission.judge0
   };
 };
 
-const sanitizedGlobalSubmission = (submission, extra = {}) => {
+const sanitizedGlobalSubmission = (submission, extra = {}, { resolveLanguageLabel } = {}) => {
   const runtimeMs = submission.runtimeMs ?? submission.execTimeMs ?? null;
   const memoryKB = submission.memoryKB ?? submission.memoryKb ?? null;
+  const languageLabel = resolveLanguageLabel
+    ? resolveLanguageLabel(
+        submission.languageId,
+        submission.language ?? deriveLanguageLabel(submission.languageId)
+      )
+    : submission.language ?? deriveLanguageLabel(submission.languageId);
 
   return {
     id: submission._id.toString(),
@@ -212,7 +235,7 @@ const sanitizedGlobalSubmission = (submission, extra = {}) => {
       (submission.user ? null : '(deleted user)'),
     problemId: submission.problemId,
     problemTitle: submission.problemTitle ?? submission.problem?.title ?? null,
-    language: submission.language ?? String(submission.languageId ?? ''),
+    language: languageLabel,
     languageId: submission.languageId ?? null,
     status: submission.status,
     verdict: submission.verdict ?? null,
@@ -223,13 +246,26 @@ const sanitizedGlobalSubmission = (submission, extra = {}) => {
     queuedAt: submission.queuedAt,
     startedAt: submission.startedAt,
     finishedAt: submission.finishedAt,
+    lastRunAt: submission.lastRunAt,
+    deletedAt: submission.deletedAt ?? null,
     ...extra
   };
 };
 
-const buildSubmissionDetail = (submission) => {
+const buildSubmissionDetail = (submission, { resolveLanguageLabel } = {}) => {
   const runtimeMs = submission.runtimeMs ?? submission.execTimeMs ?? null;
   const memoryKB = submission.memoryKB ?? submission.memoryKb ?? null;
+
+  const rawSource = submission.sourceCode ?? '';
+  const { sanitized: safeSource, changed: sourceSanitized } = sanitizeSourceCode(rawSource);
+  const computedSourceLen =
+    submission.sourceLen ?? (sourceSanitized ? safeSource.length : rawSource.length);
+  const languageLabel = resolveLanguageLabel
+    ? resolveLanguageLabel(
+        submission.languageId,
+        submission.language ?? deriveLanguageLabel(submission.languageId)
+      )
+    : submission.language ?? deriveLanguageLabel(submission.languageId);
 
   return {
     _id: submission._id.toString(),
@@ -241,9 +277,9 @@ const buildSubmissionDetail = (submission) => {
     problemId: submission.problemId,
     problemTitle: submission.problemTitle ?? submission.problem?.title ?? null,
     languageId: submission.languageId,
-    language: submission.language,
-    sourceLen: submission.sourceLen ?? submission.sourceCode?.length ?? 0,
-    source: submission.sourceCode,
+    language: languageLabel,
+    sourceLen: computedSourceLen,
+    source: safeSource,
     status: submission.status,
     verdict: submission.verdict ?? null,
     score: submission.score,
@@ -252,7 +288,17 @@ const buildSubmissionDetail = (submission) => {
     createdAt: submission.createdAt,
     queuedAt: submission.queuedAt,
     startedAt: submission.startedAt,
-    finishedAt: submission.finishedAt
+    finishedAt: submission.finishedAt,
+    lastRunAt: submission.lastRunAt,
+    runs: Array.isArray(submission.runs)
+      ? submission.runs.map((run) => ({
+          at: run.at,
+          judge0Token: run.judge0Token ?? null,
+          status: run.status ?? null,
+          time: run.time ?? null,
+          memory: run.memory ?? null
+        }))
+      : []
   };
 };
 
@@ -267,13 +313,30 @@ const emitSubmissionEvent = (submission, type = 'submission:update') => {
   publishSubmissionEvent(sanitizedGlobalSubmission(plain, { type }));
 };
 
-const markSubmissionFailed = async (submission, { verdict = 'IE', save = true } = {}) => {
+const markSubmissionFailed = async (submission, { verdict = 'IE', save = true, error } = {}) => {
   if (!submission) {
     return;
   }
+  const finishedAt = submission.finishedAt ?? new Date();
   submission.status = 'failed';
   submission.verdict = submission.verdict ?? verdict;
-  submission.finishedAt = submission.finishedAt ?? new Date();
+  submission.finishedAt = finishedAt;
+  submission.lastRunAt = finishedAt;
+  if (error) {
+    const message = error?.message ?? 'Execution failed';
+    submission.runs = Array.isArray(submission.runs) ? submission.runs : [];
+    submission.runs.push({
+      at: finishedAt,
+      judge0Token: null,
+      status: {
+        verdict: submission.verdict,
+        status: 'failed',
+        error: message
+      },
+      time: null,
+      memory: null
+    });
+  }
   if (save) {
     await submission.save();
   }
@@ -298,69 +361,38 @@ const processSubmission = async (submissionId) => {
 
   submission.status = 'running';
   submission.startedAt = new Date();
+  submission.lastRunAt = submission.startedAt;
   await submission.save();
   emitSubmissionEvent(submission);
 
   try {
-    const { results, score, maxExecTimeMs, maxMemoryKb } = await executeTestCases({
-      sourceCode: submission.sourceCode,
-      languageId: submission.languageId,
-      testCases: problem.testCases,
-      cpuTimeLimit: problem.cpuTimeLimit,
-      memoryLimit: problem.memoryLimit
+    const evaluation = await evaluateSubmissionRun({ submission, problem });
+    const finishedAt = new Date();
+
+    submission.verdict = evaluation.verdict;
+    submission.status = evaluation.status;
+    submission.score = evaluation.score;
+    submission.execTimeMs = evaluation.execTimeMs;
+    submission.runtimeMs = evaluation.execTimeMs;
+    submission.memoryKb = evaluation.memoryKb;
+    submission.memoryKB = evaluation.memoryKb;
+    submission.testCaseResults = evaluation.testCaseResults;
+    submission.resultSummary = evaluation.resultSummary;
+    submission.judge0 = evaluation.judge0;
+    submission.finishedAt = finishedAt;
+    submission.lastRunAt = finishedAt;
+    submission.runs = Array.isArray(submission.runs) ? submission.runs : [];
+    submission.runs.push({
+      at: finishedAt,
+      judge0Token: evaluation.judge0?.jobId ?? null,
+      status: {
+        verdict: evaluation.verdict,
+        status: evaluation.status,
+        score: evaluation.score
+      },
+      time: evaluation.execTimeMs ?? null,
+      memory: evaluation.memoryKb ?? null
     });
-
-    const summaryCases = buildCaseSummary(results);
-
-    const hasCompileError = results.some((result) => [6, 15].includes(result.statusId));
-    const hasRuntimeError = results.some((result) => result.statusId >= 7 && result.statusId <= 12);
-    const hasTimeLimit = results.some((result) => result.statusId === 5);
-    const hasWrongAnswer = results.some((result) => [4, 13, 14].includes(result.statusId));
-
-    let overallVerdict = 'WA';
-    if (hasCompileError) {
-      overallVerdict = 'CE';
-    } else if (hasRuntimeError) {
-      overallVerdict = 'RTE';
-    } else if (hasTimeLimit) {
-      overallVerdict = 'TLE';
-    } else if (score === 100) {
-      overallVerdict = 'AC';
-    } else if (score > 0) {
-      overallVerdict = 'PARTIAL';
-    } else if (hasWrongAnswer) {
-      overallVerdict = 'WA';
-    } else {
-      overallVerdict = 'WA';
-    }
-
-    submission.verdict = overallVerdict;
-    submission.status = verdictToStatus(overallVerdict);
-    submission.score = score;
-
-    const resolvedExecMs = Number.isFinite(maxExecTimeMs) ? maxExecTimeMs : null;
-    const resolvedMemoryKb = Number.isFinite(maxMemoryKb) ? maxMemoryKb : null;
-    submission.execTimeMs = resolvedExecMs;
-    submission.runtimeMs = resolvedExecMs;
-    submission.memoryKb = resolvedMemoryKb;
-    submission.memoryKB = resolvedMemoryKb;
-    submission.testCaseResults = results.map((result) => ({
-      index: result.index,
-      input: result.input,
-      output: result.output,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      compileOutput: result.compileOutput,
-      message: result.message,
-      status: result.status,
-      time: result.time,
-      memory: result.memory,
-      points: result.points,
-      passed: result.passed
-    }));
-    submission.resultSummary = { score, cases: summaryCases };
-    submission.judge0 = { rawPayload: results };
-    submission.finishedAt = new Date();
 
     await submission.save();
     emitSubmissionEvent(submission);
@@ -370,7 +402,7 @@ const processSubmission = async (submissionId) => {
       {
         $inc: {
           submissionCount: 1,
-          acceptedSubmissionCount: overallVerdict === 'AC' ? 1 : 0
+          acceptedSubmissionCount: evaluation.verdict === 'AC' ? 1 : 0
         }
       },
       { timestamps: false }
@@ -385,12 +417,12 @@ const processSubmission = async (submissionId) => {
     if (userId) {
       await incrementUserDailyStats(new mongoose.Types.ObjectId(userId), submission.submittedAt, {
         submitDelta: 1,
-        acDelta: overallVerdict === 'AC' ? 1 : 0
+        acDelta: evaluation.verdict === 'AC' ? 1 : 0
       });
     }
   } catch (error) {
     console.error(`Failed to process submission ${submissionId}`, error);
-    await markSubmissionFailed(submission);
+    await markSubmissionFailed(submission, { error });
   }
 };
 
@@ -417,7 +449,9 @@ export const createSubmission = async (req, res, next) => {
 
     if (
       !problem ||
-      (!problem.isPublic && problem.author?.toString() !== req.user.id && req.user.role !== 'admin')
+      (!problem.isPublic &&
+        problem.author?.toString() !== req.user.id &&
+        !isAdminLike(req.user))
     ) {
       return res
         .status(404)
@@ -442,6 +476,27 @@ export const createSubmission = async (req, res, next) => {
         .json({ code: 'TEST_CASES_MISSING', message: 'Problem has no test cases configured' });
     }
 
+    const { sanitized: normalizedSourceCode, changed: sourceChanged } = sanitizeSourceCode(sourceCode);
+
+    if (!normalizedSourceCode || normalizedSourceCode.trim().length === 0) {
+      return res
+        .status(400)
+        .json({ code: 'INVALID_SOURCE', message: 'Source code was empty after sanitization' });
+    }
+
+    if (sourceChanged) {
+      console.warn(
+        'Submission source sanitized to remove HTML artifacts for user %s and problem %s',
+        req.user.id,
+        problem.problemId
+      );
+    }
+
+    const resolveLanguageLabel = await loadLanguageResolver();
+    const languageLabel = resolveLanguageLabel
+      ? resolveLanguageLabel(languageId, deriveLanguageLabel(languageId))
+      : deriveLanguageLabel(languageId);
+
     const now = new Date();
     const submissionDoc = await Submission.create({
       user: userId,
@@ -450,9 +505,9 @@ export const createSubmission = async (req, res, next) => {
       problemId: problem.problemId,
       problemTitle: problem.title,
       languageId,
-      language: deriveLanguageLabel(languageId),
-      sourceCode,
-      sourceLen: sourceCode.length,
+      language: languageLabel,
+      sourceCode: normalizedSourceCode,
+      sourceLen: normalizedSourceCode.length,
       verdict: 'PENDING',
       status: 'queued',
       score: 0,
@@ -476,7 +531,8 @@ export const listMySubmissions = async (req, res, next) => {
   try {
     const { limit = 50, problemId, verdict } = req.validated?.query || {};
     const filters = {
-      user: req.user.id
+      user: req.user.id,
+      deletedAt: null
     };
 
     if (problemId) {
@@ -492,7 +548,13 @@ export const listMySubmissions = async (req, res, next) => {
       .sort({ submittedAt: -1 })
       .limit(limit);
 
-    res.json({ items: submissions.map(sanitizeSubmission) });
+    const resolveLanguageLabel = await loadLanguageResolver();
+
+    res.json({
+      items: submissions.map((submission) =>
+        sanitizeSubmission(submission, { resolveLanguageLabel })
+      )
+    });
   } catch (error) {
     next(error);
   }
@@ -511,6 +573,8 @@ export const listSubmissions = async (req, res, next) => {
       sort = '-createdAt'
     } = req.validated?.query || {};
 
+    const resolveLanguageLabel = await loadLanguageResolver();
+
     const { rows, total } = await fetchSubmissionList({
       page,
       limit,
@@ -520,7 +584,7 @@ export const listSubmissions = async (req, res, next) => {
       dateFrom,
       dateTo,
       sort
-    });
+    }, { resolveLanguageLabel });
 
     res.json({
       items: rows,
@@ -556,6 +620,8 @@ export const listProblemSubmissions = async (req, res, next) => {
     const targetProblemId = access.problem.problemId;
     const userFilter = scope === 'mine' ? req.user.id : undefined;
 
+    const resolveLanguageLabel = await loadLanguageResolver();
+
     const { rows, total } = await fetchSubmissionList({
       page,
       limit,
@@ -565,7 +631,7 @@ export const listProblemSubmissions = async (req, res, next) => {
       dateFrom: undefined,
       dateTo: undefined,
       sort
-    });
+    }, { resolveLanguageLabel });
 
     const normalizedRows = rows.map((row) => {
       if (row.problemTitle) {
@@ -601,7 +667,7 @@ export const getSubmission = async (req, res, next) => {
       .populate('problem', 'title problemId difficulty')
       .populate('user', 'username');
 
-    if (!submission) {
+    if (!submission || submission.deletedAt) {
       return res.status(404).json({ code: 'SUBMISSION_NOT_FOUND', message: 'Submission not found' });
     }
 
@@ -611,10 +677,11 @@ export const getSubmission = async (req, res, next) => {
       submission.user?.toString() ??
       submission.userId;
     const isOwner = ownerId ? ownerId === req.user?.id : false;
-    const isAdmin = req.user?.role === 'admin';
-    const canViewSource = isOwner || isAdmin;
+    const isAdminUser = isAdminLike(req.user);
+    const canViewSource = isOwner || isAdminUser;
 
-    const detail = buildSubmissionDetail(submission);
+    const resolveLanguageLabel = await loadLanguageResolver();
+    const detail = buildSubmissionDetail(submission, { resolveLanguageLabel });
     const responsePayload = {
       ...detail,
       canViewSource
@@ -633,84 +700,48 @@ export const getSubmission = async (req, res, next) => {
 export const resubmitSubmission = async (req, res, next) => {
   try {
     const { id } = req.validated?.params || req.params;
-    const original = await Submission.findById(id);
+    const result = await resubmitAndUpdate({ submissionId: id, actingUser: req.user });
+    const updatedSubmission = result.submission;
 
-    if (!original) {
-      return res.status(404).json({ code: 'SUBMISSION_NOT_FOUND', message: 'Submission not found' });
-    }
+    emitSubmissionEvent(updatedSubmission);
+
+    const resolveLanguageLabel = await loadLanguageResolver();
+    const detail = buildSubmissionDetail(updatedSubmission, { resolveLanguageLabel });
 
     const ownerId =
-      original.user?._id?.toString() ??
-      original.user?.id ??
-      original.user?.toString() ??
-      original.userId;
-    const isOwner = ownerId ? ownerId === req.user.id : false;
-    const isAdmin = req.user?.role === 'admin';
+      updatedSubmission.user?._id?.toString() ??
+      updatedSubmission.user?._id ??
+      updatedSubmission.user?.toString() ??
+      updatedSubmission.userId;
+    const isOwner = ownerId ? ownerId.toString() === req.user.id : false;
+    const isAdminUser = isAdminLike(req.user);
+    const canViewSource = isOwner || isAdminUser;
 
-    if (!isOwner && !isAdmin) {
-      return res.status(403).json({ code: 'FORBIDDEN', message: 'Insufficient permissions' });
+    if (!canViewSource) {
+      delete detail.source;
     }
 
-    if (!ownerId) {
-      return res
-        .status(400)
-        .json({ code: 'SUBMISSION_ORPHANED', message: 'Submission owner is unavailable' });
-    }
-
-    const problem = await Problem.findById(original.problem).select(
-      'problemId title judge0LanguageIds testCases cpuTimeLimit memoryLimit'
-    );
-
-    if (!problem) {
-      return res.status(404).json({ code: 'PROBLEM_NOT_FOUND', message: 'Problem not available' });
-    }
-
-    if (!Array.isArray(problem.testCases) || problem.testCases.length === 0) {
-      return res
-        .status(400)
-        .json({ code: 'TEST_CASES_MISSING', message: 'Problem has no test cases configured' });
-    }
-
-    const allowedLanguages = Array.isArray(problem.judge0LanguageIds)
-      ? problem.judge0LanguageIds
-      : [];
-
-    if (allowedLanguages.length && !allowedLanguages.includes(original.languageId)) {
-      return res
-        .status(400)
-        .json({ code: 'INVALID_LANGUAGE', message: 'Language no longer allowed for this problem' });
-    }
-
-    const targetUserId = isAdmin ? ownerId : req.user.id;
-    const targetUserName = isAdmin
-      ? original.userName ?? original.user?.username ?? 'Unknown user'
-      : req.user.username || req.user.email || original.userName || 'Unknown user';
-
-    const now = new Date();
-    const submissionDoc = await Submission.create({
-      user: new mongoose.Types.ObjectId(targetUserId),
-      userName: targetUserName,
-      problem: problem._id,
-      problemId: problem.problemId,
-      problemTitle: problem.title,
-      languageId: original.languageId,
-      language: original.language ?? deriveLanguageLabel(original.languageId),
-      sourceCode: original.sourceCode,
-      sourceLen: original.sourceLen ?? original.sourceCode?.length ?? 0,
-      verdict: 'PENDING',
-      status: 'queued',
-      score: 0,
-      submittedAt: now,
-      queuedAt: now
+    res.json({
+      submission: {
+        ...detail,
+        canViewSource
+      }
     });
+  } catch (error) {
+    next(error);
+  }
+};
 
-    emitSubmissionEvent(submissionDoc, 'submission:new');
-    queueSubmissionProcessing(submissionDoc._id);
+export const deleteSubmission = async (req, res, next) => {
+  try {
+    const { id } = req.validated?.params || req.params;
+    const result = await deleteSubmissionService({ submissionId: id, actingUser: req.user });
 
-    res.status(202).json({
-      submissionId: submissionDoc._id.toString(),
-      initialStatus: 'queued'
-    });
+    if (result?.submission) {
+      emitSubmissionEvent(result.submission, 'submission:deleted');
+    }
+
+    res.status(204).send();
   } catch (error) {
     next(error);
   }
@@ -730,6 +761,8 @@ export const listUserSubmissionsAsAdmin = async (req, res, next) => {
       sort = '-createdAt'
     } = req.validated?.query || {};
 
+    const resolveLanguageLabel = await loadLanguageResolver();
+
     const { rows, total } = await fetchSubmissionList({
       page,
       limit,
@@ -739,7 +772,7 @@ export const listUserSubmissionsAsAdmin = async (req, res, next) => {
       dateFrom,
       dateTo,
       sort
-    });
+    }, { resolveLanguageLabel });
 
     res.json({
       items: rows,

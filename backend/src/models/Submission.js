@@ -29,6 +29,20 @@ const judge0Schema = new mongoose.Schema(
   { _id: false }
 );
 
+const runHistorySchema = new mongoose.Schema(
+  {
+    at: { type: Date, required: true },
+    judge0Token: { type: String },
+    status: {
+      type: mongoose.Schema.Types.Mixed,
+      default: () => ({})
+    },
+    time: { type: Number },
+    memory: { type: Number }
+  },
+  { _id: false }
+);
+
 const resultCaseSummarySchema = new mongoose.Schema(
   {
     i: Number,
@@ -91,7 +105,10 @@ const submissionSchema = new mongoose.Schema(
     submittedAt: { type: Date, default: Date.now },
     queuedAt: { type: Date, default: Date.now },
     startedAt: { type: Date },
-    finishedAt: { type: Date }
+    finishedAt: { type: Date },
+    runs: { type: [runHistorySchema], default: [] },
+    lastRunAt: { type: Date, default: null },
+    deletedAt: { type: Date, default: null }
   },
   { timestamps: true }
 );
@@ -102,6 +119,9 @@ submissionSchema.index({ createdAt: -1 });
 submissionSchema.index({ user: 1, createdAt: -1 });
 submissionSchema.index({ problemId: 1, createdAt: -1 });
 submissionSchema.index({ status: 1, createdAt: -1 });
+submissionSchema.index({ problemId: 1, deletedAt: 1, createdAt: -1 });
+submissionSchema.index({ user: 1, deletedAt: 1, createdAt: -1 });
+submissionSchema.index({ deletedAt: 1, createdAt: -1 });
 
 const Submission = mongoose.model('Submission', submissionSchema);
 

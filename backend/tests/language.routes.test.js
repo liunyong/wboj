@@ -1,10 +1,12 @@
 import request from 'supertest';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-const { clearLanguageCacheSpy, fetchJudge0LanguagesSpy } = vi.hoisted(() => ({
-  clearLanguageCacheSpy: vi.fn(),
-  fetchJudge0LanguagesSpy: vi.fn(async () => [{ id: 71, name: 'Python 3' }])
-}));
+const { clearLanguageCacheSpy, fetchJudge0LanguagesSpy, clearLanguageResolverCacheSpy } =
+  vi.hoisted(() => ({
+    clearLanguageCacheSpy: vi.fn(),
+    fetchJudge0LanguagesSpy: vi.fn(async () => [{ id: 71, name: 'Python 3' }]),
+    clearLanguageResolverCacheSpy: vi.fn()
+  }));
 
 vi.mock('../src/services/judge0Service.js', () => ({
   clearLanguageCache: clearLanguageCacheSpy,
@@ -12,11 +14,17 @@ vi.mock('../src/services/judge0Service.js', () => ({
   runJudge0Submission: vi.fn()
 }));
 
+vi.mock('../src/utils/languageResolver.js', () => ({
+  clearLanguageResolverCache: clearLanguageResolverCacheSpy,
+  getLanguageResolver: vi.fn()
+}));
+
 import app from '../src/app.js';
 
 beforeEach(() => {
   clearLanguageCacheSpy.mockClear();
   fetchJudge0LanguagesSpy.mockClear();
+  clearLanguageResolverCacheSpy.mockClear();
 });
 
 describe('Language routes', () => {
@@ -40,6 +48,6 @@ describe('Language routes', () => {
     const response = await request(app).get('/api/languages?forceRefresh=notabool');
 
     expect(response.status).toBe(400);
-    expect(response.body.message).toBe('Validation failed');
+    expect(response.body.message).toBe('Request validation failed');
   });
 });

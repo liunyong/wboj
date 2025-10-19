@@ -5,6 +5,7 @@ import { ensureProblemNumbersBackfilled } from '../services/problemNumberService
 import { parseTestCasesFromZip } from '../services/testCaseZipService.js';
 import { buildProblemSlug } from '../utils/problemSlug.js';
 import { sanitizeOptionalRichText, sanitizeRichText } from '../utils/sanitizeHtml.js';
+import { recomputeProblemCounters } from '../services/submissionService.js';
 
 const sanitizeTestCases = (testCases = []) => {
   const sanitized = (testCases ?? [])
@@ -50,7 +51,7 @@ const normalizeAlgorithms = (algorithms = []) =>
     new Set((Array.isArray(algorithms) ? algorithms : []).map((name) => name.trim()).filter(Boolean))
   );
 
-const isAdmin = (user) => user?.role === 'admin';
+const isAdmin = (user) => ['admin', 'super_admin'].includes(user?.role);
 
 const assignIfDefined = (target, key, value) => {
   if (value !== undefined) {
@@ -421,6 +422,28 @@ export const deleteProblem = async (req, res, next) => {
     }
 
     res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const recountProblemCounters = async (req, res, next) => {
+  try {
+    const { problemId } = req.validated?.params || req.params;
+    const normalizedId = Number(problemId);
+    if (!Number.isFinite(normalizedId) || normalizedId <= 0) {
+      return res
+        .status(400)
+        .json({ code: 'INVALID_PROBLEM_ID', message: 'Problem id must be a positive integer' });
+    }
+
+    const result = await recomputeProblemCounters({ problemId: normalizedId });
+
+    res.json({
+      problemId: normalizedId,
+      submissionCount: result.submissionCount,
+      acceptedSubmissionCount: result.acceptedSubmissionCount
+    });
   } catch (error) {
     next(error);
   }

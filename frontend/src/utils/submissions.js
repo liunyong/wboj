@@ -37,6 +37,8 @@ export const transformEventToRow = (event, { problem = null } = {}) => {
     queuedAt: event.queuedAt ?? createdAt,
     startedAt: event.startedAt ?? null,
     finishedAt: event.finishedAt ?? null,
+    lastRunAt:
+      event.lastRunAt ?? event.finishedAt ?? event.startedAt ?? event.createdAt ?? createdAt,
     userId: event.userId ?? null,
     userName: event.userName ?? null
   };
@@ -74,6 +76,8 @@ export const applyEventToSubmissionList = (
       queuedAt: event.queuedAt ?? existing.queuedAt ?? existing.createdAt,
       createdAt: event.createdAt ?? existing.createdAt,
       submittedAt: event.createdAt ?? existing.submittedAt ?? existing.createdAt,
+      lastRunAt:
+        event.lastRunAt ?? existing.lastRunAt ?? event.finishedAt ?? existing.finishedAt ?? null,
       problemTitle: event.problemTitle ?? existing.problemTitle,
       language: event.language ?? existing.language,
       languageId: event.languageId ?? existing.languageId
@@ -138,9 +142,37 @@ export const buildOptimisticSubmission = ({
     queuedAt: nowIso,
     startedAt: null,
     finishedAt: null,
+    lastRunAt: null,
     testCaseResults: [],
     resultSummary: { score: 0, cases: [] },
     judge0: null,
     sourceLen
+  };
+};
+
+export const detailToEvent = (detail) => {
+  if (!detail) {
+    return null;
+  }
+
+  return {
+    _id: detail._id,
+    id: detail._id,
+    userId: detail.userId ?? null,
+    userName: detail.userName ?? null,
+    problemId: detail.problemId ?? null,
+    problemTitle: detail.problemTitle ?? null,
+    languageId: detail.languageId ?? null,
+    language: detail.language ?? null,
+    status: detail.status ?? null,
+    verdict: detail.verdict ?? null,
+    score: detail.score ?? null,
+    runtimeMs: detail.runtimeMs ?? detail.execTimeMs ?? null,
+    memoryKB: detail.memoryKB ?? detail.memoryKb ?? null,
+    createdAt: detail.createdAt ?? detail.queuedAt ?? null,
+    queuedAt: detail.queuedAt ?? null,
+    startedAt: detail.startedAt ?? null,
+    finishedAt: detail.finishedAt ?? null,
+    lastRunAt: detail.lastRunAt ?? detail.finishedAt ?? null
   };
 };

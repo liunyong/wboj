@@ -23,20 +23,20 @@ export const usernameParamSchema = z
 
 export const updateUserRoleSchema = z
   .object({
-    role: z.enum(['admin', 'user'])
+    role: z.enum(['user', 'admin', 'super_admin'])
   })
   .strict();
 
-export const updateUserStatusSchema = z
+export const userActivationSchema = z
   .object({
-    isActive: z.boolean()
+    isActive: z.boolean().optional()
   })
   .strict();
 
 export const listUsersQuerySchema = z
   .object({
     search: z.string().max(64).optional(),
-    role: z.enum(['admin', 'user']).optional(),
+    role: z.enum(['user', 'admin', 'super_admin']).optional(),
     isActive: z.coerce.boolean().optional(),
     limit: z.coerce.number().int().min(1).max(200).optional().default(50)
   })

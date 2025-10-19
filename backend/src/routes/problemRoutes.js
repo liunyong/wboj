@@ -9,7 +9,8 @@ import {
   updateProblemVisibility,
   deleteProblem,
   getProblemAlgorithms,
-  parseProblemTestCasesZip
+  parseProblemTestCasesZip,
+  recountProblemCounters
 } from '../controllers/problemController.js';
 import {
   listProblemSubmissions,
@@ -88,6 +89,13 @@ router.delete(
   requireRole('admin'),
   validate({ params: problemIdParamSchema }),
   deleteProblem
+);
+router.post(
+  '/:problemId/recount',
+  requireAuth,
+  requireRole('super_admin'),
+  validate({ params: problemIdParamSchema }),
+  recountProblemCounters
 );
 router.post(
   '/testcases/zip-parse',

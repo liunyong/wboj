@@ -3,8 +3,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext.jsx';
 
 function AdminUsersPage() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
   const queryClient = useQueryClient();
+  const isSuperAdmin = user?.role === 'super_admin';
+  const isAdmin = ['admin', 'super_admin'].includes(user?.role);
 
   const usersQuery = useQuery({
     queryKey: ['admin', 'users'],
@@ -22,7 +24,10 @@ function AdminUsersPage() {
 
   const statusMutation = useMutation({
     mutationFn: ({ id, isActive }) =>
-      authFetch(`/api/admin/users/${id}/status`, { method: 'PATCH', body: { isActive } }),
+      authFetch(`/api/admin/users/${id}/deactivate`, {
+        method: 'PATCH',
+        body: { isActive }
+      }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
   });
 
@@ -37,6 +42,9 @@ function AdminUsersPage() {
         <div>
           <h1>User Management</h1>
           <p>Promote administrators and deactivate accounts.</p>
+          {!isSuperAdmin && (
+            <p className="muted">Administrative changes are restricted to super admins.</p>
+          )}
         </div>
       </header>
 
@@ -57,41 +65,52 @@ function AdminUsersPage() {
               </tr>
             </thead>
             <tbody>
-              {usersQuery.data.map((user) => (
-                <tr key={user.id}>
-                  <td>{user.username}</td>
-                  <td>{user.email}</td>
-                  <td>{user.role}</td>
-                  <td>{user.isActive ? 'Active' : 'Inactive'}</td>
-                  <td>{user.profilePublic ? 'Public' : 'Private'}</td>
+              {usersQuery.data.map((entry) => (
+                <tr key={entry.id}>
+                  <td>{entry.username}</td>
+                  <td>{entry.email}</td>
+                  <td>{entry.role}</td>
+                  <td>{entry.isActive ? 'Active' : 'Inactive'}</td>
+                  <td>{entry.profilePublic ? 'Public' : 'Private'}</td>
                   <td className="admin-actions">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        roleMutation.mutate({
-                          id: user.id,
-                          role: user.role === 'admin' ? 'user' : 'admin'
-                        })
-                      }
-                    >
-                      {user.role === 'admin' ? 'Demote' : 'Promote'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        statusMutation.mutate({ id: user.id, isActive: !user.isActive })
-                      }
-                    >
-                      {user.isActive ? 'Deactivate' : 'Activate'}
-                    </button>
-                    <button
-                      type="button"
-                      className="danger"
-                      onClick={() => deleteMutation.mutate(user.id)}
-                      disabled={deleteMutation.isLoading}
-                    >
-                      Delete
-                    </button>
+                    {isSuperAdmin ? (
+                      <div className="admin-actions__controls">
+                        <label className="sr-only" htmlFor={`role-${entry.id}`}>
+                          Role
+                        </label>
+                        <select
+                          id={`role-${entry.id}`}
+                          value={entry.role}
+                          onChange={(event) =>
+                            roleMutation.mutate({ id: entry.id, role: event.target.value })
+                          }
+                          disabled={roleMutation.isPending}
+                        >
+                          <option value="user">user</option>
+                          <option value="admin">admin</option>
+                          <option value="super_admin">super_admin</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            statusMutation.mutate({ id: entry.id, isActive: !entry.isActive })
+                          }
+                          disabled={statusMutation.isPending}
+                        >
+                          {entry.isActive ? 'Deactivate' : 'Activate'}
+                        </button>
+                        <button
+                          type="button"
+                          className="danger"
+                          onClick={() => deleteMutation.mutate(entry.id)}
+                          disabled={deleteMutation.isLoading}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="muted">Super admin only</span>
+                    )}
                   </td>
                 </tr>
               ))}

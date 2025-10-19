@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   createSubmission,
+  deleteSubmission,
   getSubmission,
   getSubmissionUpdates,
   listMySubmissions,
@@ -8,7 +9,7 @@ import {
   resubmitSubmission,
   streamSubmissions
 } from '../controllers/submissionController.js';
-import { requireAuth } from '../middlewares/auth.js';
+import { requireAuth, requireRole } from '../middlewares/auth.js';
 import {
   listRateLimiter,
   resubmitRateLimiter,
@@ -49,12 +50,19 @@ router.post(
   validate({ body: createSubmissionSchema }),
   createSubmission
 );
-router.post(
+router.patch(
   '/:id/resubmit',
   requireAuth,
   resubmitRateLimiter,
   validate({ params: submissionIdParamSchema }),
   resubmitSubmission
+);
+router.delete(
+  '/:id',
+  requireAuth,
+  requireRole('super_admin'),
+  validate({ params: submissionIdParamSchema }),
+  deleteSubmission
 );
 
 export default router;

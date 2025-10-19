@@ -1,4 +1,5 @@
 import { executeTestCases, buildCaseSummary } from '../services/testCaseRunnerService.js';
+import { sanitizeSourceCode } from '../utils/sourceSanitizer.js';
 
 const sanitizeTestCases = (testCases = []) =>
   testCases.map((testCase) => ({
@@ -13,9 +14,16 @@ export const validateSolution = async (req, res, next) => {
       req.validated?.body || req.body;
 
     const sanitizedTestCases = sanitizeTestCases(testCases);
+    const { sanitized: normalizedSourceCode } = sanitizeSourceCode(sourceCode);
+
+    if (!normalizedSourceCode || normalizedSourceCode.trim().length === 0) {
+      return res
+        .status(400)
+        .json({ code: 'INVALID_SOURCE', message: 'Source code was empty after sanitization' });
+    }
 
     const { results, score, maxExecTimeMs, maxMemoryKb } = await executeTestCases({
-      sourceCode,
+      sourceCode: normalizedSourceCode,
       languageId,
       testCases: sanitizedTestCases,
       cpuTimeLimit,

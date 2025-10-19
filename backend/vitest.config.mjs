@@ -5,6 +5,8 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     setupFiles: ['./tests/setup.js'],
+    maxThreads: 1,
+    minThreads: 1,
     reporters: 'default',
     coverage: {
       enabled: false

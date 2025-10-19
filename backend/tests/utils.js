@@ -47,6 +47,21 @@ export const authenticateAsAdmin = async () => {
   return loginUser({ usernameOrEmail: adminUsername, password: adminPassword });
 };
 
+export const authenticateAsSuperAdmin = async () => {
+  const superUsername = `super_${uniqueValue()}`;
+  const superPassword = 'UltraSecret123!';
+  const superEmail = `${superUsername}@example.com`;
+
+  await createUser({
+    username: superUsername,
+    email: superEmail,
+    password: superPassword,
+    role: 'super_admin'
+  });
+
+  return loginUser({ usernameOrEmail: superUsername, password: superPassword });
+};
+
 export const authenticateAsUser = async () => {
   const username = `user_${uniqueValue()}`;
   const password = 'StrongPass123!';

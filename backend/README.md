@@ -21,6 +21,8 @@ Copy `.env.example` to `.env` (or create the file manually) and set:
 - `npm run dev` — Start the server with Nodemon (development).
 - `npm run start` — Start the server with Node.
 - `npm run seed` — Seed MongoDB with sample problems.
+- `npm run migrate:roles` — Promote legacy admins to `super_admin` role.
+- `npm run clean:highlighted-submissions` — Dry-run clean-up for highlighted HTML fragments persisted in `Submission.sourceCode`.
 
 ## API Overview
 
@@ -28,10 +30,16 @@ Copy `.env.example` to `.env` (or create the file manually) and set:
 - `GET /api/problems` — List problems.
 - `GET /api/problems/:idOrSlug` — Get problem by Mongo ID or slug.
 - `POST /api/problems` — Create a new problem.
+- `POST /api/problems/:problemId/recount` — Recompute submission counters for a problem (super admin).
 - `GET /api/languages` — Retrieve Judge0 language metadata (cached for 5 minutes, pass `forceRefresh=true` to bypass cache).
 - `POST /api/submissions` — Submit solution for a problem (validates `problemId`, `languageId`, and `sourceCode`).
 - `GET /api/submissions` — Recent submissions.
 - `GET /api/submissions/:id` — Submission details.
+- `PATCH /api/submissions/:id/resubmit` — Re-run a submission and update its result in place.
+- `DELETE /api/submissions/:id` — Soft-delete a submission (super admin).
+- `PATCH /api/users/:id/role` — Update a user's role (super admin).
+- `PATCH /api/users/:id/deactivate` — Activate or deactivate a user account (super admin).
+- `DELETE /api/users/:id` — Soft-delete a user account (super admin).
 
 All submissions are evaluated against stored test cases via Judge0.
 
