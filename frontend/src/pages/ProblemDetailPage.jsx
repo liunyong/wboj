@@ -413,7 +413,7 @@ const resubmitMutation = useResubmitSubmission({
                     {sample.explanation && (
                       <div>
                         <strong>Explanation</strong>
-                        <p>{sample.explanation}</p>
+                        <p className="sample-explanation">{sample.explanation}</p>
                       </div>
                     )}
                   </div>

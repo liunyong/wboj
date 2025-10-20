@@ -575,6 +575,11 @@ textarea {
   overflow: auto;
 }
 
+.sample-card .sample-explanation {
+  white-space: pre-wrap;
+  margin: 0.5rem 0 0;
+}
+
 .callout {
   background: #e0f2fe;
   color: #0f172a;
