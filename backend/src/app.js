@@ -13,6 +13,7 @@ import judgeRoutes from './routes/judgeRoutes.js';
 import announcementRoutes from './routes/announcementRoutes.js';
 import problemUpdateRoutes from './routes/problemUpdateRoutes.js';
 import adminUserRoutes from './routes/adminUserRoutes.js';
+import sessionRoutes from './routes/sessionRoutes.js';
 
 const app = express();
 const debugAuth = () => process.env.DEBUG_AUTH === '1';
@@ -41,6 +42,7 @@ app.use('/api/languages', languageRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/judge', judgeRoutes);
+app.use('/api/session', sessionRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);

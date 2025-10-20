@@ -7,7 +7,7 @@ import { formatDateTime } from '../utils/date.js';
 
 function HomePage() {
   const { authFetch, user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = ['admin', 'super_admin'].includes(user?.role);
   const queryClient = useQueryClient();
   const [isCreating, setIsCreating] = useState(false);
   const [createDraft, setCreateDraft] = useState({ title: '', body: '', pinned: false });

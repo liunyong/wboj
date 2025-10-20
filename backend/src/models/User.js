@@ -32,6 +32,8 @@ const userSchema = new mongoose.Schema(
           {
             tokenHash: { type: String, required: true },
             expiresAt: { type: Date, required: true },
+            inactivityExpiresAt: { type: Date, default: null },
+            lastTouchedAt: { type: Date, default: Date.now },
             createdAt: { type: Date, default: Date.now }
           },
           { _id: false }

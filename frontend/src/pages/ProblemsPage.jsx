@@ -11,13 +11,14 @@ function ProblemsPage() {
   const { authFetch, user } = useAuth();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
-  const [visibility, setVisibility] = useState(user?.role === 'admin' ? 'all' : 'public');
+  const isAdminLike = ['admin', 'super_admin'].includes(user?.role);
+  const [visibility, setVisibility] = useState(isAdminLike ? 'all' : 'public');
   const [difficulty, setDifficulty] = useState('');
   const [pendingDeletion, setPendingDeletion] = useState(null);
   const [visibilityTarget, setVisibilityTarget] = useState(null);
 
   useEffect(() => {
-    setVisibility(user?.role === 'admin' ? 'all' : 'public');
+    setVisibility(['admin', 'super_admin'].includes(user?.role) ? 'all' : 'public');
   }, [user?.role]);
 
   const problemsQuery = useQuery({
@@ -78,7 +79,7 @@ function ProblemsPage() {
     });
   }, [problemsQuery.data, search]);
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminLike;
 
   const handleDeleteConfirm = () => {
     if (!pendingDeletion) {

@@ -13,7 +13,7 @@ function RequireAdmin({ children }) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  if (user.role !== 'admin') {
+  if (!['admin', 'super_admin'].includes(user.role)) {
     return <Navigate to="/" replace />;
   }
 

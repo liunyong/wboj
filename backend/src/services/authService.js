@@ -7,7 +7,9 @@ import {
   REFRESH_TOKEN_SECRET,
   ACCESS_TOKEN_TTL,
   REFRESH_TOKEN_TTL,
-  MAX_SESSIONS_PER_USER
+  MAX_SESSIONS_PER_USER,
+  INACTIVITY_TTL_MS,
+  MIN_TOUCH_INTERVAL_MS
 } from '../config/auth.js';
 import User from '../models/User.js';
 
@@ -44,8 +46,26 @@ const parseDurationMs = (value, fallbackMs) => {
   return amount * multiplier;
 };
 
+const timeValue = (value) => {
+  if (!value) {
+    return null;
+  }
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+  const parsed = new Date(value);
+  const time = parsed.getTime();
+  return Number.isNaN(time) ? null : time;
+};
+
 const refreshTtlMs = parseDurationMs(REFRESH_TOKEN_TTL, 7 * 24 * 60 * 60 * 1000);
 const refreshTtlSeconds = Math.round(refreshTtlMs / 1000);
+
+const inactivityTtlMs = parseDurationMs(INACTIVITY_TTL_MS, 2 * 60 * 60 * 1000);
+const minTouchIntervalMs = parseDurationMs(MIN_TOUCH_INTERVAL_MS, 60 * 1000);
+
+export const SESSION_INACTIVITY_TTL_MS = inactivityTtlMs;
+export const SESSION_MIN_TOUCH_INTERVAL_MS = minTouchIntervalMs;
 
 export const hashPassword = async (password) => {
   const saltRounds = 12;
@@ -54,12 +74,13 @@ export const hashPassword = async (password) => {
 
 export const verifyPassword = (password, hash) => bcrypt.compare(password, hash);
 
-export const signAccessToken = (user) =>
+export const signAccessToken = (user, sid) =>
   jwt.sign(
     {
       sub: user._id.toString(),
       role: user.role,
-      username: user.username
+      username: user.username,
+      sid
     },
     ACCESS_TOKEN_SECRET,
     {
@@ -71,36 +92,104 @@ const createSessionId = () => crypto.randomBytes(48).toString('hex');
 
 const hashSessionId = (value) => crypto.createHash('sha256').update(value).digest('hex');
 
-const pruneExpiredSessions = (sessions = []) => {
-  const now = Date.now();
-  return sessions.filter((session) => session.expiresAt && session.expiresAt.getTime() > now);
+const pruneExpiredSessions = (sessions = [], now = Date.now()) => {
+  const nextSessions = [];
+
+  for (const session of sessions) {
+    if (!session?.tokenHash) {
+      continue;
+    }
+
+    const expiresAtMs = timeValue(session.expiresAt);
+    if (expiresAtMs === null) {
+      continue;
+    }
+
+    const createdAtMs = timeValue(session.createdAt) ?? now;
+    const inactivityExpiresAtMs =
+      timeValue(session.inactivityExpiresAt) ?? now + inactivityTtlMs;
+    const lastTouchedAtMs =
+      timeValue(session.lastTouchedAt) ?? now - minTouchIntervalMs - 1;
+
+    if (expiresAtMs <= now || inactivityExpiresAtMs <= now) {
+      continue;
+    }
+
+    nextSessions.push({
+      tokenHash: session.tokenHash,
+      expiresAt: new Date(expiresAtMs),
+      inactivityExpiresAt: new Date(inactivityExpiresAtMs),
+      lastTouchedAt: new Date(lastTouchedAtMs),
+      createdAt: new Date(createdAtMs)
+    });
+  }
+
+  return nextSessions;
+};
+
+const sessionsEqual = (current = [], next = []) => {
+  if (current.length !== next.length) {
+    return false;
+  }
+
+  for (let index = 0; index < current.length; index += 1) {
+    const left = current[index];
+    const right = next[index];
+    if (!right) {
+      return false;
+    }
+
+    if (left.tokenHash !== right.tokenHash) {
+      return false;
+    }
+
+    if (timeValue(left.expiresAt) !== timeValue(right.expiresAt)) {
+      return false;
+    }
+
+    if (timeValue(left.inactivityExpiresAt) !== timeValue(right.inactivityExpiresAt)) {
+      return false;
+    }
+
+    if (timeValue(left.lastTouchedAt) !== timeValue(right.lastTouchedAt)) {
+      return false;
+    }
+
+    if (timeValue(left.createdAt) !== timeValue(right.createdAt)) {
+      return false;
+    }
+  }
+
+  return true;
 };
 
 const persistSessionsIfChanged = async (user, nextSessions) => {
-  const changed =
-    (user.sessions || []).length !== nextSessions.length ||
-    (user.sessions || []).some((session, index) => session.tokenHash !== nextSessions[index]?.tokenHash);
-
-  if (changed) {
+  if (!sessionsEqual(user.sessions ?? [], nextSessions)) {
     user.sessions = nextSessions;
     await user.save();
   }
 };
 
 export const issueRefreshToken = async (user) => {
+  const now = Date.now();
+  const sessions = pruneExpiredSessions(user.sessions ?? [], now);
+
   const sessionId = createSessionId();
   const tokenHash = hashSessionId(sessionId);
-  const expiresAt = new Date(Date.now() + refreshTtlMs);
 
-  const sessions = pruneExpiredSessions(user.sessions ?? []);
-  sessions.push({ tokenHash, expiresAt, createdAt: new Date() });
+  sessions.push({
+    tokenHash,
+    expiresAt: new Date(now + refreshTtlMs),
+    inactivityExpiresAt: new Date(now + inactivityTtlMs),
+    lastTouchedAt: new Date(now),
+    createdAt: new Date(now)
+  });
 
   while (sessions.length > MAX_SESSIONS_PER_USER) {
     sessions.shift();
   }
 
-  user.sessions = sessions;
-  await user.save();
+  await persistSessionsIfChanged(user, sessions);
 
   const refreshToken = jwt.sign(
     {
@@ -113,12 +202,12 @@ export const issueRefreshToken = async (user) => {
     }
   );
 
-  return refreshToken;
+  return { refreshToken, sid: tokenHash };
 };
 
 export const createAuthTokens = async (user) => {
-  const accessToken = signAccessToken(user);
-  const refreshToken = await issueRefreshToken(user);
+  const { refreshToken, sid } = await issueRefreshToken(user);
+  const accessToken = signAccessToken(user, sid);
   return { accessToken, refreshToken };
 };
 
@@ -186,4 +275,71 @@ export const revokeAllSessions = async (userId) => {
   }
   user.sessions = [];
   await user.save();
+};
+
+export const touchSession = async (userId, sid, { force = false } = {}) => {
+  if (!sid) {
+    return null;
+  }
+
+  const user = await User.findById(userId).select('sessions');
+  if (!user) {
+    return null;
+  }
+
+  const now = Date.now();
+  const sessions = pruneExpiredSessions(user.sessions ?? [], now);
+  const targetIndex = sessions.findIndex((session) => session.tokenHash === sid);
+
+  if (targetIndex === -1) {
+    await persistSessionsIfChanged(user, sessions);
+    return null;
+  }
+
+  const session = sessions[targetIndex];
+
+  if (!force && now - session.lastTouchedAt.getTime() < minTouchIntervalMs) {
+    await persistSessionsIfChanged(user, sessions);
+    return {
+      inactivityExpiresAt: session.inactivityExpiresAt.getTime(),
+      touched: false
+    };
+  }
+
+  const updatedSession = {
+    ...session,
+    inactivityExpiresAt: new Date(now + inactivityTtlMs),
+    lastTouchedAt: new Date(now)
+  };
+
+  sessions[targetIndex] = updatedSession;
+
+  await persistSessionsIfChanged(user, sessions);
+
+  return {
+    inactivityExpiresAt: updatedSession.inactivityExpiresAt.getTime(),
+    touched: true
+  };
+};
+
+export const getSessionMeta = async (userId, sid) => {
+  if (!sid) {
+    return null;
+  }
+
+  const user = await User.findById(userId).select('sessions');
+  if (!user) {
+    return null;
+  }
+
+  const sessions = pruneExpiredSessions(user.sessions ?? []);
+  const session = sessions.find((entry) => entry.tokenHash === sid);
+
+  await persistSessionsIfChanged(user, sessions);
+
+  if (!session) {
+    return null;
+  }
+
+  return { inactivityExpiresAt: session.inactivityExpiresAt.getTime() };
 };

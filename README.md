@@ -43,6 +43,12 @@ npm run dev               # start the API on http://localhost:4000
 
 The backend queues Judge0 runs per test case, stores per-case verdicts, updates per-problem counters, and maintains a daily submission cache (`user_stats_daily`) for dashboard heatmaps.
 
+### Session Management
+
+- Authenticated sessions now use a 2 hour sliding inactivity window with a 15 minute pre-expiry warning modal.
+- `GET /api/session/state` and `POST /api/session/extend` expose the inactivity deadline; the React hook keeps all tabs in sync and handles the blocking countdown UI.
+- Configure `INACTIVITY_TTL_MS`, `WARNING_LEAD_MS`, and `MIN_TOUCH_INTERVAL_MS` in the backend environment. See `docs/security/session.md` for full details.
+
 ## Frontend Setup
 
 ```bash

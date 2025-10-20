@@ -1,5 +1,5 @@
 import User from '../models/User.js';
-import { decodeAccessToken } from '../services/authService.js';
+import { decodeAccessToken, touchSession } from '../services/authService.js';
 
 const extractBearerToken = (req) => {
   const header = req.headers['authorization'] || req.headers['Authorization'];
@@ -15,13 +15,17 @@ const extractBearerToken = (req) => {
 
 const resolveUserFromToken = async (token) => {
   const payload = decodeAccessToken(token);
-  if (!payload?.sub) {
+  if (!payload?.sub || !payload?.sid) {
     return null;
   }
   const user = await User.findById(payload.sub).select(
     'username email role isActive deletedAt profile profilePublic createdAt updatedAt'
   );
   if (!user || !user.isActive || user.deletedAt) {
+    return null;
+  }
+  const touchResult = await touchSession(payload.sub, payload.sid);
+  if (!touchResult) {
     return null;
   }
   return {
@@ -34,7 +38,11 @@ const resolveUserFromToken = async (token) => {
     profile: user.profile,
     profilePublic: user.profilePublic ?? false,
     createdAt: user.createdAt,
-    updatedAt: user.updatedAt
+    updatedAt: user.updatedAt,
+    session: {
+      sid: payload.sid,
+      inactivityExpiresAt: touchResult.inactivityExpiresAt
+    }
   };
 };
 
@@ -44,9 +52,11 @@ export const authenticateOptional = async (req, res, next) => {
     if (!token) {
       return next();
     }
-    const user = await resolveUserFromToken(token);
-    if (user) {
+    const resolved = await resolveUserFromToken(token);
+    if (resolved) {
+      const { session, ...user } = resolved;
       req.user = user;
+      req.session = session;
     }
     return next();
   } catch (error) {
@@ -61,12 +71,14 @@ export const requireAuth = async (req, res, next) => {
       return res.status(401).json({ code: 'UNAUTHENTICATED', message: 'Authentication required' });
     }
 
-    const user = await resolveUserFromToken(token);
-    if (!user) {
+    const resolved = await resolveUserFromToken(token);
+    if (!resolved) {
       return res.status(401).json({ code: 'UNAUTHENTICATED', message: 'Invalid or expired token' });
     }
 
+    const { session, ...user } = resolved;
     req.user = user;
+    req.session = session;
     return next();
   } catch (error) {
     return next(error);

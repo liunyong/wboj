@@ -61,7 +61,7 @@ function ProblemEditPage() {
       ? problemAuthorRaw._id ?? problemAuthorRaw.toString?.()
       : problemAuthorRaw;
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = ['admin', 'super_admin'].includes(user?.role);
   const isOwner =
     problemAuthorId && user?.id ? String(problemAuthorId) === String(user.id) : false;
 

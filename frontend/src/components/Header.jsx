@@ -40,6 +40,8 @@ function Header() {
 
   const closeMenu = () => setIsMenuOpen(false);
 
+  const isAdminLike = ['admin', 'super_admin'].includes(user?.role);
+
   return (
     <header className="app-header">
       <div className="app-header__brand">
@@ -62,7 +64,7 @@ function Header() {
             </NavLink>
           </>
         ) : null}
-        {user?.role === 'admin' && (
+        {isAdminLike && (
           <NavLink to="/admin/create" className={({ isActive }) => (isActive ? 'active' : '')}>
             Create Problem
           </NavLink>
@@ -103,7 +105,7 @@ function Header() {
                 <Link to="/settings" role="menuitem" onClick={closeMenu}>
                   Settings
                 </Link>
-                {user.role === 'admin' && (
+                {isAdminLike && (
                   <Link to="/admin/users" role="menuitem" onClick={closeMenu}>
                     User Management
                   </Link>
