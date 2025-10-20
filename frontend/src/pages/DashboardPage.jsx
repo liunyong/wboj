@@ -9,6 +9,7 @@ import { applyEventToSubmissionList, detailToEvent } from '../utils/submissions.
 import { useSubmissionStream } from '../hooks/useSubmissionStream.js';
 import { useResubmitSubmission } from '../hooks/useResubmitSubmission.js';
 import { useLanguages } from '../hooks/useLanguages.js';
+import { useUserProgress, userProgressQueryKey } from '../hooks/useUserProgress.js';
 import SubmissionViewerModal from '../components/SubmissionViewerModal.jsx';
 
 const currentYear = new Date().getUTCFullYear();
@@ -41,6 +42,10 @@ function DashboardPage() {
     }
   });
 
+  const progressQuery = useUserProgress();
+  const solvedProblems = progressQuery.solved;
+  const attemptedProblems = progressQuery.attempted;
+
   const resubmitMutation = useResubmitSubmission({
     onSuccess: (data, variables) => {
       setResubmittingId(null);
@@ -50,6 +55,9 @@ function DashboardPage() {
         queryClient.setQueryData(['submissions', 'mine', 'dashboard'], (entries) =>
           applyEventToSubmissionList(Array.isArray(entries) ? entries : [], event)
         );
+        if (submission.verdict && submission.verdict !== 'PENDING') {
+          queryClient.invalidateQueries({ queryKey: userProgressQueryKey });
+        }
 
         const previousVerdict = variables?.baseSubmission?.verdict ?? null;
         const nextVerdict = submission.verdict ?? null;
@@ -76,6 +84,17 @@ function DashboardPage() {
       queryClient.setQueryData(['submissions', 'mine', 'dashboard'], (entries) =>
         applyEventToSubmissionList(Array.isArray(entries) ? entries : [], event)
       );
+      const verdict = event.verdict ?? null;
+      const status = event.status ?? null;
+      const finalVerdict =
+        verdict && verdict !== 'PENDING'
+          ? verdict
+          : status && !['queued', 'running'].includes(status)
+          ? status
+          : null;
+      if (finalVerdict) {
+        queryClient.invalidateQueries({ queryKey: userProgressQueryKey });
+      }
     },
     [queryClient, user?.id]
   );
@@ -123,6 +142,40 @@ function DashboardPage() {
 
   const summary = summaryQuery.data ?? {};
   const heatmapData = heatmapQuery.data?.items ?? [];
+  const getAttemptedVerdictBadge = (entry) => {
+    const verdict = entry?.latestVerdict ?? null;
+    if (verdict && verdict !== 'PENDING') {
+      const key = verdict.toLowerCase();
+      return {
+        label: verdict,
+        className: `verdict verdict-${key}`
+      };
+    }
+
+    const status = entry?.latestStatus ?? null;
+    if (!status) {
+      return null;
+    }
+
+    const normalized = status.toLowerCase();
+    const statusMap = {
+      accepted: 'AC',
+      wrong_answer: 'WA',
+      tle: 'TLE',
+      rte: 'RTE',
+      ce: 'CE',
+      mle: 'MLE',
+      failed: 'IE'
+    };
+    const mapped = statusMap[normalized];
+    if (!mapped || mapped === 'PENDING') {
+      return null;
+    }
+    return {
+      label: mapped,
+      className: `verdict verdict-${mapped.toLowerCase()}`
+    };
+  };
 
   return (
     <section className="page">
@@ -161,6 +214,67 @@ function DashboardPage() {
           <div className="page-message">Loading activity…</div>
         ) : (
           <Heatmap year={year} items={heatmapData} />
+        )}
+      </article>
+
+      <article className="dashboard-section">
+        <h2>Problem Progress</h2>
+        {progressQuery.isLoading || progressQuery.isIdle ? (
+          <div className="page-message">Loading progress…</div>
+        ) : progressQuery.isError ? (
+          <div className="page-message error">Failed to load progress.</div>
+        ) : (
+          <div className="dashboard-progress">
+            <section className="dashboard-progress__group">
+              <header className="dashboard-progress__header">
+                <h3>Solved Problems</h3>
+                <span className="dashboard-progress__count">{solvedProblems.length}</span>
+              </header>
+              {solvedProblems.length ? (
+                <ul className="dashboard-progress__chips">
+                  {solvedProblems.map((problem) => (
+                    <li key={problem.problemId}>
+                      <Link
+                        to={`/problems/${problem.problemId}`}
+                        className="dashboard-progress__chip"
+                      >
+                        <span className="dashboard-progress__chip-id">
+                          #{problem.problemId}
+                        </span>
+                        <span className="dashboard-progress__chip-title">{problem.title}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="dashboard-progress__empty">No solved problems yet.</p>
+              )}
+            </section>
+
+            <section className="dashboard-progress__group">
+              <header className="dashboard-progress__header">
+                <h3>Attempted (Not Accepted Yet)</h3>
+                <span className="dashboard-progress__count">{attemptedProblems.length}</span>
+              </header>
+              {attemptedProblems.length ? (
+                <ul className="dashboard-progress__list">
+                  {attemptedProblems.map((problem) => {
+                    const badge = getAttemptedVerdictBadge(problem);
+                    return (
+                      <li key={problem.problemId} className="dashboard-progress__attempted-item">
+                        <Link to={`/problems/${problem.problemId}`}>
+                          #{problem.problemId} {problem.title}
+                        </Link>
+                        {badge ? <span className={badge.className}>{badge.label}</span> : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="dashboard-progress__empty">No pending attempts right now.</p>
+              )}
+            </section>
+          </div>
         )}
       </article>
 

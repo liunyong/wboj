@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom';
 
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useUserProgress, userProgressQueryKey } from '../hooks/useUserProgress.js';
+import { useSubmissionStream } from '../hooks/useSubmissionStream.js';
 
 const difficulties = ['BASIC', 'EASY', 'MEDIUM', 'HARD'];
 
@@ -33,6 +35,14 @@ function ProblemsPage() {
     }
   });
 
+  const progressQuery = useUserProgress();
+  const solvedProblemIds = useMemo(() => {
+    if (!Array.isArray(progressQuery.solved)) {
+      return new Set();
+    }
+    return new Set(progressQuery.solved.map((item) => item.problemId));
+  }, [progressQuery.solved]);
+
   const toggleVisibilityMutation = useMutation({
     mutationFn: ({ problemId, isPublic }) =>
       authFetch(`/api/problems/${problemId}/visibility`, {
@@ -47,6 +57,24 @@ function ProblemsPage() {
     },
     onSettled: () => {
       setVisibilityTarget(null);
+    }
+  });
+
+  useSubmissionStream({
+    enabled: Boolean(user?.id),
+    onEvent: (event) => {
+      if (!event || event.userId !== user?.id) {
+        return;
+      }
+      const verdict = event.verdict ?? null;
+      const status = event.status ?? null;
+      const hasFinalVerdict =
+        verdict && verdict !== 'PENDING'
+          ? true
+          : status && !['queued', 'running'].includes(status);
+      if (hasFinalVerdict) {
+        queryClient.invalidateQueries({ queryKey: userProgressQueryKey });
+      }
     }
   });
 
@@ -130,6 +158,9 @@ function ProblemsPage() {
           <table className="problem-table">
             <thead>
               <tr>
+                <th className="problem-table__status-header" aria-label="Solved">
+                  <span>✓</span>
+                </th>
                 <th>ID</th>
                 <th>Title</th>
                 <th>Difficulty</th>
@@ -144,9 +175,29 @@ function ProblemsPage() {
                 const accepted = problem.acceptedSubmissionCount ?? 0;
                 const acceptanceRate =
                   total > 0 ? `${Math.round((accepted / total) * 100)}%` : '—';
+                const isSolved = solvedProblemIds.has(problem.problemId);
 
                 return (
                   <tr key={problem._id}>
+                    <td className="problem-table__status">
+                      {isSolved ? (
+                        <span className="problem-table__status-icon" role="img" aria-label="Solved">
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 16 16"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M8 1.333a6.667 6.667 0 1 0 0 13.334A6.667 6.667 0 0 0 8 1.333Zm3.207 4.94-3.76 3.76a.667.667 0 0 1-.944 0l-1.76-1.76a.667.667 0 1 1 .944-.944L7 8.9l3.287-3.287a.667.667 0 1 1 .94.94Z"
+                              fill="currentColor"
+                            />
+                          </svg>
+                        </span>
+                      ) : null}
+                    </td>
                     <td className="problem-table__id">#{problem.problemId}</td>
                     <td>
                       <div className="problem-table__title">
@@ -200,7 +251,7 @@ function ProblemsPage() {
               })}
               {!filtered.length && (
                 <tr>
-                  <td colSpan={isAdmin ? 6 : 5}>
+                  <td colSpan={isAdmin ? 7 : 6}>
                     <div className="problem-table__empty">No problems found.</div>
                   </td>
                 </tr>
