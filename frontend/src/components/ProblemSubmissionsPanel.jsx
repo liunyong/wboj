@@ -6,7 +6,11 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useSubmissionStream } from '../hooks/useSubmissionStream.js';
 import { useLanguages } from '../hooks/useLanguages.js';
 import { applyEventToSubmissionList } from '../utils/submissions.js';
-import { formatDateTime } from '../utils/date.js';
+import {
+  formatRelativeOrDate,
+  formatTooltip,
+  getUserTZ
+} from '../utils/time.js';
 
 const PAGE_SIZE = 20;
 
@@ -75,6 +79,7 @@ function ProblemSubmissionsPanel({
   const queryClient = useQueryClient();
   const { authFetch } = useAuth();
   const { resolveLanguageLabel } = useLanguages();
+  const userTimeZone = useMemo(() => getUserTZ(), []);
   const [activeScope, setActiveScope] = useState('mine');
   const [pageByScope, setPageByScope] = useState({ mine: 1, all: 1 });
 
@@ -135,53 +140,52 @@ function ProblemSubmissionsPanel({
         return;
       }
 
-      queryClient.setQueriesData(
-        { queryKey: ['problemSubmissions', problemId] },
-        (existing, query) => {
-          if (!existing) {
-            return existing;
-          }
-
-          const scopeKey = query.queryKey?.[2] ?? 'mine';
-          const params = query.queryKey?.[3] ?? {};
-          const pageValue = params?.page ?? existing.page ?? 1;
-          const limit = existing.limit ?? PAGE_SIZE;
-          const items = Array.isArray(existing.items) ? existing.items : [];
-          const isMineScope = scopeKey === 'mine';
-          const belongsToUser = event.userId && event.userId === currentUserId;
-
-          if (isMineScope && !belongsToUser) {
-            return existing;
-          }
-
-          const allowInsert = pageValue === 1;
-          const existed = items.some((item) => (item.id ?? item._id) === event._id);
-
-          const nextItems = applyEventToSubmissionList(items, event, {
-            maxItems: allowInsert ? limit : null,
-            allowInsert,
-            problem
-          });
-
-          if (nextItems === items) {
-            return existing;
-          }
-
-          let nextTotal = existing.total ?? items.length;
-          let nextTotalPages = existing.totalPages ?? Math.max(1, Math.ceil(nextTotal / limit));
-          if (!existed && allowInsert) {
-            nextTotal += 1;
-            nextTotalPages = Math.max(1, Math.ceil(nextTotal / limit));
-          }
-
-          return {
-            ...existing,
-            items: nextItems,
-            total: nextTotal,
-            totalPages: nextTotalPages
-          };
+      queryClient.setQueriesData({ queryKey: ['problemSubmissions', problemId] }, (existing, query) => {
+        if (!existing) {
+          return existing;
         }
-      );
+
+        const queryKey = Array.isArray(query?.queryKey) ? query.queryKey : [];
+        const scopeKey = queryKey[2] ?? existing.scope ?? 'mine';
+        const rawParams = queryKey[3];
+        const params = rawParams && typeof rawParams === 'object' ? rawParams : {};
+        const pageValue = params.page ?? existing.page ?? 1;
+        const limit = existing.limit ?? PAGE_SIZE;
+        const items = Array.isArray(existing.items) ? existing.items : [];
+        const isMineScope = scopeKey === 'mine';
+        const belongsToUser = event.userId && event.userId === currentUserId;
+
+        if (isMineScope && !belongsToUser) {
+          return existing;
+        }
+
+        const allowInsert = pageValue === 1;
+        const existed = items.some((item) => (item.id ?? item._id) === event._id);
+
+        const nextItems = applyEventToSubmissionList(items, event, {
+          maxItems: allowInsert ? limit : null,
+          allowInsert,
+          problem
+        });
+
+        if (nextItems === items) {
+          return existing;
+        }
+
+        let nextTotal = existing.total ?? items.length;
+        let nextTotalPages = existing.totalPages ?? Math.max(1, Math.ceil(nextTotal / limit));
+        if (!existed && allowInsert) {
+          nextTotal += 1;
+          nextTotalPages = Math.max(1, Math.ceil(nextTotal / limit));
+        }
+
+        return {
+          ...existing,
+          items: nextItems,
+          total: nextTotal,
+          totalPages: nextTotalPages
+        };
+      });
 
       if (event.userId === currentUserId) {
         queryClient.setQueryData(['submissions', 'mine', 'dashboard'], (entries) =>
@@ -269,101 +273,100 @@ function ProblemSubmissionsPanel({
               </tr>
             </thead>
             <tbody>
-              {items.map((submission) => {
-                const isOwner = submission.userId === currentUserId;
-                const displayUser = submission.userName || (isOwner ? 'You' : '(unknown)');
-                const languageSlug =
-                  submission.language ??
-                  (submission.languageId != null ? `language-${submission.languageId}` : null);
-                const languageLabel =
-                  resolveLanguageLabel(
-                    submission.languageId,
-                    languageSlug ?? (submission.languageId != null ? String(submission.languageId) : null)
-                  ) ?? '—';
-                const lastRunAt =
-                  submission.lastRunAt ??
-                  submission.finishedAt ??
-                  submission.startedAt ??
-                  submission.createdAt;
+              {(() => {
+                const nowMs = Date.now();
+                return items.map((submission) => {
+                  const isOwner = submission.userId === currentUserId;
+                  const displayUser = submission.userName || (isOwner ? 'You' : '(unknown)');
+                  const languageSlug =
+                    submission.language ??
+                    (submission.languageId != null ? `language-${submission.languageId}` : null);
+                  const languageLabel =
+                    resolveLanguageLabel(
+                      submission.languageId,
+                      languageSlug ?? (submission.languageId != null ? String(submission.languageId) : null)
+                    ) ?? '—';
+                  const lastRunAt =
+                    submission.lastRunAt ??
+                    submission.finishedAt ??
+                    submission.startedAt ??
+                    submission.createdAt;
+                  const lastRunLabel = formatRelativeOrDate(lastRunAt, nowMs, userTimeZone);
+                  const lastRunTooltip = lastRunAt ? formatTooltip(lastRunAt, userTimeZone) : '—';
 
-                const allowResubmit =
-                  submission._id && (isOwner || isAdmin) && (activeScope === 'mine' ? isOwner : true);
-                const allowDelete = Boolean(onDelete) && canDelete && submission._id;
+                  const allowResubmit =
+                    submission._id && (isOwner || isAdmin) && (activeScope === 'mine' ? isOwner : true);
+                  const allowDelete = Boolean(onDelete) && canDelete && submission._id;
 
-                return (
-                  <tr key={submission._id}>
-                    <td>{formatDateTime(lastRunAt)}</td>
-                    <td>
-                      {submission.userName ? (
-                        <Link to={`/u/${submission.userName}`}>{displayUser}</Link>
-                      ) : (
-                        <span className="muted">{displayUser}</span>
-                      )}
-                    </td>
-                    <td>{languageLabel}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="link-button verdict-link"
-                        onClick={() => onVerdictClick(submission._id)}
-                      >
-                        <span
-                          className={`status-badge ${STATUS_CLASS[submission.status] || ''}`}
-                        >
-                          {STATUS_LABELS[submission.status] ?? submission.status}
-                        </span>
-                      </button>
-                    </td>
-                    <td>
-                      {typeof submission.score === 'number' ? `${submission.score}%` : '—'}
-                    </td>
-                    <td>{submission.runtimeMs ?? '—'}</td>
-                    <td>{submission.memoryKB ?? '—'}</td>
-                    {(isAdmin || canDelete || activeScope === 'mine') && (
-                      <td className="submission-actions">
-                        {allowResubmit ? (
-                          <button
-                            type="button"
-                            className="secondary"
-                            onClick={() =>
-                              onResubmit({
-                                ...submission,
-                                id: submission.id ?? submission._id,
-                                problem: {
-                                  id: problem?._id ?? problem?.id ?? null,
-                                  title: problem?.title ?? submission.problemTitle ?? null,
-                                  problemId: problem?.problemId ?? submission.problemId ?? null
-                                }
-                              })
-                            }
-                            disabled={
-                              isResubmitPending && resubmittingId === submission._id
-                            }
-                          >
-                            {isResubmitPending && resubmittingId === submission._id
-                              ? 'Re-submitting…'
-                              : 'Re-submit'}
-                          </button>
-                        ) : !allowDelete ? (
-                          <span className="muted">—</span>
-                        ) : null}
-                        {allowDelete ? (
-                          <button
-                            type="button"
-                            className="danger"
-                            onClick={() => onDelete?.(submission)}
-                            disabled={isDeletePending && deletingId === submission._id}
-                          >
-                            {isDeletePending && deletingId === submission._id
-                              ? 'Deleting…'
-                              : 'Delete'}
-                          </button>
-                        ) : null}
+                  return (
+                    <tr key={submission._id}>
+                      <td title={lastRunTooltip}>{lastRunLabel}</td>
+                      <td>
+                        {submission.userName ? (
+                          <Link to={`/u/${submission.userName}`}>{displayUser}</Link>
+                        ) : (
+                          <span className="muted">{displayUser}</span>
+                        )}
                       </td>
-                    )}
-                  </tr>
-                );
-              })}
+                      <td>{languageLabel}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="link-button verdict-link"
+                          onClick={() => onVerdictClick(submission._id)}
+                        >
+                          <span className={`status-badge ${STATUS_CLASS[submission.status] || ''}`}>
+                            {STATUS_LABELS[submission.status] ?? submission.status}
+                          </span>
+                        </button>
+                      </td>
+                      <td>{typeof submission.score === 'number' ? `${submission.score}%` : '—'}</td>
+                      <td>{submission.runtimeMs ?? '—'}</td>
+                      <td>{submission.memoryKB ?? '—'}</td>
+                      {(isAdmin || canDelete || activeScope === 'mine') && (
+                        <td className="submission-actions">
+                          {allowResubmit ? (
+                            <button
+                              type="button"
+                              className="secondary"
+                              onClick={() =>
+                                onResubmit({
+                                  ...submission,
+                                  id: submission.id ?? submission._id,
+                                  problem: {
+                                    id: problem?._id ?? problem?.id ?? null,
+                                    title: problem?.title ?? submission.problemTitle ?? null,
+                                    problemId: problem?.problemId ?? submission.problemId ?? null
+                                  }
+                                })
+                              }
+                              disabled={isResubmitPending && resubmittingId === submission._id}
+                            >
+                              {isResubmitPending && resubmittingId === submission._id
+                                ? 'Re-submitting…'
+                                : 'Re-submit'}
+                            </button>
+                          ) : !allowDelete ? (
+                            <span className="muted">—</span>
+                          ) : null}
+                          {allowDelete ? (
+                            <button
+                              type="button"
+                              className="danger"
+                              onClick={() => onDelete?.(submission)}
+                              disabled={isDeletePending && deletingId === submission._id}
+                            >
+                              {isDeletePending && deletingId === submission._id
+                                ? 'Deleting…'
+                                : 'Delete'}
+                            </button>
+                          ) : null}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                });
+              })()}
               {!items.length && (
                 <tr>
                   <td colSpan={(isAdmin || canDelete || activeScope === 'mine') ? 8 : 7}>

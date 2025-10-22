@@ -2,7 +2,11 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
-import { formatDateTime } from '../utils/date.js';
+import {
+  formatRelativeOrDate,
+  formatTooltip,
+  getUserTZ
+} from '../utils/time.js';
 import { useLanguages } from '../hooks/useLanguages.js';
 import CodeBlock from './CodeBlock.jsx';
 
@@ -42,6 +46,8 @@ function SubmissionViewerModal({
   const { resolveLanguageLabel } = useLanguages();
 
   const submission = submissionQuery.data;
+  const userTimeZone = getUserTZ();
+  const nowMs = Date.now();
   const canViewSource = submission?.canViewSource ?? Boolean(submission?.source);
   const codeText =
     canViewSource && typeof submission?.source === 'string' && submission.source.length
@@ -55,6 +61,20 @@ function SubmissionViewerModal({
   const languageSlug =
     submission?.language ??
     (submission?.languageId != null ? `language-${submission.languageId}` : null);
+
+  const lastRunAtIso =
+    submission?.lastRunAt ??
+    submission?.finishedAt ??
+    submission?.startedAt ??
+    submission?.createdAt ??
+    null;
+  const submittedAtIso = submission?.createdAt ?? submission?.queuedAt ?? null;
+  const lastRunLabel = lastRunAtIso ? formatRelativeOrDate(lastRunAtIso, nowMs, userTimeZone) : '—';
+  const lastRunTooltip = lastRunAtIso ? formatTooltip(lastRunAtIso, userTimeZone) : '—';
+  const submittedLabel = submittedAtIso
+    ? formatRelativeOrDate(submittedAtIso, nowMs, userTimeZone)
+    : '—';
+  const submittedTooltip = submittedAtIso ? formatTooltip(submittedAtIso, userTimeZone) : '—';
 
   let displayLanguageLabel = '—';
   if (submission) {
@@ -127,13 +147,11 @@ function SubmissionViewerModal({
               </div>
               <div>
                 <span className="label">Last Run</span>
-                <span>
-                  {submission.lastRunAt ? formatDateTime(submission.lastRunAt) : '—'}
-                </span>
+                <span title={lastRunTooltip}>{lastRunLabel}</span>
               </div>
               <div>
                 <span className="label">Submitted</span>
-                <span>{formatDateTime(submission.createdAt ?? submission.queuedAt)}</span>
+                <span title={submittedTooltip}>{submittedLabel}</span>
               </div>
             </div>
 
@@ -149,8 +167,11 @@ function SubmissionViewerModal({
                         className="submission-modal__history-item"
                       >
                         <div className="history-row">
-                          <span className="history-time">
-                            {run.at ? formatDateTime(run.at) : 'Unknown time'}
+                          <span
+                            className="history-time"
+                            title={run.at ? formatTooltip(run.at, userTimeZone) : undefined}
+                          >
+                            {run.at ? formatRelativeOrDate(run.at, nowMs, userTimeZone) : 'Unknown time'}
                           </span>
                           <span className={`status-badge ${runStatus ? `status-${runStatus}` : ''}`}>
                             {statusLabel}

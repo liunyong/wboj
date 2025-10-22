@@ -4,7 +4,7 @@ import { getNextSequence } from '../services/idService.js';
 import { ensureProblemNumbersBackfilled } from '../services/problemNumberService.js';
 import { parseTestCasesFromZip } from '../services/testCaseZipService.js';
 import { buildProblemSlug } from '../utils/problemSlug.js';
-import { sanitizeOptionalRichText, sanitizeRichText } from '../utils/sanitizeHtml.js';
+import { decodeHtmlEntities, sanitizeOptionalRichText, sanitizeRichText } from '../utils/sanitizeHtml.js';
 import { recomputeProblemCounters } from '../services/submissionService.js';
 
 const sanitizeTestCases = (testCases = []) => {
@@ -57,6 +57,33 @@ const assignIfDefined = (target, key, value) => {
   if (value !== undefined) {
     target[key] = value;
   }
+};
+
+const decodeRichTextField = (value) =>
+  typeof value === 'string' ? decodeHtmlEntities(value) : value;
+
+const decodeProblemRichText = (payload) => {
+  if (!payload || typeof payload !== 'object') {
+    return payload;
+  }
+  const decoded = { ...payload };
+  decoded.statement = decodeRichTextField(decoded.statement);
+  decoded.inputFormat = decodeRichTextField(decoded.inputFormat);
+  decoded.outputFormat = decodeRichTextField(decoded.outputFormat);
+  decoded.constraints = decodeRichTextField(decoded.constraints);
+
+  if (Array.isArray(decoded.samples)) {
+    decoded.samples = decoded.samples.map((sample) => {
+      if (!sample || typeof sample !== 'object') {
+        return sample;
+      }
+      const normalized = { ...sample };
+      normalized.explanation = decodeRichTextField(normalized.explanation);
+      return normalized;
+    });
+  }
+
+  return decoded;
 };
 
 export const getProblems = async (req, res, next) => {
@@ -140,7 +167,7 @@ export const getProblemById = async (req, res, next) => {
       return res.status(404).json({ code: 'PROBLEM_NOT_FOUND', message: 'Problem not found' });
     }
 
-    const payload = problem.toObject();
+    const payload = decodeProblemRichText(problem.toObject());
     payload.testCaseCount = Array.isArray(problem.testCases) ? problem.testCases.length : 0;
     payload.totalPoints = Array.isArray(problem.testCases)
       ? problem.testCases.reduce((sum, testCase) => sum + (testCase.points || 0), 0)
@@ -241,7 +268,7 @@ export const createProblem = async (req, res, next) => {
           console.error('Failed to record problem creation update', updateError);
         }
 
-        const created = problem.toObject();
+        const created = decodeProblemRichText(problem.toObject());
         created.testCaseCount = sanitizedTestCases.length;
         created.totalPoints = sanitizedTestCases.reduce((sum, item) => sum + (item.points || 0), 0);
         res.status(201).json(created);
@@ -376,7 +403,7 @@ export const updateProblem = async (req, res, next) => {
       console.error('Failed to record problem update entry', updateError);
     }
 
-    const payload = problem.toObject();
+    const payload = decodeProblemRichText(problem.toObject());
     payload.testCaseCount = Array.isArray(problem.testCases) ? problem.testCases.length : 0;
     payload.totalPoints = Array.isArray(problem.testCases)
       ? problem.testCases.reduce((sum, testCase) => sum + (testCase.points || 0), 0)
@@ -404,7 +431,7 @@ export const updateProblemVisibility = async (req, res, next) => {
       return res.status(404).json({ message: 'Problem not found' });
     }
 
-    res.json(problem);
+    res.json(decodeProblemRichText(problem.toObject()));
   } catch (error) {
     next(error);
   }

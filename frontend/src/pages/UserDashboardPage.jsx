@@ -3,7 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
-import { formatDateTime } from '../utils/date.js';
+import {
+  formatRelativeOrDate,
+  formatTooltip,
+  getUserTZ
+} from '../utils/time.js';
 
 function UserDashboardPage() {
   const { username = '' } = useParams();
@@ -23,6 +27,8 @@ function UserDashboardPage() {
     }
     return profileUser.profilePublic ? 'Public profile' : 'Private profile';
   }, [profileUser]);
+  const userTimeZone = useMemo(() => getUserTZ(), []);
+  const nowMs = Date.now();
 
   return (
     <section className="page user-dashboard-page">
@@ -54,15 +60,23 @@ function UserDashboardPage() {
               <div className="card-empty">No problems solved yet.</div>
             ) : (
               <ul className="dashboard-list">
-                {solved.map((entry) => (
-                  <li key={entry.latestAcceptedSubmissionId}>
-                    <div>
-                      <Link to={`/problems/${entry.problemId}`}>Problem #{entry.problemId}</Link>
-                      <span className="muted">{entry.problemTitle}</span>
-                    </div>
-                    <span className="muted">Accepted {formatDateTime(entry.acceptedAt)}</span>
-                  </li>
-                ))}
+                {solved.map((entry) => {
+                  const acceptedLabel = formatRelativeOrDate(entry.acceptedAt, nowMs, userTimeZone);
+                  const acceptedTooltip = entry.acceptedAt
+                    ? formatTooltip(entry.acceptedAt, userTimeZone)
+                    : '—';
+                  return (
+                    <li key={entry.latestAcceptedSubmissionId}>
+                      <div>
+                        <Link to={`/problems/${entry.problemId}`}>Problem #{entry.problemId}</Link>
+                        <span className="muted">{entry.problemTitle}</span>
+                      </div>
+                      <span className="muted" title={acceptedTooltip}>
+                        Accepted {acceptedLabel}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </article>
@@ -75,15 +89,23 @@ function UserDashboardPage() {
               <div className="card-empty">No attempts recorded yet.</div>
             ) : (
               <ul className="dashboard-list">
-                {attempted.map((entry) => (
-                  <li key={`${entry.problemId}-${entry.lastTriedAt}`}>
-                    <div>
-                      <Link to={`/problems/${entry.problemId}`}>Problem #{entry.problemId}</Link>
-                      <span className="muted">{entry.problemTitle}</span>
-                    </div>
-                    <span className="muted">Last tried {formatDateTime(entry.lastTriedAt)}</span>
-                  </li>
-                ))}
+                {attempted.map((entry) => {
+                  const triedLabel = formatRelativeOrDate(entry.lastTriedAt, nowMs, userTimeZone);
+                  const triedTooltip = entry.lastTriedAt
+                    ? formatTooltip(entry.lastTriedAt, userTimeZone)
+                    : '—';
+                  return (
+                    <li key={`${entry.problemId}-${entry.lastTriedAt}`}>
+                      <div>
+                        <Link to={`/problems/${entry.problemId}`}>Problem #{entry.problemId}</Link>
+                        <span className="muted">{entry.problemTitle}</span>
+                      </div>
+                      <span className="muted" title={triedTooltip}>
+                        Last tried {triedLabel}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </article>

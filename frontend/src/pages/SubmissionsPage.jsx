@@ -7,7 +7,11 @@ import { useSubmissionStream } from '../hooks/useSubmissionStream.js';
 import { useResubmitSubmission } from '../hooks/useResubmitSubmission.js';
 import { useDeleteSubmission } from '../hooks/useDeleteSubmission.js';
 import { useLanguages } from '../hooks/useLanguages.js';
-import { formatDateTime } from '../utils/date.js';
+import {
+  formatRelativeOrDate,
+  formatTooltip,
+  getUserTZ
+} from '../utils/time.js';
 import { detailToEvent } from '../utils/submissions.js';
 import SubmissionViewerModal from '../components/SubmissionViewerModal.jsx';
 
@@ -94,6 +98,7 @@ function SubmissionsPage() {
   const { authFetch, user } = useAuth();
   const queryClient = useQueryClient();
   const { resolveLanguageLabel } = useLanguages();
+  const userTimeZone = useMemo(() => getUserTZ(), []);
   const [filters, setFilters] = useState({
     statuses: [],
     user: '',
@@ -467,7 +472,9 @@ function SubmissionsPage() {
               </tr>
             </thead>
             <tbody>
-              {items.map((submission) => {
+              {(() => {
+                const nowMs = Date.now();
+                return items.map((submission) => {
                 const languageSlug =
                   submission.language ??
                   (submission.languageId != null ? `language-${submission.languageId}` : null);
@@ -489,10 +496,12 @@ function SubmissionsPage() {
                 const isOwner = submission.userId && submission.userId === currentUserId;
                 const allowResubmit = submission._id && (isOwner || isAdmin);
                 const allowDelete = submission._id && isSuperAdmin;
+                const lastRunLabel = formatRelativeOrDate(lastRunAt, nowMs, userTimeZone);
+                const lastRunTooltip = lastRunAt ? formatTooltip(lastRunAt, userTimeZone) : '—';
 
                 return (
                   <tr key={submission._id}>
-                    <td>{formatDateTime(lastRunAt)}</td>
+                    <td title={lastRunTooltip}>{lastRunLabel}</td>
                     <td>
                       {submission.userName ? (
                         <Link to={`/u/${submission.userName}`}>{displayUser}</Link>
@@ -559,7 +568,8 @@ function SubmissionsPage() {
                     ) : null}
                   </tr>
                 );
-              })}
+              });
+              })()}
               {!items.length && (
                 <tr>
                   <td colSpan={isAdmin ? 9 : 8}>

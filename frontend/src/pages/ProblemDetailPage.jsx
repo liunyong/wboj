@@ -11,6 +11,7 @@ import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import ProblemSubmissionsPanel from '../components/ProblemSubmissionsPanel.jsx';
 import SubmissionViewerModal from '../components/SubmissionViewerModal.jsx';
 import { detailToEvent } from '../utils/submissions.js';
+import { renderMarkdownToSafeHtml } from '../utils/markdown.js';
 
 function ProblemDetailPage() {
   const { problemId } = useParams();
@@ -183,6 +184,40 @@ const resubmitMutation = useResubmitSubmission({
   const allowedLanguages = problem?.judge0LanguageIds?.length
     ? languages.filter((item) => problem.judge0LanguageIds.includes(item.id))
     : languages;
+
+  const statementHtml = useMemo(
+    () => renderMarkdownToSafeHtml(problem?.statement ?? ''),
+    [problem?.statement]
+  );
+
+  const inputFormatHtml = useMemo(
+    () => renderMarkdownToSafeHtml(problem?.inputFormat ?? ''),
+    [problem?.inputFormat]
+  );
+
+  const outputFormatHtml = useMemo(
+    () => renderMarkdownToSafeHtml(problem?.outputFormat ?? ''),
+    [problem?.outputFormat]
+  );
+
+  const constraintsHtml = useMemo(
+    () => renderMarkdownToSafeHtml(problem?.constraints ?? ''),
+    [problem?.constraints]
+  );
+
+  const hasInputFormat = Boolean(inputFormatHtml) || Boolean(problem?.inputFormat?.trim());
+  const hasOutputFormat = Boolean(outputFormatHtml) || Boolean(problem?.outputFormat?.trim());
+  const hasConstraints = Boolean(constraintsHtml) || Boolean(problem?.constraints?.trim());
+
+  const renderRichTextBlock = (html, fallback, className = 'problem-text') => {
+    if (html) {
+      return <div className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+    }
+    if (typeof fallback === 'string' && fallback.trim()) {
+      return <p className={className}>{fallback}</p>;
+    }
+    return null;
+  };
 
   const getSubmissionFromCaches = useCallback(
     (submissionId) => {
@@ -371,27 +406,27 @@ const resubmitMutation = useResubmitSubmission({
 
           <article className="problem-section">
             <h2>Statement</h2>
-            <p className="problem-text">{problem.statement}</p>
+            {renderRichTextBlock(statementHtml, problem.statement)}
           </article>
 
-          {problem.inputFormat && (
+          {hasInputFormat && (
             <article className="problem-section">
               <h3>Input Format</h3>
-              <p className="problem-text">{problem.inputFormat}</p>
+              {renderRichTextBlock(inputFormatHtml, problem.inputFormat)}
             </article>
           )}
 
-          {problem.outputFormat && (
+          {hasOutputFormat && (
             <article className="problem-section">
               <h3>Output Format</h3>
-              <p className="problem-text">{problem.outputFormat}</p>
+              {renderRichTextBlock(outputFormatHtml, problem.outputFormat)}
             </article>
           )}
 
-          {problem.constraints && (
+          {hasConstraints && (
             <article className="problem-section">
               <h3>Constraints</h3>
-              <p className="problem-text">{problem.constraints}</p>
+              {renderRichTextBlock(constraintsHtml, problem.constraints)}
             </article>
           )}
 
@@ -399,25 +434,34 @@ const resubmitMutation = useResubmitSubmission({
             <article className="problem-section">
               <h3>Sample Cases</h3>
               <div className="samples-grid">
-                {problem.samples.map((sample, index) => (
-                  <div key={index} className="sample-card">
-                    <h4>Sample {index + 1}</h4>
-                    <div>
-                      <strong>Input</strong>
-                      <pre>{sample.input}</pre>
-                    </div>
-                    <div>
-                      <strong>Output</strong>
-                      <pre>{sample.output}</pre>
-                    </div>
-                    {sample.explanation && (
+                {problem.samples.map((sample, index) => {
+                  const explanationHtml = renderMarkdownToSafeHtml(sample.explanation ?? '');
+                  const hasExplanation =
+                    Boolean(explanationHtml) || Boolean(sample.explanation?.trim());
+                  return (
+                    <div key={index} className="sample-card">
+                      <h4>Sample {index + 1}</h4>
                       <div>
-                        <strong>Explanation</strong>
-                        <p className="sample-explanation">{sample.explanation}</p>
+                        <strong>Input</strong>
+                        <pre>{sample.input}</pre>
                       </div>
-                    )}
-                  </div>
-                ))}
+                      <div>
+                        <strong>Output</strong>
+                        <pre>{sample.output}</pre>
+                      </div>
+                      {hasExplanation && (
+                        <div>
+                          <strong>Explanation</strong>
+                          {renderRichTextBlock(
+                            explanationHtml,
+                            sample.explanation,
+                            'sample-explanation'
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </article>
           ) : null}

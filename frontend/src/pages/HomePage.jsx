@@ -3,7 +3,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
-import { formatDateTime } from '../utils/date.js';
+import {
+  formatRelativeOrDate,
+  formatTooltip,
+  getUserTZ
+} from '../utils/time.js';
 
 function HomePage() {
   const { authFetch, user } = useAuth();
@@ -14,6 +18,8 @@ function HomePage() {
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState({ title: '', body: '', pinned: false });
   const [formError, setFormError] = useState('');
+  const userTimeZone = getUserTZ();
+  const nowMs = Date.now();
 
   const announcementsQuery = useQuery({
     queryKey: ['announcements'],
@@ -273,7 +279,15 @@ function HomePage() {
                           <h3>{announcement.title}</h3>
                           <p className="announcement-meta">
                             {announcement.pinned ? <span className="badge">Pinned</span> : null}
-                            <span>{formatDateTime(announcement.createdAt)}</span>
+                            <span
+                              title={
+                                announcement.createdAt
+                                  ? formatTooltip(announcement.createdAt, userTimeZone)
+                                  : '—'
+                              }
+                            >
+                              {formatRelativeOrDate(announcement.createdAt, nowMs, userTimeZone)}
+                            </span>
                           </p>
                         </div>
                         {isAdmin && (
@@ -349,7 +363,12 @@ function HomePage() {
                   <Link to={`/problems/${update.problemId}`}>{update.titleSnapshot}</Link>
                 </h3>
                 <p>{update.summary}</p>
-                <span className="update-date">{formatDateTime(update.createdAt)}</span>
+                <span
+                  className="update-date"
+                  title={update.createdAt ? formatTooltip(update.createdAt, userTimeZone) : '—'}
+                >
+                  {formatRelativeOrDate(update.createdAt, nowMs, userTimeZone)}
+                </span>
               </li>
             ))}
           </ul>

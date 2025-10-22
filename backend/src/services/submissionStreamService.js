@@ -3,6 +3,13 @@ import EventEmitter from 'node:events';
 const emitter = new EventEmitter();
 const recentEvents = [];
 const MAX_EVENTS = 500;
+let eventSequence = 0;
+
+const generateEventId = (payload) => {
+  eventSequence = (eventSequence + 1) % Number.MAX_SAFE_INTEGER;
+  const base = payload?._id ?? payload?.id ?? 'submission';
+  return `${base}:${Date.now()}:${eventSequence.toString(36)}`;
+};
 
 const pruneOldEvents = () => {
   while (recentEvents.length > MAX_EVENTS) {
@@ -16,7 +23,7 @@ export const publishSubmissionEvent = (payload) => {
   }
   const enriched = {
     ...payload,
-    eventId: payload.eventId ?? `${payload._id}:${Date.now()}`,
+    eventId: payload.eventId ?? generateEventId(payload),
     emittedAt: new Date().toISOString()
   };
   recentEvents.push(enriched);
@@ -40,4 +47,11 @@ export const getSubmissionUpdatesSince = (isoDate) => {
     return [...recentEvents];
   }
   return recentEvents.filter((event) => Date.parse(event.emittedAt) > since);
+};
+
+// Test helper to clear accumulated events between unit tests.
+export const __resetSubmissionStream = () => {
+  recentEvents.length = 0;
+  eventSequence = 0;
+  emitter.removeAllListeners('submission');
 };

@@ -1,10 +1,14 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import Heatmap from '../components/Heatmap.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
-import { formatDateTime } from '../utils/date.js';
+import {
+  formatRelativeOrDate,
+  formatTooltip,
+  getUserTZ
+} from '../utils/time.js';
 import { applyEventToSubmissionList, detailToEvent } from '../utils/submissions.js';
 import { useSubmissionStream } from '../hooks/useSubmissionStream.js';
 import { useResubmitSubmission } from '../hooks/useResubmitSubmission.js';
@@ -19,6 +23,7 @@ function DashboardPage() {
   const queryClient = useQueryClient();
   const { authFetch, user } = useAuth();
   const { resolveLanguageLabel } = useLanguages();
+  const userTimeZone = useMemo(() => getUserTZ(), []);
   const [year, setYear] = useState(currentYear);
   const [message, setMessage] = useState(null);
   const [activeSubmissionId, setActiveSubmissionId] = useState(null);
@@ -302,9 +307,11 @@ function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {submissionsQuery.data.map((submission) => {
-                const submissionKey = submission.id ?? submission._id;
-                const problemLinkId = submission.problem?.problemId;
+              {(() => {
+                const nowMs = Date.now();
+                return submissionsQuery.data.map((submission) => {
+                  const submissionKey = submission.id ?? submission._id;
+                  const problemLinkId = submission.problem?.problemId;
                 const isProcessing =
                   submission.status === 'queued' || submission.status === 'running';
                 const displayVerdict = isProcessing
@@ -327,6 +334,8 @@ function DashboardPage() {
                   submission.finishedAt ??
                   submission.startedAt ??
                   submittedAt;
+                const lastRunLabel = formatRelativeOrDate(lastRunAt, nowMs, userTimeZone);
+                const lastRunTooltip = lastRunAt ? formatTooltip(lastRunAt, userTimeZone) : '—';
                 const isResubmitPending =
                   resubmittingId === submissionKey && resubmitMutation.isPending;
 
@@ -354,7 +363,7 @@ function DashboardPage() {
                       typeof submission.score === 'number' ? `${submission.score}%` : '—'
                     }</td>
                     <td>{displayLanguage}</td>
-                    <td>{formatDateTime(lastRunAt)}</td>
+                    <td title={lastRunTooltip}>{lastRunLabel}</td>
                     <td className="submission-actions">
                       <button
                         type="button"
@@ -367,7 +376,8 @@ function DashboardPage() {
                     </td>
                   </tr>
                 );
-              })}
+                });
+              })()}
             </tbody>
           </table>
         ) : null}

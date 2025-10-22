@@ -2,6 +2,10 @@
   email liunyong@gmail.com
 }
 
+www.wboj.app {
+    redir https://wboj.app{uri} permanent
+}
+
 wboj.app {
   encode zstd gzip
 
