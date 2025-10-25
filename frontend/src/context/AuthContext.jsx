@@ -163,12 +163,12 @@ export function AuthProvider({ children }) {
     gcTime: 0
   });
 
-  const login = async ({ usernameOrEmail, password }) => {
+  const login = async ({ email, password }) => {
     const data = await authFetch(
       '/api/auth/login',
       {
         method: 'POST',
-        body: { usernameOrEmail, password }
+        body: { email, password }
       },
       { skipAuth: true }
     );
@@ -188,10 +188,49 @@ export function AuthProvider({ children }) {
       { skipAuth: true }
     );
 
-    saveTokens(data.tokens);
-    queryClient.setQueryData(['me'], data.user);
-    return data.user;
+    clearTokens();
+    return data;
   };
+
+  const verifyEmail = async ({ email, token }) =>
+    authFetch(
+      '/api/auth/verify',
+      {
+        method: 'POST',
+        body: { email, token }
+      },
+      { skipAuth: true }
+    );
+
+  const resendVerification = async ({ email }) =>
+    authFetch(
+      '/api/auth/verify/resend',
+      {
+        method: 'POST',
+        body: { email }
+      },
+      { skipAuth: true }
+    );
+
+  const requestPasswordReset = async ({ email }) =>
+    authFetch(
+      '/api/auth/password/reset/request',
+      {
+        method: 'POST',
+        body: { email }
+      },
+      { skipAuth: true }
+    );
+
+  const resetPassword = async ({ email, token, password, confirmPassword }) =>
+    authFetch(
+      '/api/auth/password/reset',
+      {
+        method: 'POST',
+        body: { email, token, password, confirmPassword }
+      },
+      { skipAuth: true }
+    );
 
   const logout = async () => {
     if (tokens.refreshToken) {
@@ -219,12 +258,28 @@ export function AuthProvider({ children }) {
       isLoading: Boolean(tokens.accessToken) && isFetchingMe,
       login,
       register,
+      verifyEmail,
+      resendVerification,
+      requestPasswordReset,
+      resetPassword,
       logout,
       authFetch,
       refreshTokens,
       setTokens: saveTokens
     }),
-    [authFetch, isFetchingMe, login, logout, me, register, tokens]
+    [
+      authFetch,
+      isFetchingMe,
+      login,
+      logout,
+      me,
+      register,
+      requestPasswordReset,
+      resetPassword,
+      resendVerification,
+      tokens,
+      verifyEmail
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

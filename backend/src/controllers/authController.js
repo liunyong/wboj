@@ -7,6 +7,17 @@ import {
   revokeRefreshToken,
   verifyPassword
 } from '../services/authService.js';
+import {
+  ensureUserCanResendVerification,
+  issueEmailVerification,
+  verifyEmailToken
+} from '../services/emailVerificationService.js';
+import {
+  clearPasswordResetState,
+  ensureUserCanRequestPasswordReset,
+  issuePasswordReset,
+  verifyPasswordResetToken
+} from '../services/passwordResetService.js';
 import { getPasswordStrengthIssues } from '../validation/passwordRules.js';
 
 const sanitizeUser = (user) => ({
@@ -17,6 +28,7 @@ const sanitizeUser = (user) => ({
   isActive: user.isActive,
   profile: user.profile ?? {},
   profilePublic: user.profilePublic ?? false,
+  emailVerified: user.emailVerified ?? false,
   createdAt: user.createdAt,
   updatedAt: user.updatedAt
 });
@@ -78,8 +90,11 @@ export const register = async (req, res, next) => {
       email: normalizedEmail,
       passwordHash,
       role: 'user',
-      passwordChangedAt: new Date()
+      passwordChangedAt: new Date(),
+      emailVerified: false
     });
+
+    await issueEmailVerification(user);
 
     logAuth('info', 'user registered', {
       userId: user._id.toString(),
@@ -87,11 +102,10 @@ export const register = async (req, res, next) => {
       emailHash: anonymizeIdentifier(user.email)
     });
 
-    const tokens = await createAuthTokens(user);
-
     res.status(201).json({
       user: sanitizeUser(user),
-      tokens
+      code: 'VERIFICATION_REQUIRED',
+      message: 'Verification email sent'
     });
   } catch (error) {
     if (error?.code === 11000) {
@@ -116,19 +130,183 @@ export const register = async (req, res, next) => {
   }
 };
 
+export const resendVerification = async (req, res, next) => {
+  try {
+    const { email } = req.validated?.body || req.body;
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      return res.status(404).json({ code: 'USER_NOT_FOUND', message: 'User not found' });
+    }
+
+    if (user.emailVerified) {
+      return res
+        .status(200)
+        .json({ code: 'ALREADY_VERIFIED', message: 'Email is already verified' });
+    }
+
+    if (!ensureUserCanResendVerification(user)) {
+      return res.status(429).json({
+        code: 'EMAIL_RESEND_RATE_LIMITED',
+        message: 'Please wait before requesting another verification email'
+      });
+    }
+
+    await issueEmailVerification(user);
+
+    logAuth('info', 'verification email resent', { userId: user._id.toString() });
+
+    return res.status(200).json({
+      code: 'VERIFICATION_EMAIL_SENT',
+      message: 'Verification email sent'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const verifyEmail = async (req, res, next) => {
+  try {
+    const { email, token } = req.validated?.body || req.body;
+    const result = await verifyEmailToken({ email, token });
+
+    if (result.status === 'not_found') {
+      return res.status(404).json({ code: 'USER_NOT_FOUND', message: 'User not found' });
+    }
+
+    if (result.status === 'verified') {
+      logAuth('info', 'email verified', { userId: result.user._id.toString() });
+      return res.json({
+        code: 'EMAIL_VERIFIED',
+        message: 'Email verified successfully',
+        user: sanitizeUser(result.user)
+      });
+    }
+
+    if (result.status === 'already_verified') {
+      return res.json({
+        code: 'ALREADY_VERIFIED',
+        message: 'Email already verified',
+        user: sanitizeUser(result.user)
+      });
+    }
+
+    if (result.status === 'expired') {
+      return res.status(410).json({
+        code: 'TOKEN_EXPIRED',
+        message: 'Verification link has expired'
+      });
+    }
+
+    return res.status(400).json({
+      code: 'TOKEN_INVALID',
+      message: 'Verification token is invalid'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const requestPasswordReset = async (req, res, next) => {
+  try {
+    const { email } = req.validated?.body || req.body;
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      return res.status(200).json({
+        code: 'PASSWORD_RESET_EMAIL_SENT',
+        message: 'If the email is registered, a reset link has been sent'
+      });
+    }
+
+    if (!ensureUserCanRequestPasswordReset(user)) {
+      return res.status(200).json({
+        code: 'PASSWORD_RESET_EMAIL_SENT',
+        message: 'Password reset email was recently sent'
+      });
+    }
+
+    await issuePasswordReset(user);
+
+    logAuth('info', 'password reset email issued', { userId: user._id.toString() });
+
+    return res.status(200).json({
+      code: 'PASSWORD_RESET_EMAIL_SENT',
+      message: 'Password reset email sent'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const resetPasswordWithToken = async (req, res, next) => {
+  try {
+    const { email, token, password } = req.validated?.body || req.body;
+
+    const result = await verifyPasswordResetToken({ email, token });
+
+    if (result.status === 'not_found') {
+      return res.status(404).json({ code: 'USER_NOT_FOUND', message: 'User not found' });
+    }
+
+    const user = result.user;
+
+    if (result.status === 'expired') {
+      return res.status(410).json({
+        code: 'TOKEN_EXPIRED',
+        message: 'Password reset link has expired'
+      });
+    }
+
+    if (result.status !== 'valid') {
+      return res.status(400).json({
+        code: 'TOKEN_INVALID',
+        message: 'Password reset token is invalid'
+      });
+    }
+
+    const issues = getPasswordStrengthIssues(password, {
+      username: user.username,
+      email: user.email
+    });
+
+    if (issues.length) {
+      return res.status(400).json({
+        code: 'WEAK_PASSWORD',
+        message: issues[0],
+        details: issues
+      });
+    }
+
+    user.passwordHash = await hashPassword(password);
+    user.passwordChangedAt = new Date();
+    user.sessions = [];
+
+    await clearPasswordResetState(user);
+
+    logAuth('info', 'password reset completed', { userId: user._id.toString() });
+
+    return res.status(200).json({
+      code: 'PASSWORD_RESET_SUCCESS',
+      message: 'Password has been reset successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const login = async (req, res, next) => {
   try {
-    const { usernameOrEmail, password } = req.validated?.body || req.body;
-    const trimmedIdentifier = usernameOrEmail.trim();
-    const normalizedEmail = trimmedIdentifier.toLowerCase();
+    const { email, password } = req.validated?.body || req.body;
+    const normalizedEmail = email.trim().toLowerCase();
 
-    const user = await User.findOne({
-      $or: [{ username: trimmedIdentifier }, { email: normalizedEmail }]
-    });
+    const user = await User.findOne({ email: normalizedEmail });
 
     if (!user) {
       logAuth('warn', 'login failed: user not found', {
-        identifierHash: anonymizeIdentifier(trimmedIdentifier)
+        identifierHash: anonymizeIdentifier(normalizedEmail)
       });
       return res.status(401).json({ code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' });
     }
@@ -136,6 +314,13 @@ export const login = async (req, res, next) => {
     if (!user.isActive) {
       logAuth('warn', 'login blocked: inactive user', { userId: user._id.toString() });
       return res.status(403).json({ code: 'ACCOUNT_INACTIVE', message: 'Account is inactive' });
+    }
+
+    if (!user.emailVerified) {
+      logAuth('warn', 'login blocked: email not verified', { userId: user._id.toString() });
+      return res
+        .status(403)
+        .json({ code: 'EMAIL_NOT_VERIFIED', message: 'Verify your email to continue' });
     }
 
     const isValid = await verifyPassword(password, user.passwordHash);

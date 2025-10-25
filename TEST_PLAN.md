@@ -32,7 +32,7 @@
    for i in $(seq 1 21); do
      curl -s -X POST http://localhost:4000/api/auth/login \
        -H "Content-Type: application/json" \
-       -d '{"usernameOrEmail":"demo@example.com","password":"WrongPass123!"}' | jq '.code? // empty'
+       -d '{"email":"demo@example.com","password":"WrongPass123!"}' | jq '.code? // empty'
    done
    ```
 
@@ -41,10 +41,24 @@
    ```bash
    curl -i -X POST http://localhost:4000/api/auth/login \
      -H "Content-Type: application/json" \
-     -d '{"usernameOrEmail":"demo@example.com","password":"Secret123!"}'
+     -d '{"email":"demo@example.com","password":"Secret123!"}'
    ```
 
-6. (Optional) Enable Redis-backed rate limiting by installing `redis` and `rate-limit-redis`, then set:
+6. Request a password reset and complete it with the emailed token (inspect the database for the stored hash if you need to verify linkage):
+
+   ```bash
+   curl -i -X POST http://localhost:4000/api/auth/password/reset/request \
+     -H "Content-Type: application/json" \
+     -d '{"email":"demo@example.com"}'
+   ```
+
+   ```bash
+   curl -i -X POST http://localhost:4000/api/auth/password/reset \
+     -H "Content-Type: application/json" \
+     -d '{"email":"demo@example.com","token":"<RAW_TOKEN>","password":"NewSecret123!","confirmPassword":"NewSecret123!"}'
+   ```
+
+7. (Optional) Enable Redis-backed rate limiting by installing `redis` and `rate-limit-redis`, then set:
 
    ```bash
    export RATE_LIMIT_USE_REDIS=true

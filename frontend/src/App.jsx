@@ -13,8 +13,11 @@ import ProblemDetailPage from './pages/ProblemDetailPage.jsx';
 import ProblemEditPage from './pages/ProblemEditPage.jsx';
 import ProblemsPage from './pages/ProblemsPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
+import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import UserDashboardPage from './pages/UserDashboardPage.jsx';
+import VerifyEmailPage from './pages/VerifyEmailPage.jsx';
+import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
 
 function App() {
   return (
@@ -23,6 +26,9 @@ function App() {
         <Route index element={<HomePage />} />
         <Route path="login" element={<LoginPage />} />
         <Route path="register" element={<RegisterPage />} />
+        <Route path="forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="auth/verify" element={<VerifyEmailPage />} />
+        <Route path="auth/reset-password" element={<ResetPasswordPage />} />
         <Route path="problems" element={<ProblemsPage />} />
         <Route path="problems/:problemId" element={<ProblemDetailPage />} />
         <Route

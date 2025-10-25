@@ -1,11 +1,10 @@
 import { useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
 
 function RegisterPage() {
-  const navigate = useNavigate();
-  const { register } = useAuth();
+  const { register, resendVerification } = useAuth();
   const [form, setForm] = useState({
     username: '',
     email: '',
@@ -14,7 +13,10 @@ function RegisterPage() {
   });
   const [error, setError] = useState('');
   const [validationErrors, setValidationErrors] = useState([]);
+  const [verificationInfo, setVerificationInfo] = useState(null);
+  const [resendStatus, setResendStatus] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const usernameRef = useRef(null);
   const emailRef = useRef(null);
   const passwordRef = useRef(null);
@@ -49,6 +51,7 @@ function RegisterPage() {
     event.preventDefault();
     setError('');
     setValidationErrors([]);
+    setResendStatus(null);
     if (form.password !== form.confirmPassword) {
       setValidationErrors([{ path: 'confirmPassword', message: 'Passwords must match.' }]);
       focusField('confirmPassword');
@@ -56,9 +59,21 @@ function RegisterPage() {
     }
     setIsSubmitting(true);
     try {
-      await register(form);
+      const data = await register(form);
+      setVerificationInfo({
+        email: data?.user?.email ?? form.email,
+        message:
+          data?.message ||
+          'We sent a verification link to your email. Please verify to continue.',
+        username: data?.user?.username ?? form.username
+      });
       setValidationErrors([]);
-      navigate('/dashboard', { replace: true });
+      setForm({
+        username: '',
+        email: '',
+        password: '',
+        confirmPassword: ''
+      });
     } catch (err) {
       if (err.code === 'VALIDATION_ERROR' && Array.isArray(err.details) && err.details.length) {
         setValidationErrors(err.details);
@@ -77,6 +92,30 @@ function RegisterPage() {
     }
   };
 
+  const handleResend = async () => {
+    if (!verificationInfo?.email) {
+      return;
+    }
+
+    setIsResending(true);
+    setResendStatus(null);
+
+    try {
+      const response = await resendVerification({ email: verificationInfo.email });
+      setResendStatus({
+        status: 'success',
+        message: response?.message || 'Verification email sent.'
+      });
+    } catch (err) {
+      setResendStatus({
+        status: err.code === 'EMAIL_RESEND_RATE_LIMITED' ? 'warning' : 'error',
+        message: err.message || 'Unable to resend verification email.'
+      });
+    } finally {
+      setIsResending(false);
+    }
+  };
+
   const fieldErrors = (field) => validationErrors.filter((detail) => detail.path === field);
   const generalValidationErrors = validationErrors.filter((detail) => !fieldRefs[detail.path]);
 
@@ -85,87 +124,117 @@ function RegisterPage() {
       <div className="auth-card">
         <h1>Create Account</h1>
         <p>Sign up to track submissions and earn progress.</p>
-        <form className="auth-form" onSubmit={handleSubmit}>
-          <label>
-            Username
-            <input
-              type="text"
-              name="username"
-              value={form.username}
-              ref={usernameRef}
-              onChange={handleChange}
-              required
-              autoComplete="username"
-            />
-            {fieldErrors('username').map((detail, index) => (
-              <div key={`username-error-${index}`} className="form-message error">
-                {detail.message}
+        {verificationInfo ? (
+          <div className="auth-form">
+            <div className="form-message success">
+              <p>{verificationInfo.message}</p>
+              <p>
+                Sent to <strong>{verificationInfo.email}</strong>.
+              </p>
+            </div>
+            <button type="button" onClick={handleResend} disabled={isResending}>
+              {isResending ? 'Sending…' : 'Resend verification email'}
+            </button>
+            {resendStatus && (
+              <div
+                className={`form-message ${
+                  resendStatus.status === 'success'
+                    ? 'success'
+                    : resendStatus.status === 'warning'
+                    ? 'warning'
+                    : 'error'
+                }`}
+              >
+                {resendStatus.message}
               </div>
-            ))}
-          </label>
-          <label>
-            Email
-            <input
-              type="email"
-              name="email"
-              value={form.email}
-              ref={emailRef}
-              onChange={handleChange}
-              required
-              autoComplete="email"
-            />
-            {fieldErrors('email').map((detail, index) => (
-              <div key={`email-error-${index}`} className="form-message error">
-                {detail.message}
-              </div>
-            ))}
-          </label>
-          <label>
-            Password
-            <input
-              type="password"
-              name="password"
-              value={form.password}
-              ref={passwordRef}
-              onChange={handleChange}
-              required
-              autoComplete="new-password"
-            />
-            {fieldErrors('password').map((detail, index) => (
-              <div key={`password-error-${index}`} className="form-message error">
-                {detail.message}
-              </div>
-            ))}
-          </label>
-          <label>
-            Confirm Password
-            <input
-              type="password"
-              name="confirmPassword"
-              value={form.confirmPassword}
-              ref={confirmPasswordRef}
-              onChange={handleChange}
-              required
-              autoComplete="new-password"
-            />
-            {fieldErrors('confirmPassword').map((detail, index) => (
-              <div key={`confirmPassword-error-${index}`} className="form-message error">
-                {detail.message}
-              </div>
-            ))}
-          </label>
-          <button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Creating…' : 'Register'}
-          </button>
-          {generalValidationErrors.length > 0 && (
-            <ul className="form-message error">
-              {generalValidationErrors.map((detail, index) => (
-                <li key={`general-error-${index}`}>{detail.message}</li>
+            )}
+            <p>
+              Ready to login? <Link to="/login">Go to login</Link>
+            </p>
+          </div>
+        ) : (
+          <form className="auth-form" onSubmit={handleSubmit}>
+            <label>
+              Username
+              <input
+                type="text"
+                name="username"
+                value={form.username}
+                ref={usernameRef}
+                onChange={handleChange}
+                required
+                autoComplete="username"
+              />
+              {fieldErrors('username').map((detail, index) => (
+                <div key={`username-error-${index}`} className="form-message error">
+                  {detail.message}
+                </div>
               ))}
-            </ul>
-          )}
-          {error && <div className="form-message error">{error}</div>}
-        </form>
+            </label>
+            <label>
+              Email
+              <input
+                type="email"
+                name="email"
+                value={form.email}
+                ref={emailRef}
+                onChange={handleChange}
+                required
+                autoComplete="email"
+              />
+              {fieldErrors('email').map((detail, index) => (
+                <div key={`email-error-${index}`} className="form-message error">
+                  {detail.message}
+                </div>
+              ))}
+            </label>
+            <label>
+              Password
+              <input
+                type="password"
+                name="password"
+                value={form.password}
+                ref={passwordRef}
+                onChange={handleChange}
+                required
+                autoComplete="new-password"
+              />
+              {fieldErrors('password').map((detail, index) => (
+                <div key={`password-error-${index}`} className="form-message error">
+                  {detail.message}
+                </div>
+              ))}
+            </label>
+            <label>
+              Confirm Password
+              <input
+                type="password"
+                name="confirmPassword"
+                value={form.confirmPassword}
+                ref={confirmPasswordRef}
+                onChange={handleChange}
+                required
+                autoComplete="new-password"
+              />
+              {fieldErrors('confirmPassword').map((detail, index) => (
+                <div key={`confirmPassword-error-${index}`} className="form-message error">
+                  {detail.message}
+                </div>
+              ))}
+            </label>
+            <button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Creating…' : 'Register'}
+            </button>
+            {generalValidationErrors.length > 0 && (
+              <ul className="form-message error">
+                {generalValidationErrors.map((detail, index) => (
+                  <li key={`general-error-${index}`}>{detail.message}</li>
+                ))}
+              </ul>
+            )}
+            {error && <div className="form-message error">{error}</div>}
+          </form>
+        )}
       </div>
     </section>
   );

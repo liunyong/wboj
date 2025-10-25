@@ -6,7 +6,7 @@ RUN npm install --omit=dev
 
 COPY src ./src
 COPY scripts ./scripts
-COPY .env.example ./
+COPY .env ./
 
 ENV NODE_ENV=production
 CMD ["npm", "start"]

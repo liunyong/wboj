@@ -6,6 +6,7 @@ const sanitizeUser = (user) => ({
   id: user._id.toString(),
   username: user.username,
   email: user.email,
+  emailVerified: user.emailVerified ?? false,
   role: user.role,
   isActive: user.isActive,
   deletedAt: user.deletedAt ?? null,
@@ -41,7 +42,9 @@ export const listUsers = async (req, res, next) => {
     const users = await User.find(filters)
       .sort({ createdAt: -1 })
       .limit(limit)
-      .select('username email role isActive deletedAt profile profilePublic createdAt updatedAt');
+      .select(
+        'username email emailVerified role isActive deletedAt profile profilePublic createdAt updatedAt'
+      );
 
     res.json({ items: users.map(sanitizeUser) });
   } catch (error) {

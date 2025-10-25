@@ -46,7 +46,7 @@ export const registerSchema = z
 
 export const loginSchema = z
   .object({
-    usernameOrEmail: z.string().min(1, 'Username or email is required'),
+    email: z.string().email('Provide a valid email address'),
     password: z.string().min(1, 'Password is required')
   })
   .strict();
@@ -111,4 +111,54 @@ export const passwordUpdateSchema = z
         path: ['confirmNewPassword']
       });
     }
+  });
+
+export const emailVerificationSchema = z
+  .object({
+    email: z.string().email('Provide a valid email address'),
+    token: z.string().min(1, 'Verification token is required')
+  })
+  .strict();
+
+export const resendVerificationSchema = z
+  .object({
+    email: z.string().email('Provide a valid email address')
+  })
+  .strict();
+
+export const passwordResetRequestSchema = z
+  .object({
+    email: z.string().email('Provide a valid email address')
+  })
+  .strict();
+
+export const passwordResetSchema = z
+  .object({
+    email: z.string().email('Provide a valid email address'),
+    token: z.string().min(1, 'Password reset token is required'),
+    password: passwordFieldSchema,
+    confirmPassword: confirmPasswordFieldSchema
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (data.password !== data.confirmPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Passwords do not match',
+        path: ['confirmPassword']
+      });
+    }
+
+    const issues = getPasswordStrengthIssues(data.password, {
+      username: data.email.split('@')[0],
+      email: data.email
+    });
+
+    issues.forEach((message) =>
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message,
+        path: ['password']
+      })
+    );
   });

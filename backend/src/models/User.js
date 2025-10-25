@@ -22,6 +22,13 @@ const userSchema = new mongoose.Schema(
     },
     isActive: { type: Boolean, default: true },
     deletedAt: { type: Date, default: null },
+    emailVerified: { type: Boolean, default: false },
+    emailVerificationTokenHash: { type: String, default: null },
+    emailVerificationExpires: { type: Date, default: null },
+    emailVerificationSentAt: { type: Date, default: null },
+    passwordResetTokenHash: { type: String, default: null },
+    passwordResetExpires: { type: Date, default: null },
+    passwordResetSentAt: { type: Date, default: null },
     profile: {
       type: profileSchema,
       default: () => ({})
@@ -51,6 +58,8 @@ const userSchema = new mongoose.Schema(
 userSchema.index({ username: 1 }, { unique: true });
 userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ role: 1, deletedAt: 1 });
+userSchema.index({ emailVerificationTokenHash: 1 }, { sparse: true });
+userSchema.index({ passwordResetTokenHash: 1 }, { sparse: true });
 
 const User = mongoose.model('User', userSchema);
 

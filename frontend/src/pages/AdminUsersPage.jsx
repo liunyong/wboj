@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
 
@@ -58,6 +59,7 @@ function AdminUsersPage() {
               <tr>
                 <th>Username</th>
                 <th>Email</th>
+                <th>Verified</th>
                 <th>Role</th>
                 <th>Status</th>
                 <th>Profile</th>
@@ -67,8 +69,11 @@ function AdminUsersPage() {
             <tbody>
               {usersQuery.data.map((entry) => (
                 <tr key={entry.id}>
-                  <td>{entry.username}</td>
+                  <td>
+                    <Link to={`/u/${entry.username}`}>{entry.username}</Link>
+                  </td>
                   <td>{entry.email}</td>
+                  <td>{entry.emailVerified ? 'Verified' : 'Pending'}</td>
                   <td>{entry.role}</td>
                   <td>{entry.isActive ? 'Active' : 'Inactive'}</td>
                   <td>{entry.profilePublic ? 'Public' : 'Private'}</td>

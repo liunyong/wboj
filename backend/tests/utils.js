@@ -9,7 +9,8 @@ export const createUser = async ({
   email,
   password,
   role = 'user',
-  isActive = true
+  isActive = true,
+  emailVerified = true
 }) => {
   const passwordHash = await bcrypt.hash(password, 12);
   return User.create({
@@ -18,12 +19,13 @@ export const createUser = async ({
     passwordHash,
     passwordChangedAt: new Date(),
     role,
-    isActive
+    isActive,
+    emailVerified
   });
 };
 
-export const loginUser = async ({ usernameOrEmail, password }) => {
-  const response = await request(app).post('/api/auth/login').send({ usernameOrEmail, password });
+export const loginUser = async ({ email, password }) => {
+  const response = await request(app).post('/api/auth/login').send({ email, password });
   if (response.status !== 200) {
     throw new Error(`Login failed with status ${response.status}: ${response.body?.message}`);
   }
@@ -44,7 +46,7 @@ export const authenticateAsAdmin = async () => {
     role: 'admin'
   });
 
-  return loginUser({ usernameOrEmail: adminUsername, password: adminPassword });
+  return loginUser({ email: adminEmail, password: adminPassword });
 };
 
 export const authenticateAsSuperAdmin = async () => {
@@ -59,7 +61,7 @@ export const authenticateAsSuperAdmin = async () => {
     role: 'super_admin'
   });
 
-  return loginUser({ usernameOrEmail: superUsername, password: superPassword });
+  return loginUser({ email: superEmail, password: superPassword });
 };
 
 export const authenticateAsUser = async () => {
@@ -69,7 +71,7 @@ export const authenticateAsUser = async () => {
 
   await createUser({ username, email, password });
 
-  return loginUser({ usernameOrEmail: username, password });
+  return loginUser({ email, password });
 };
 
 export const authHeader = (accessToken) => ({ Authorization: `Bearer ${accessToken}` });

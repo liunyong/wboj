@@ -4,10 +4,14 @@ import {
   login,
   logout,
   me,
+  requestPasswordReset,
+  resendVerification,
   refresh,
   register,
+  resetPasswordWithToken,
   updatePassword,
-  updateProfile
+  updateProfile,
+  verifyEmail
 } from '../controllers/authController.js';
 import { requireAuth } from '../middlewares/auth.js';
 import validate from '../middlewares/validate.js';
@@ -17,7 +21,11 @@ import {
   passwordUpdateSchema,
   profileUpdateSchema,
   refreshTokenSchema,
-  registerSchema
+  registerSchema,
+  emailVerificationSchema,
+  resendVerificationSchema,
+  passwordResetRequestSchema,
+  passwordResetSchema
 } from '../validation/authSchemas.js';
 import {
   getRateLimitKeyFromIp,
@@ -47,8 +55,6 @@ const loginKeyGenerator = (req) => {
   const identifier =
     typeof req.body?.email === 'string'
       ? req.body.email
-      : typeof req.body?.usernameOrEmail === 'string'
-      ? req.body.usernameOrEmail
       : null;
   if (identifier) {
     return identifier.trim().toLowerCase();
@@ -94,6 +100,48 @@ const registerLimiter = rateLimit({
   handler: createRateLimitHandler(registerKeyGenerator)
 });
 
+const resendVerificationKeyGenerator = (req) => {
+  if (typeof req.body?.email === 'string') {
+    return req.body.email.trim().toLowerCase();
+  }
+  return getRateLimitKeyFromIp(req);
+};
+
+const resendVerificationLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  limit: 3,
+  keyGenerator: resendVerificationKeyGenerator,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  store: sharedStore ?? undefined,
+  message: {
+    code: 'RATE_LIMITED',
+    message: 'Too many verification requests, please try again later'
+  },
+  handler: createRateLimitHandler(resendVerificationKeyGenerator)
+});
+
+const passwordResetRequestKeyGenerator = (req) => {
+  if (typeof req.body?.email === 'string') {
+    return req.body.email.trim().toLowerCase();
+  }
+  return getRateLimitKeyFromIp(req);
+};
+
+const passwordResetRequestLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  keyGenerator: passwordResetRequestKeyGenerator,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  store: sharedStore ?? undefined,
+  message: {
+    code: 'RATE_LIMITED',
+    message: 'Too many password reset requests, please try again later'
+  },
+  handler: createRateLimitHandler(passwordResetRequestKeyGenerator)
+});
+
 const maybeApplyLimiter = (limiter) => (req, res, next) => {
   if (process.env.NODE_ENV === 'production') {
     return limiter(req, res, next);
@@ -103,6 +151,20 @@ const maybeApplyLimiter = (limiter) => (req, res, next) => {
 
 router.post('/register', maybeApplyLimiter(registerLimiter), validate({ body: registerSchema }), register);
 router.post('/login', maybeApplyLimiter(loginLimiter), validate({ body: loginSchema }), login);
+router.post('/verify', validate({ body: emailVerificationSchema }), verifyEmail);
+router.post(
+  '/verify/resend',
+  maybeApplyLimiter(resendVerificationLimiter),
+  validate({ body: resendVerificationSchema }),
+  resendVerification
+);
+router.post(
+  '/password/reset/request',
+  maybeApplyLimiter(passwordResetRequestLimiter),
+  validate({ body: passwordResetRequestSchema }),
+  requestPasswordReset
+);
+router.post('/password/reset', validate({ body: passwordResetSchema }), resetPasswordWithToken);
 router.post('/refresh', validate({ body: refreshTokenSchema }), refresh);
 router.post('/logout', validate({ body: logoutSchema }), logout);
 router.get('/me', requireAuth, me);
