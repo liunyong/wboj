@@ -69,6 +69,11 @@ function Header() {
             Create Problem
           </NavLink>
         )}
+        {isAdminLike && (
+          <NavLink to="/admin/uploads" className={({ isActive }) => (isActive ? 'active' : '')}>
+            Manage Uploads
+          </NavLink>
+        )}
       </nav>
       <div className="app-header__actions">
         {!user && !isLoading && (
@@ -108,6 +113,11 @@ function Header() {
                 {isAdminLike && (
                   <Link to="/admin/users" role="menuitem" onClick={closeMenu}>
                     User Management
+                  </Link>
+                )}
+                {isAdminLike && (
+                  <Link to="/admin/uploads" role="menuitem" onClick={closeMenu}>
+                    Image Uploads
                   </Link>
                 )}
                 <button

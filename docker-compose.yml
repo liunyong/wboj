@@ -37,6 +37,8 @@ services:
     networks:
       - default
       - ojnet
+    volumes:
+      - uploads-imgs:/app/uploads/problems
 
   frontend:
     build: ./frontend
@@ -63,6 +65,7 @@ volumes:
   mongo-data:
   caddy_data:
   caddy_config:
+  uploads-imgs:
 
 secrets:
   me_user:

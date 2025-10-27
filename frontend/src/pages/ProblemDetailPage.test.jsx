@@ -15,6 +15,12 @@ const authFetchMock = vi.fn(async (path, options = {}, _meta = {}) => {
       problemId: 345,
       title: 'Sample Problem',
       statement: 'Add two numbers.',
+      statementMd: 'Add two numbers.',
+      author: {
+        _id: '64f1f77bcf86cd799439012',
+        username: 'problem_maker',
+        profile: { displayName: 'Problem Maker' }
+      },
       judge0LanguageIds: [71],
       isPublic: true,
       testCases: [
@@ -128,6 +134,7 @@ describe('ProblemDetailPage submission form', () => {
       </QueryClientProvider>
     );
 
+    await screen.findByText('Author: Problem Maker');
     const textarea = await screen.findByLabelText('Source Code');
     const codeSample = 'if (m < 3) {\n  return m;\n}';
 

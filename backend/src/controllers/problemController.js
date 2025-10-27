@@ -4,7 +4,7 @@ import { getNextSequence } from '../services/idService.js';
 import { ensureProblemNumbersBackfilled } from '../services/problemNumberService.js';
 import { parseTestCasesFromZip } from '../services/testCaseZipService.js';
 import { buildProblemSlug } from '../utils/problemSlug.js';
-import { decodeHtmlEntities, sanitizeOptionalRichText, sanitizeRichText } from '../utils/sanitizeHtml.js';
+import { decodeHtmlEntities, sanitizeMarkdown, sanitizeOptionalRichText } from '../utils/sanitizeHtml.js';
 import { recomputeProblemCounters } from '../services/submissionService.js';
 
 const sanitizeTestCases = (testCases = []) => {
@@ -68,6 +68,14 @@ const decodeProblemRichText = (payload) => {
   }
   const decoded = { ...payload };
   decoded.statement = decodeRichTextField(decoded.statement);
+  const decodedStatementMd = decodeRichTextField(
+    decoded.statementMd ?? decoded.statement ?? ''
+  );
+  decoded.statementMd = decodedStatementMd;
+  if (!decoded.statement && decodedStatementMd) {
+    decoded.statement = decodedStatementMd;
+  }
+  decoded.statementHtmlCache = decodeRichTextField(decoded.statementHtmlCache);
   decoded.inputFormat = decodeRichTextField(decoded.inputFormat);
   decoded.outputFormat = decodeRichTextField(decoded.outputFormat);
   decoded.constraints = decodeRichTextField(decoded.constraints);
@@ -154,7 +162,10 @@ export const getProblemById = async (req, res, next) => {
     const { includePrivate = false } = req.validated?.query || {};
     const numericProblemId = Number(problemId);
 
-    const problem = await Problem.findOne({ problemId: numericProblemId });
+    const problem = await Problem.findOne({ problemId: numericProblemId }).populate(
+      'author',
+      'username profile.displayName'
+    );
 
     if (!problem) {
       return res.status(404).json({ code: 'PROBLEM_NOT_FOUND', message: 'Problem not found' });
@@ -219,7 +230,14 @@ export const createProblem = async (req, res, next) => {
     const sanitizedInputFormat = sanitizeOptionalRichText(clientPayload.inputFormat);
     const sanitizedOutputFormat = sanitizeOptionalRichText(clientPayload.outputFormat);
     const sanitizedConstraints = sanitizeOptionalRichText(clientPayload.constraints);
-    const sanitizedStatement = sanitizeRichText(clientPayload.statement);
+    const rawStatement =
+      typeof clientPayload.statementMd === 'string'
+        ? clientPayload.statementMd
+        : clientPayload.statement;
+    const sanitizedStatementMd = sanitizeMarkdown(rawStatement);
+    if (!sanitizedStatementMd.trim()) {
+      return res.status(400).json({ message: 'Problem statement cannot be empty' });
+    }
     const normalizedTitle =
       typeof clientPayload.title === 'string' ? clientPayload.title.trim() : clientPayload.title;
 
@@ -235,7 +253,8 @@ export const createProblem = async (req, res, next) => {
       try {
         const problemData = {
           title: normalizedTitle,
-          statement: sanitizedStatement,
+          statement: sanitizedStatementMd,
+          statementMd: sanitizedStatementMd,
           difficulty: clientPayload.difficulty,
           isPublic: typeof clientPayload.isPublic === 'boolean' ? clientPayload.isPublic : true,
           tags,
@@ -254,8 +273,14 @@ export const createProblem = async (req, res, next) => {
         assignIfDefined(problemData, 'constraints', sanitizedConstraints);
         assignIfDefined(problemData, 'cpuTimeLimit', clientPayload.cpuTimeLimit);
         assignIfDefined(problemData, 'memoryLimit', clientPayload.memoryLimit);
+        assignIfDefined(
+          problemData,
+          'statementHtmlCache',
+          sanitizeOptionalRichText(clientPayload.statementHtmlCache)
+        );
 
         const problem = await Problem.create(problemData);
+        await problem.populate('author', 'username profile.displayName');
 
         try {
           await ProblemUpdate.create({
@@ -324,12 +349,34 @@ export const updateProblem = async (req, res, next) => {
 
     const nextUpdates = {
       title: normalizedTitle,
-      statement: sanitizeRichText(updates.statement),
       slug: buildProblemSlug(normalizedTitle, problem.problemId)
     };
 
+    const hasStatementMd = Object.prototype.hasOwnProperty.call(updates, 'statementMd');
+    const hasStatement = Object.prototype.hasOwnProperty.call(updates, 'statement');
+
+    if (hasStatementMd || hasStatement) {
+      const statementSource = hasStatementMd ? updates.statementMd : updates.statement;
+      const sanitizedStatementMd = sanitizeMarkdown(statementSource);
+      if (!sanitizedStatementMd.trim()) {
+        return res
+          .status(400)
+          .json({ message: 'Problem statement cannot be empty after sanitization' });
+      }
+      nextUpdates.statement = sanitizedStatementMd;
+      nextUpdates.statementMd = sanitizedStatementMd;
+    }
+
     if (Object.prototype.hasOwnProperty.call(updates, 'inputFormat')) {
       assignIfDefined(nextUpdates, 'inputFormat', sanitizeOptionalRichText(updates.inputFormat));
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'statementHtmlCache')) {
+      assignIfDefined(
+        nextUpdates,
+        'statementHtmlCache',
+        sanitizeOptionalRichText(updates.statementHtmlCache)
+      );
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, 'outputFormat')) {
@@ -382,6 +429,7 @@ export const updateProblem = async (req, res, next) => {
 
     problem.set(nextUpdates);
     await problem.save();
+    await problem.populate('author', 'username profile.displayName');
 
     try {
       const changedFields = Object.keys(updates || {}).filter(

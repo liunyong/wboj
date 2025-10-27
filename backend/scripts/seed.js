@@ -60,6 +60,7 @@ const seed = async () => {
     slug,
     problemNumber,
     statement: 'Given two integers, output their sum.',
+    statementMd: 'Given two integers, output their sum.',
     inputFormat: 'Two integers a and b (|a|, |b| \le 10^9).',
     outputFormat: 'Print a single integer, the sum of a and b.',
     constraints: '0 < |a|, |b| \le 10^9',

@@ -15,10 +15,13 @@ let problemNumberCounter = 1;
 const buildProblem = (overrides = {}) => {
   const problemId = overrides.problemId ?? problemIdCounter++;
   const problemNumber = overrides.problemNumber ?? problemNumberCounter++;
+  const statement = overrides.statement ?? 'Add two numbers.';
+  const statementMd = overrides.statementMd ?? statement;
 
   return {
     title: 'Sample Problem',
-    statement: 'Add two numbers.',
+    statement,
+    statementMd,
     inputFormat: 'Two integers a and b',
     outputFormat: 'One integer representing the sum',
     constraints: '0 <= |a|, |b| <= 10^9',
@@ -88,7 +91,7 @@ describe('Problem routes with auth', () => {
       .set(authHeader(adminTokens.accessToken))
       .send({
         title: 'New Problem',
-        statement: 'Compute the difference.',
+        statementMd: 'Compute the difference.',
         difficulty: 'EASY',
         tags: ['math', 'difference'],
         algorithms: ['Math'],
@@ -100,6 +103,8 @@ describe('Problem routes with auth', () => {
     expect(response.status).toBe(201);
     expect(response.body.problemId).toBeGreaterThanOrEqual(100000);
     expect(response.body.author).toBeDefined();
+    expect(response.body.statementMd).toBe('Compute the difference.');
+    expect(response.body.statement).toBe('Compute the difference.');
   });
 
   it('blocks non-admins from creating problems', async () => {
@@ -110,7 +115,7 @@ describe('Problem routes with auth', () => {
       .set(authHeader(tokens.accessToken))
       .send({
         title: 'Forbidden',
-        statement: 'Nope',
+        statementMd: 'Nope',
         judge0LanguageIds: [71],
         samples: [{ input: '1', output: '1' }],
         testCases: [{ input: '1', output: '1', points: 1 }]
@@ -155,7 +160,7 @@ describe('Problem routes with auth', () => {
       .set(authHeader(adminTokens.accessToken))
       .send({
         title: ' Updated Title ',
-        statement: '<script>alert(1)</script>Safe statement',
+        statementMd: '<script>alert(1)</script>Safe statement',
         inputFormat: '  Updated input format ',
         outputFormat: 'Updated output format',
         constraints: 'Updated constraints',
@@ -176,7 +181,9 @@ describe('Problem routes with auth', () => {
     expect(response.status).toBe(200);
     expect(response.body.problemId).toBe(original.problemId);
     expect(response.body.title).toBe('Updated Title');
-    expect(response.body.statement).toContain('&lt;script&gt;alert(1)&lt;/script&gt;Safe statement');
+    expect(response.body.statement).toBe('Safe statement');
+    expect(response.body.statementMd).toBe('Safe statement');
+    expect(response.body.statement.includes('<script')).toBe(false);
     expect(response.body.inputFormat).toBe('Updated input format');
     expect(response.body.tags).toEqual(['graphs', 'shortest path']);
     expect(response.body.algorithms).toEqual(['Graph Theory']);
@@ -201,13 +208,14 @@ describe('Problem routes with auth', () => {
       .set(authHeader(session.tokens.accessToken))
       .send({
         title: 'Author Updated',
-        statement: 'Updated by owner.',
+        statementMd: 'Updated by owner.',
         difficulty: 'HARD'
       });
 
     expect(response.status).toBe(200);
     expect(response.body.title).toBe('Author Updated');
     expect(response.body.difficulty).toBe('HARD');
+    expect(response.body.statementMd).toBe('Updated by owner.');
   });
 
   it('rejects updates from users who are neither admin nor owner', async () => {
@@ -220,11 +228,40 @@ describe('Problem routes with auth', () => {
       .set(authHeader(tokens.accessToken))
       .send({
         title: 'Nope',
-        statement: 'Should be blocked'
+        statementMd: 'Should be blocked'
       });
 
     expect(response.status).toBe(403);
     expect(response.body.code).toBe('FORBIDDEN');
+  });
+
+  it('sanitizes unsafe image links and attributes within markdown statements', async () => {
+    const original = await Problem.create(
+      buildProblem({
+        title: 'Image Problem',
+        statement: 'Original'
+      })
+    );
+
+    const { tokens: adminTokens } = await authenticateAsAdmin();
+
+    const payload = {
+      title: 'Image Problem',
+      statementMd:
+        '![should-remove](javascript:alert(1))\n\n<img src="/uploads/problems/demo.png" onerror="alert(1)" style="width:9999px" width="9000" height="2000">'
+    };
+
+    const response = await request(app)
+      .put(`/api/problems/${original.problemId}`)
+      .set(authHeader(adminTokens.accessToken))
+      .send(payload);
+
+    expect(response.status).toBe(200);
+    expect(response.body.statement.includes('javascript')).toBe(false);
+    expect(response.body.statement.includes('onerror')).toBe(false);
+    expect(response.body.statement.includes('style=')).toBe(false);
+    expect(response.body.statement).toContain('<img');
+    expect(response.body.statement).toContain('/uploads/problems/demo.png');
   });
 
   it('cascades submissions when a problem is deleted', async () => {

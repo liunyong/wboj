@@ -80,6 +80,188 @@ textarea {
   resize: vertical;
 }
 
+.markdown-body {
+  color: #0f172a;
+  line-height: 1.7;
+  font-size: 1rem;
+}
+
+.markdown-body > *:first-child {
+  margin-top: 0;
+}
+
+.markdown-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body p,
+.markdown-body ul,
+.markdown-body ol,
+.markdown-body blockquote,
+.markdown-body table {
+  margin: 0.75rem 0;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 1.5rem;
+}
+
+.markdown-body li + li {
+  margin-top: 0.25rem;
+}
+
+.markdown-body code {
+  font-family: 'Source Code Pro', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  background: rgba(15, 23, 42, 0.08);
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.markdown-body pre {
+  background: rgba(15, 23, 42, 0.9);
+  color: #f8fafc;
+  padding: 0.85rem;
+  border-radius: 0.6rem;
+  overflow: auto;
+  font-size: 0.9rem;
+  margin: 1rem 0;
+}
+
+.markdown-body pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.problem-author {
+  margin-top: 0.35rem;
+  color: #475569;
+  font-size: 0.95rem;
+}
+
+.markdown-body blockquote {
+  border-left: 3px solid #2563eb;
+  padding-left: 1rem;
+  margin: 1rem 0;
+  color: #1e293b;
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.markdown-body table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.markdown-body th {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.markdown-body img {
+  max-width: 100%;
+  display: block;
+}
+
+.markdown-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.markdown-editor__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.markdown-editor__title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.markdown-editor__header label {
+  font-weight: 600;
+}
+
+.markdown-editor__hint {
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.markdown-editor__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.markdown-editor__uploading {
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.markdown-editor__panes {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.markdown-editor__panes textarea {
+  min-height: 260px;
+}
+
+.markdown-editor__preview {
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  border-radius: 0.75rem;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  min-height: 260px;
+}
+
+.markdown-editor__preview-header {
+  font-weight: 600;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.markdown-editor__preview-body {
+  padding: 1rem;
+  overflow: auto;
+  flex: 1;
+}
+
+.markdown-editor__empty {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+@media (min-width: 960px) {
+  .markdown-editor__panes {
+    flex-direction: row;
+  }
+
+  .markdown-editor__panes textarea {
+    flex: 1;
+  }
+
+  .markdown-editor__preview {
+    flex: 1;
+  }
+}
+
 .app-shell {
   min-height: 100vh;
   display: flex;
@@ -569,7 +751,6 @@ textarea {
 }
 
 .problem-text {
-  white-space: pre-wrap;
   margin: 0;
 }
 
@@ -599,7 +780,6 @@ textarea {
 }
 
 .sample-card .sample-explanation {
-  white-space: pre-wrap;
   margin: 0.5rem 0 0;
 }
 
@@ -1424,6 +1604,117 @@ textarea {
   gap: 1rem;
 }
 
+.uploads-summary {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+  font-weight: 500;
+}
+
+.uploads-grid {
+  margin-top: 1.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.upload-card {
+  background: #fff;
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.upload-card__preview {
+  background: #000;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.upload-card__preview img {
+  display: block;
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+}
+
+.upload-card__details {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.upload-card__name {
+  font-weight: 600;
+  color: #0f172a;
+  word-break: break-all;
+}
+
+.upload-card__meta {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.upload-card__url {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(15, 23, 42, 0.05);
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.upload-card__url code {
+  background: none;
+  padding: 0;
+  color: #1e293b;
+  font-size: 0.85rem;
+}
+
+.upload-card__url button {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+.upload-card__actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.upload-card__actions a {
+  color: #2563eb;
+  font-weight: 500;
+}
+
+.upload-preview-modal {
+  max-width: 640px;
+  width: min(640px, 95%);
+  padding: 0;
+}
+
+.upload-preview-body {
+  padding: 1rem;
+  max-height: 75vh;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+}
+
+.upload-preview-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+}
+
 .grid-two-columns {
   display: grid;
   gap: 1rem;
@@ -1615,9 +1906,11 @@ textarea {
 .submission-modal {
   max-width: 900px;
   width: min(900px, 100%);
+  max-height: min(90vh, 960px);
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  overflow: hidden;
 }
 
 .submission-modal__header {
@@ -1625,6 +1918,7 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  flex-shrink: 0;
 }
 
 .icon-button {
@@ -1657,6 +1951,10 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0 0.25rem 0.5rem 0;
+  -webkit-overflow-scrolling: touch;
 }
 
 .submission-modal__meta {
@@ -1673,7 +1971,8 @@ textarea {
 }
 
 .submission-modal__code {
-  max-height: 480px;
+  flex: 1 1 auto;
+  min-height: 200px;
   overflow: auto;
   border: 1px solid rgba(15, 23, 42, 0.12);
   border-radius: 0.75rem;
@@ -1698,6 +1997,7 @@ textarea {
 .submission-modal__actions {
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .test-case-modal,

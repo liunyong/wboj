@@ -23,9 +23,12 @@ let mongoServer;
 
 const buildProblem = (overrides = {}) => {
   const baseId = overrides.problemId ?? 100000 + Math.floor(Math.random() * 1000);
+  const statement = overrides.statement ?? 'Sample statement';
+  const statementMd = overrides.statementMd ?? statement;
   return {
     title: `Problem ${baseId}`,
-    statement: 'Sample statement',
+    statement,
+    statementMd,
     difficulty: 'BASIC',
     problemId: baseId,
     problemNumber: baseId,

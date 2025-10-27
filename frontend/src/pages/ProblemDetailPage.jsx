@@ -2,16 +2,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
-import { useAuth } from '../context/AuthContext.jsx';
-import { applyEventToSubmissionList, buildOptimisticSubmission } from '../utils/submissions.js';
-import { useResubmitSubmission } from '../hooks/useResubmitSubmission.js';
-import { useDeleteSubmission } from '../hooks/useDeleteSubmission.js';
-import { useLanguages } from '../hooks/useLanguages.js';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
+import ProblemStatement from '../components/ProblemStatement.jsx';
 import ProblemSubmissionsPanel from '../components/ProblemSubmissionsPanel.jsx';
 import SubmissionViewerModal from '../components/SubmissionViewerModal.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
+import { useDeleteSubmission } from '../hooks/useDeleteSubmission.js';
+import { useLanguages } from '../hooks/useLanguages.js';
+import { useResubmitSubmission } from '../hooks/useResubmitSubmission.js';
 import { detailToEvent } from '../utils/submissions.js';
-import { renderMarkdownToSafeHtml } from '../utils/markdown.js';
+import { applyEventToSubmissionList, buildOptimisticSubmission } from '../utils/submissions.js';
 
 function ProblemDetailPage() {
   const { problemId } = useParams();
@@ -185,39 +185,24 @@ const resubmitMutation = useResubmitSubmission({
     ? languages.filter((item) => problem.judge0LanguageIds.includes(item.id))
     : languages;
 
-  const statementHtml = useMemo(
-    () => renderMarkdownToSafeHtml(problem?.statement ?? ''),
-    [problem?.statement]
-  );
-
-  const inputFormatHtml = useMemo(
-    () => renderMarkdownToSafeHtml(problem?.inputFormat ?? ''),
-    [problem?.inputFormat]
-  );
-
-  const outputFormatHtml = useMemo(
-    () => renderMarkdownToSafeHtml(problem?.outputFormat ?? ''),
-    [problem?.outputFormat]
-  );
-
-  const constraintsHtml = useMemo(
-    () => renderMarkdownToSafeHtml(problem?.constraints ?? ''),
-    [problem?.constraints]
-  );
-
-  const hasInputFormat = Boolean(inputFormatHtml) || Boolean(problem?.inputFormat?.trim());
-  const hasOutputFormat = Boolean(outputFormatHtml) || Boolean(problem?.outputFormat?.trim());
-  const hasConstraints = Boolean(constraintsHtml) || Boolean(problem?.constraints?.trim());
-
-  const renderRichTextBlock = (html, fallback, className = 'problem-text') => {
-    if (html) {
-      return <div className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+  const preferStatement = (markdown, fallback) => {
+    if (typeof markdown === 'string' && markdown.trim()) {
+      return markdown;
     }
-    if (typeof fallback === 'string' && fallback.trim()) {
-      return <p className={className}>{fallback}</p>;
+    if (typeof fallback === 'string') {
+      return fallback;
     }
-    return null;
+    return '';
   };
+
+  const statementSource = preferStatement(problem?.statementMd, problem?.statement);
+  const inputFormatSource = problem?.inputFormat ?? '';
+  const outputFormatSource = problem?.outputFormat ?? '';
+  const constraintsSource = problem?.constraints ?? '';
+
+  const hasInputFormat = Boolean(inputFormatSource?.trim?.());
+  const hasOutputFormat = Boolean(outputFormatSource?.trim?.());
+  const hasConstraints = Boolean(constraintsSource?.trim?.());
 
   const getSubmissionFromCaches = useCallback(
     (submissionId) => {
@@ -257,6 +242,22 @@ const resubmitMutation = useResubmitSubmission({
       : problemAuthorRaw;
   const isOwner =
     problemAuthorId && user?.id ? String(problemAuthorId) === String(user.id) : false;
+
+  const authorName = useMemo(() => {
+    if (!problemAuthorRaw) {
+      return null;
+    }
+    if (typeof problemAuthorRaw === 'object' && problemAuthorRaw !== null) {
+      const displayName = problemAuthorRaw.profile?.displayName;
+      if (typeof displayName === 'string' && displayName.trim()) {
+        return displayName.trim();
+      }
+      if (typeof problemAuthorRaw.username === 'string' && problemAuthorRaw.username.trim()) {
+        return problemAuthorRaw.username.trim();
+      }
+    }
+    return null;
+  }, [problemAuthorRaw]);
 
   useEffect(() => {
     if (!languageId && allowedLanguages.length) {
@@ -355,6 +356,7 @@ const resubmitMutation = useResubmitSubmission({
                 </span>
                 {!problem.isPublic && <span className="problem-card__badge">Private</span>}
               </div>
+              {authorName && <div className="problem-author">Author: {authorName}</div>}
             </div>
             <div className="problem-detail__meta">
               <div className="problem-stats">
@@ -406,27 +408,39 @@ const resubmitMutation = useResubmitSubmission({
 
           <article className="problem-section">
             <h2>Statement</h2>
-            {renderRichTextBlock(statementHtml, problem.statement)}
+            <ProblemStatement
+              source={statementSource}
+              className="problem-text markdown-body"
+            />
           </article>
 
           {hasInputFormat && (
             <article className="problem-section">
               <h3>Input Format</h3>
-              {renderRichTextBlock(inputFormatHtml, problem.inputFormat)}
+              <ProblemStatement
+                source={inputFormatSource}
+                className="problem-text markdown-body"
+              />
             </article>
           )}
 
           {hasOutputFormat && (
             <article className="problem-section">
               <h3>Output Format</h3>
-              {renderRichTextBlock(outputFormatHtml, problem.outputFormat)}
+              <ProblemStatement
+                source={outputFormatSource}
+                className="problem-text markdown-body"
+              />
             </article>
           )}
 
           {hasConstraints && (
             <article className="problem-section">
               <h3>Constraints</h3>
-              {renderRichTextBlock(constraintsHtml, problem.constraints)}
+              <ProblemStatement
+                source={constraintsSource}
+                className="problem-text markdown-body"
+              />
             </article>
           )}
 
@@ -435,9 +449,8 @@ const resubmitMutation = useResubmitSubmission({
               <h3>Sample Cases</h3>
               <div className="samples-grid">
                 {problem.samples.map((sample, index) => {
-                  const explanationHtml = renderMarkdownToSafeHtml(sample.explanation ?? '');
-                  const hasExplanation =
-                    Boolean(explanationHtml) || Boolean(sample.explanation?.trim());
+                  const explanationSource = sample.explanation ?? '';
+                  const hasExplanation = Boolean(explanationSource?.trim?.());
                   return (
                     <div key={index} className="sample-card">
                       <h4>Sample {index + 1}</h4>
@@ -452,11 +465,10 @@ const resubmitMutation = useResubmitSubmission({
                       {hasExplanation && (
                         <div>
                           <strong>Explanation</strong>
-                          {renderRichTextBlock(
-                            explanationHtml,
-                            sample.explanation,
-                            'sample-explanation'
-                          )}
+                          <ProblemStatement
+                            source={explanationSource}
+                            className="sample-explanation markdown-body"
+                          />
                         </div>
                       )}
                     </div>

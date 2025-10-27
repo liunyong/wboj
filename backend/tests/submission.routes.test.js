@@ -42,10 +42,13 @@ let problemNumberCounter = 1;
 const buildProblem = (overrides = {}) => {
   const problemId = overrides.problemId ?? problemIdCounter++;
   const problemNumber = overrides.problemNumber ?? problemNumberCounter++;
+  const statement = overrides.statement ?? 'Sum two numbers.';
+  const statementMd = overrides.statementMd ?? statement;
 
   return {
     title: 'Submission Problem',
-    statement: 'Sum two numbers.',
+    statement,
+    statementMd,
     difficulty: 'BASIC',
     problemId,
     problemNumber,

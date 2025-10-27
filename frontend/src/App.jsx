@@ -5,6 +5,7 @@ import RequireAdmin from './components/RequireAdmin.jsx';
 import RequireAuth from './components/RequireAuth.jsx';
 import AdminCreatePage from './pages/AdminCreatePage.jsx';
 import AdminUsersPage from './pages/AdminUsersPage.jsx';
+import AdminUploadsPage from './pages/AdminUploadsPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import SubmissionsPage from './pages/SubmissionsPage.jsx';
 import HomePage from './pages/HomePage.jsx';
@@ -86,6 +87,14 @@ function App() {
           element={
             <RequireAdmin>
               <AdminUsersPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="admin/uploads"
+          element={
+            <RequireAdmin>
+              <AdminUploadsPage />
             </RequireAdmin>
           }
         />

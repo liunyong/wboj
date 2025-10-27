@@ -45,6 +45,20 @@ const judge0LanguageIdsSchema = z
   .array(z.coerce.number().int().positive('Language id must be positive'))
   .min(1, 'At least one language id is required');
 
+const buildStatementSchema = (message) =>
+  z
+    .string()
+    .min(1, message)
+    .refine((value) => value.trim().length > 0, message);
+
+const statementOptionalTransform = (value) => {
+  if (!value) {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+};
+
 export const listProblemsQuerySchema = z
   .object({
     page: z.coerce.number().int().min(1).default(1),
@@ -75,40 +89,12 @@ export const createProblemSchema = z
       .string()
       .trim()
       .min(1, 'Title is required'),
-    statement: z
-      .string()
-      .min(1, 'Statement is required')
-      .refine((value) => value.trim().length > 0, 'Statement is required'),
-    inputFormat: z
-      .string()
-      .optional()
-      .transform((value) => {
-        if (!value) {
-          return undefined;
-        }
-        const trimmed = value.trim();
-        return trimmed ? trimmed : undefined;
-      }),
-    outputFormat: z
-      .string()
-      .optional()
-      .transform((value) => {
-        if (!value) {
-          return undefined;
-        }
-        const trimmed = value.trim();
-        return trimmed ? trimmed : undefined;
-      }),
-    constraints: z
-      .string()
-      .optional()
-      .transform((value) => {
-        if (!value) {
-          return undefined;
-        }
-        const trimmed = value.trim();
-        return trimmed ? trimmed : undefined;
-      }),
+    statement: buildStatementSchema('Statement is required').optional(),
+    statementMd: buildStatementSchema('Statement markdown is required').optional(),
+    statementHtmlCache: z.string().optional().transform(statementOptionalTransform),
+    inputFormat: z.string().optional().transform(statementOptionalTransform),
+    outputFormat: z.string().optional().transform(statementOptionalTransform),
+    constraints: z.string().optional().transform(statementOptionalTransform),
     difficulty: z.enum(['BASIC', 'EASY', 'MEDIUM', 'HARD']).default('BASIC'),
     tags: tagsArraySchema.optional().default([]),
     samples: z.array(sampleSchema).optional().default([]),
@@ -140,7 +126,19 @@ export const createProblemSchema = z
       .max(1024, 'Memory limit must be at most 1024 MB')
       .optional()
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    const hasStatement = typeof value.statement === 'string' && value.statement.trim().length > 0;
+    const hasStatementMd =
+      typeof value.statementMd === 'string' && value.statementMd.trim().length > 0;
+    if (!hasStatementMd && !hasStatement) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Statement markdown is required',
+        path: ['statementMd']
+      });
+    }
+  });
 
 export const updateProblemSchema = z
   .object({
@@ -148,40 +146,12 @@ export const updateProblemSchema = z
       .string()
       .trim()
       .min(1, 'Title is required'),
-    statement: z
-      .string()
-      .min(1, 'Statement is required')
-      .refine((value) => value.trim().length > 0, 'Statement is required'),
-    inputFormat: z
-      .string()
-      .optional()
-      .transform((value) => {
-        if (!value) {
-          return undefined;
-        }
-        const trimmed = value.trim();
-        return trimmed ? trimmed : undefined;
-      }),
-    outputFormat: z
-      .string()
-      .optional()
-      .transform((value) => {
-        if (!value) {
-          return undefined;
-        }
-        const trimmed = value.trim();
-        return trimmed ? trimmed : undefined;
-      }),
-    constraints: z
-      .string()
-      .optional()
-      .transform((value) => {
-        if (!value) {
-          return undefined;
-        }
-        const trimmed = value.trim();
-        return trimmed ? trimmed : undefined;
-      }),
+    statement: buildStatementSchema('Statement is required').optional(),
+    statementMd: buildStatementSchema('Statement markdown is required').optional(),
+    statementHtmlCache: z.string().optional().transform(statementOptionalTransform),
+    inputFormat: z.string().optional().transform(statementOptionalTransform),
+    outputFormat: z.string().optional().transform(statementOptionalTransform),
+    constraints: z.string().optional().transform(statementOptionalTransform),
     difficulty: z.enum(['BASIC', 'EASY', 'MEDIUM', 'HARD']).optional(),
     tags: tagsArraySchema.optional(),
     samples: z.array(sampleSchema).optional(),
@@ -213,7 +183,19 @@ export const updateProblemSchema = z
       .max(1024, 'Memory limit must be at most 1024 MB')
       .optional()
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    const hasStatement = typeof value.statement === 'string' && value.statement.trim().length > 0;
+    const hasStatementMd =
+      typeof value.statementMd === 'string' && value.statementMd.trim().length > 0;
+    if (!hasStatementMd && !hasStatement) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Statement markdown is required',
+        path: ['statementMd']
+      });
+    }
+  });
 
 export const getProblemQuerySchema = z
   .object({

@@ -26,6 +26,8 @@ const problemSchema = new mongoose.Schema(
     problemId: { type: Number, required: true, unique: true, min: 100000, immutable: true },
     problemNumber: { type: Number, required: true, unique: true, min: 1, immutable: true },
     statement: { type: String, required: true },
+    statementMd: { type: String, default: '' },
+    statementHtmlCache: { type: String },
     inputFormat: { type: String },
     outputFormat: { type: String },
     constraints: { type: String },

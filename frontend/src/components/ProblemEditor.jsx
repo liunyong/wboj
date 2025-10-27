@@ -1,14 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import ProblemStatement from './ProblemStatement.jsx';
 import TestCaseModal from './TestCaseModal.jsx';
 import ValidateTestCasesModal from './ValidateTestCasesModal.jsx';
 import SampleModal from './SampleModal.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
+const selectStatementSource = (markdown, fallback) => {
+  if (typeof markdown === 'string' && markdown.trim()) {
+    return markdown;
+  }
+  if (typeof fallback === 'string') {
+    return fallback;
+  }
+  return '';
+};
+
 const buildDefaultForm = () => ({
   title: '',
-  statement: '',
+  statementMd: '',
   difficulty: 'BASIC',
   isPublic: true,
   inputFormat: '',
@@ -27,6 +38,8 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
   const { authFetch } = useAuth();
   const queryClient = useQueryClient();
   const fileInputRef = useRef(null);
+  const imageInputRef = useRef(null);
+  const statementTextareaRef = useRef(null);
 
   const [form, setForm] = useState(buildDefaultForm);
   const [testCases, setTestCases] = useState([]);
@@ -46,6 +59,16 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
   const [editingTestCaseIndex, setEditingTestCaseIndex] = useState(null);
   const [isSampleModalOpen, setIsSampleModalOpen] = useState(false);
   const [editingSampleIndex, setEditingSampleIndex] = useState(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  const allowedImageMimeTypes = useMemo(
+    () => new Set(['image/png', 'image/jpeg', 'image/webp', 'image/avif']),
+    []
+  );
+  const allowedImageExtensions = useMemo(
+    () => new Set(['.png', '.jpg', '.jpeg', '.webp', '.avif']),
+    []
+  );
 
   const algorithmsQuery = useQuery({
     queryKey: ['problems', 'algorithms'],
@@ -85,7 +108,7 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
 
     setForm({
       title: initialProblem.title ?? '',
-      statement: initialProblem.statement ?? '',
+      statementMd: selectStatementSource(initialProblem.statementMd, initialProblem.statement),
       difficulty: initialProblem.difficulty ?? 'BASIC',
       isPublic: initialProblem.isPublic ?? true,
       inputFormat: initialProblem.inputFormat ?? '',
@@ -148,6 +171,7 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
     setValidationResult(null);
     setValidationError('');
     setError('');
+    setIsUploadingImage(false);
   };
 
   const validateMutation = useMutation({
@@ -198,13 +222,13 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
 
       if (isEdit) {
         if (problemId) {
-          queryClient.invalidateQueries({ queryKey: ['problem', String(problemId)] });
-        }
-        queryClient.invalidateQueries({ queryKey: ['problems'] });
-        queryClient.invalidateQueries({ queryKey: ['problems', 'algorithms'] });
-        setForm({
-          title: response.title ?? form.title,
-          statement: response.statement ?? form.statement,
+        queryClient.invalidateQueries({ queryKey: ['problem', String(problemId)] });
+      }
+      queryClient.invalidateQueries({ queryKey: ['problems'] });
+      queryClient.invalidateQueries({ queryKey: ['problems', 'algorithms'] });
+      setForm({
+        title: response.title ?? form.title,
+        statementMd: selectStatementSource(response.statementMd, response.statement),
           difficulty: response.difficulty ?? form.difficulty,
           isPublic: response.isPublic ?? form.isPublic,
           inputFormat: response.inputFormat ?? '',
@@ -478,6 +502,108 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
     validateMutation.mutate({ languageId, sourceCode });
   };
 
+  const insertImageMarkdown = (url) => {
+    const textarea = statementTextareaRef.current;
+    setForm((prev) => {
+      const start = textarea?.selectionStart ?? prev.statementMd.length;
+      const end = textarea?.selectionEnd ?? start;
+      const before = prev.statementMd.slice(0, start);
+      const after = prev.statementMd.slice(end);
+      const prefix = before.length === 0 ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+      const suffix = after.length === 0 ? '\n\n' : after.startsWith('\n') ? '\n' : '\n\n';
+      const snippet = `${prefix}![](${url})${suffix}`;
+      const nextValue = `${before}${snippet}${after}`;
+      const cursor = before.length + snippet.length;
+
+      const scheduler =
+        typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function'
+          ? window.requestAnimationFrame
+          : (cb) => setTimeout(cb, 0);
+      scheduler(() => {
+        const target = statementTextareaRef.current;
+        if (target) {
+          target.focus();
+          target.setSelectionRange(cursor, cursor);
+        }
+      });
+
+      return { ...prev, statementMd: nextValue };
+    });
+  };
+
+  const handleImageUploadClick = () => {
+    if (!isReady || isUploadingImage) {
+      return;
+    }
+    imageInputRef.current?.click();
+  };
+
+  const handleImageFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const extension =
+      file.name && file.name.includes('.')
+        ? file.name.toLowerCase().slice(file.name.lastIndexOf('.'))
+        : '';
+
+    if (!allowedImageMimeTypes.has(file.type) && !allowedImageExtensions.has(extension)) {
+      setError('Only PNG, JPG, JPEG, WEBP, or AVIF images are supported.');
+      event.target.value = '';
+      return;
+    }
+
+    setIsUploadingImage(true);
+    try {
+      setError('');
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await authFetch('/api/uploads/images', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response?.url) {
+        throw new Error('Image upload failed');
+      }
+
+      const rawUrl =
+        typeof response.apiPath === 'string'
+          ? response.apiPath
+          : typeof response.url === 'string'
+            ? response.url
+            : response.path;
+      const markdownUrl = (() => {
+        if (!rawUrl) {
+          return rawUrl;
+        }
+        if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+          return rawUrl;
+        }
+        const base = import.meta.env.VITE_API_URL || '';
+        if (!base) {
+          return rawUrl;
+        }
+        try {
+          const absolute = new URL(rawUrl, base).toString();
+          return absolute;
+        } catch (_error) {
+          return rawUrl;
+        }
+      })();
+      insertImageMarkdown(markdownUrl);
+    } catch (uploadError) {
+      setError(uploadError.message || 'Failed to upload image');
+    } finally {
+      setIsUploadingImage(false);
+      if (event.target) {
+        event.target.value = '';
+      }
+    }
+  };
+
   const handleSubmit = (event) => {
     event.preventDefault();
 
@@ -491,9 +617,17 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
       return;
     }
 
+    if (!form.statementMd.trim()) {
+      setError('Problem statement cannot be empty.');
+      return;
+    }
+
+    const statementMarkdown = form.statementMd;
+
     const payload = {
       title: form.title.trim(),
-      statement: form.statement,
+      statementMd: statementMarkdown,
+      statement: statementMarkdown,
       difficulty: form.difficulty,
       isPublic: form.isPublic,
       inputFormat: form.inputFormat || undefined,
@@ -593,17 +727,60 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
           Public
         </label>
 
-        <label>
-          Statement
-          <textarea
-            name="statement"
-            value={form.statement}
-            onChange={handleInputChange}
-            rows={6}
-            required
-            disabled={!isReady}
+        <div className="markdown-editor">
+          <div className="markdown-editor__header">
+            <div className="markdown-editor__title">
+              <label htmlFor="problem-statement-input">Statement</label>
+              <span className="markdown-editor__hint">Markdown + LaTeX supported</span>
+            </div>
+            <div className="markdown-editor__actions">
+              {isUploadingImage && (
+                <span className="markdown-editor__uploading">Uploading image…</span>
+              )}
+              <button
+                type="button"
+                className="secondary"
+                onClick={handleImageUploadClick}
+                disabled={!isReady || isUploadingImage}
+              >
+                {isUploadingImage ? 'Uploading…' : 'Insert Image'}
+              </button>
+            </div>
+          </div>
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept=".png,.jpg,.jpeg,.webp,.avif"
+            style={{ display: 'none' }}
+            onChange={handleImageFileChange}
           />
-        </label>
+          <div className="markdown-editor__panes">
+            <textarea
+              id="problem-statement-input"
+              name="statementMd"
+              value={form.statementMd}
+              onChange={handleInputChange}
+              rows={12}
+              required
+              disabled={!isReady}
+              placeholder="Describe the problem. Use $...$ for inline math and $$...$$ for displayed equations."
+              ref={statementTextareaRef}
+            />
+            <div className="markdown-editor__preview" aria-live="polite">
+              <div className="markdown-editor__preview-header">Preview</div>
+              <div className="markdown-editor__preview-body">
+                {form.statementMd.trim() ? (
+                  <ProblemStatement source={form.statementMd} />
+                ) : (
+                  <p className="markdown-editor__empty">
+                    Start typing to see the rendered Markdown preview. Inline math uses $a^2 + b^2 =
+                    c^2$ and blocks use $$\int_0^1 x^2 dx$$.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
 
         <label>
           Input Format

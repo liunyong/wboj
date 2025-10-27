@@ -34,3 +34,11 @@ export const resubmitRateLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: defaultKeyGenerator
 });
+
+export const uploadImageRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: defaultKeyGenerator
+});
