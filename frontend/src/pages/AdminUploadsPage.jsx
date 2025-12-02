@@ -180,7 +180,7 @@ function AdminUploadsPage() {
               </button>
             </header>
             <div className="upload-preview-body">
-              <img src={previewImage} alt="Preview" />
+              <img src={previewImage} alt="Preview" loading="lazy" />
             </div>
           </div>
         </div>

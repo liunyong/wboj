@@ -72,6 +72,9 @@ const sanitizeMarkdownLinks = (value) =>
   });
 
 const sanitizeHtml = (html) => {
+  if (!html || !/[<>]/.test(html)) {
+    return html;
+  }
   const purifier = getPurifier();
   if (!purifier) {
     return html;

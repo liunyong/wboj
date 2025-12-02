@@ -15,6 +15,8 @@ import { useResubmitSubmission } from '../hooks/useResubmitSubmission.js';
 import { useLanguages } from '../hooks/useLanguages.js';
 import { useUserProgress, userProgressQueryKey } from '../hooks/useUserProgress.js';
 import SubmissionViewerModal from '../components/SubmissionViewerModal.jsx';
+import { usePageSeo } from '../hooks/useSeo.js';
+import { siteMeta } from '../utils/seo.js';
 
 const currentYear = new Date().getUTCFullYear();
 const selectableYears = [currentYear, currentYear - 1, currentYear - 2];
@@ -50,6 +52,52 @@ function DashboardPage() {
   const progressQuery = useUserProgress();
   const solvedProblems = progressQuery.solved;
   const attemptedProblems = progressQuery.attempted;
+  const solvedCount = Array.isArray(solvedProblems) ? solvedProblems.length : Number(solvedProblems || 0);
+  const attemptedCount = Array.isArray(attemptedProblems)
+    ? attemptedProblems.length
+    : Number(attemptedProblems || 0);
+
+  const seoConfig = useMemo(
+    () => ({
+      title: 'Dashboard Overview | WB Online Judge',
+      titleKo: '대시보드 개요 | WB 온라인 저지',
+      description: `Review ${solvedCount} solved challenges and keep your ${year} streak alive.`,
+      descriptionKo: `올해 ${solvedCount}개의 문제를 해결하고 제출 히트맵으로 진행률을 추적하세요.`,
+      path: '/dashboard',
+      ogType: 'profile',
+      jsonLd: [
+        {
+          id: 'dashboard-webapp',
+          data: {
+            '@context': 'https://schema.org',
+            '@type': 'WebApplication',
+            name: 'WB Online Judge Dashboard',
+            url: `${siteMeta.siteUrl}/dashboard`,
+            inLanguage: ['en', 'ko'],
+            applicationCategory: 'EducationalApplication',
+            operatingSystem: 'Web',
+            audience: { '@type': 'Audience', audienceType: 'Competitive programming students' },
+            offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+            interactionStatistic: [
+              {
+                '@type': 'InteractionCounter',
+                interactionType: { '@type': 'UseAction', name: 'SolvedProblem' },
+                userInteractionCount: solvedCount
+              },
+              {
+                '@type': 'InteractionCounter',
+                interactionType: { '@type': 'UseAction', name: 'AttemptedProblem' },
+                userInteractionCount: attemptedCount
+              }
+            ],
+            featureList: ['Heatmap', 'Submission history', 'Language trends']
+          }
+        }
+      ]
+    }),
+    [attemptedCount, solvedCount, year]
+  );
+  usePageSeo(seoConfig);
 
   const resubmitMutation = useResubmitSubmission({
     onSuccess: (data, variables) => {

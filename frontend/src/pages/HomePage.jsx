@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
@@ -8,6 +8,8 @@ import {
   formatTooltip,
   getUserTZ
 } from '../utils/time.js';
+import { siteMeta, summarizeText } from '../utils/seo.js';
+import { usePageSeo } from '../hooks/useSeo.js';
 
 function HomePage() {
   const { authFetch, user } = useAuth();
@@ -95,6 +97,72 @@ function HomePage() {
 
   const announcements = announcementsQuery.data ?? [];
   const problemUpdates = updatesQuery.data ?? [];
+
+  const seoConfig = useMemo(() => {
+    const latestAnnouncements = announcements.slice(0, 5);
+    const latestUpdates = problemUpdates.slice(0, 5);
+
+    return {
+      title: 'Updates & Announcements | WB Online Judge',
+      titleKo: '공지 및 업데이트 | WB 온라인 저지',
+      description: 'Stay current on WB Online Judge announcements, downtime, and recently edited problems.',
+      descriptionKo: '플랫폼 공지, 점검 일정, 문제 업데이트를 한자리에서 확인하세요.',
+      path: '/',
+      jsonLd: [
+        {
+          id: 'home-announcements',
+          data: {
+            '@context': 'https://schema.org',
+            '@type': 'CollectionPage',
+            name: 'WB Online Judge Announcements',
+            url: `${siteMeta.siteUrl}/`,
+            inLanguage: ['en', 'ko'],
+            isPartOf: { '@type': 'WebSite', '@id': `${siteMeta.siteUrl}#website` },
+            itemListElement: latestAnnouncements.map((announcement, index) => ({
+              '@type': 'ListItem',
+              position: index + 1,
+              url: `${siteMeta.siteUrl}/?announcement=${announcement._id ?? announcement.id ?? index}`,
+              name: announcement.title,
+              description: summarizeText(announcement.body ?? '')
+            }))
+          }
+        },
+        {
+          id: 'home-updates',
+          data: {
+            '@context': 'https://schema.org',
+            '@type': 'Blog',
+            name: 'Problem Changelog',
+            url: `${siteMeta.siteUrl}/problems`,
+            blogPost: latestUpdates.map((entry) => ({
+              '@type': 'BlogPosting',
+              headline: entry.title ?? entry.problemTitle ?? 'Problem update',
+              url: `${siteMeta.siteUrl}/problems/${entry.problemId ?? ''}`,
+              dateModified: entry.updatedAt ?? entry.createdAt ?? new Date().toISOString(),
+              inLanguage: ['en', 'ko']
+            }))
+          }
+        },
+        {
+          id: 'site-search',
+          data: {
+            '@context': 'https://schema.org',
+            '@type': 'WebSite',
+            '@id': `${siteMeta.siteUrl}#website`,
+            name: 'WB Online Judge',
+            url: siteMeta.siteUrl,
+            potentialAction: {
+              '@type': 'SearchAction',
+              target: `${siteMeta.siteUrl}/problems?query={search_term_string}`,
+              'query-input': 'required name=search_term_string'
+            }
+          }
+        }
+      ]
+    };
+  }, [announcements, problemUpdates]);
+
+  usePageSeo(seoConfig);
 
   const isEditing = (id) => editingId === id;
 

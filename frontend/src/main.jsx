@@ -8,6 +8,17 @@ import 'katex/dist/katex.min.css';
 import App from './App.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
 import './styles.css';
+import { ensureDefaultMeta, siteMeta } from './utils/seo.js';
+import { DEFAULT_HREFLANG_LOCALES, setHrefLangLinks } from './utils/hreflang.js';
+
+ensureDefaultMeta();
+if (typeof window !== 'undefined') {
+  setHrefLangLinks({
+    baseUrl: siteMeta.siteUrl,
+    path: `${window.location.pathname}${window.location.search}`,
+    locales: DEFAULT_HREFLANG_LOCALES
+  });
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {

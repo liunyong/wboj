@@ -1,4 +1,6 @@
-# Judge0-enabled Playground
+##Website: https://wboj.org##
+
+# Online Judge System based on Judge0
 
 Full-stack online judge featuring a Node.js + MongoDB backend with Judge0 execution, JWT authentication with role-based access control, and a React dashboard for contestants and administrators.
 
@@ -93,6 +95,15 @@ npm run seed --prefix backend
 ```
 
 The seed clears existing problems, inserts a sample addition challenge, and provisions an admin account based on `ADMIN_USERNAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` in the backend `.env`.
+
+## SEO checklist
+
+- **Meta, Open Graph, and JSON-LD** → `frontend/src/hooks/useSeo.js` updates bilingual `<title>`/`<meta>` plus OG/Twitter tags per route, while `frontend/src/pages/HomePage.jsx`, `DashboardPage.jsx`, and `ProblemDetailPage.jsx` emit `CollectionPage`, `WebApplication`, and `SoftwareApplication` JSON-LD for dashboards, blog-like announcements, and problem statements. Add new pages by calling `usePageSeo` with the desired schema payload.
+- **Internationalization signals** → Set `VITE_SITE_URL` (frontend) and `FRONTEND_ORIGIN` (backend) before running `npm run dev`. The new `setHrefLangLinks` utility injects `hreflang` alternates for English and Korean as React Router navigates.
+- **Robots & sitemap** → `frontend/public/robots.txt` and `frontend/public/sitemap.xml` ship with the bundle and are served verbatim by Vite/Nginx/Caddy (`curl http://localhost:5173/robots.txt`). Update them whenever you add static sections, then redeploy so Nginx (see `frontend/nginx.conf`) and the Caddy proxy can cache them for 1 hour.
+- **Backend headers & crawl logging** → `backend/src/middlewares/seoHeaders.js` now sets `Cache-Control`, tightened `Content-Security-Policy`, and `X-Robots-Tag`. Toggle behaviour with `SEO_ALLOW_INDEXING`, `SEO_PRERENDER_AGENTS`, `API_CACHE_SECONDS`, and `FRONTEND_ORIGIN` in `backend/.env.example`. `searchBotLogger` prints `[crawler]` entries whenever Googlebot/Bingbot/etc. hit `/api/*`, so you can trace crawl frequency or add deny rules.
+- **Monitoring & PageSpeed** → After `npm run build --prefix frontend && npm run preview --prefix frontend`, run `npx @lhci/cli collect --url=http://localhost:4173 --preset=desktop --preset=mobile` (or PageSpeed Insights) and record the four Lighthouse scores. Current work prioritises (1) deferring admin/problem editor bundles via dynamic `import()` (Vite code-splitting), (2) prefetching `/problems` data with `<link rel="prefetch">` for high-traffic slugs, and (3) keeping images lazy-loaded with descriptive `alt` text to preserve accessibility scores.
+- **Crawl control in production** → `robots.txt` disallows `/api/` while allowing the rest of the SPA, and Nginx now caches and serves `/robots.txt` + `/sitemap.xml` explicitly. When running under Docker + Caddy, the proxy inherits those assets because requests fall back to the frontend container; keep gzip/brotli enabled as defined in `Caddyfile`.
 
 ## Next Steps
 

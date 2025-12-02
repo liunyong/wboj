@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="WB Online Judge social card">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1d4ed8" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)" />
+  <g fill="#f8fafc" font-family="'Inter', 'Pretendard', 'Noto Sans KR', sans-serif">
+    <text x="100" y="200" font-size="72" font-weight="600">WB Online Judge</text>
+    <text x="100" y="280" font-size="42" opacity="0.85">Solve, review, and learn faster.</text>
+    <text x="100" y="350" font-size="36" opacity="0.75">WB 온라인 저지 · 경쟁 프로그래밍 연습 플랫폼</text>
+    <text x="100" y="450" font-size="32" opacity="0.7">wboj.app</text>
+  </g>
+</svg>

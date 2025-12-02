@@ -12,6 +12,8 @@ import { useLanguages } from '../hooks/useLanguages.js';
 import { useResubmitSubmission } from '../hooks/useResubmitSubmission.js';
 import { detailToEvent } from '../utils/submissions.js';
 import { applyEventToSubmissionList, buildOptimisticSubmission } from '../utils/submissions.js';
+import { usePageSeo } from '../hooks/useSeo.js';
+import { siteMeta, summarizeText } from '../utils/seo.js';
 
 function ProblemDetailPage() {
   const { problemId } = useParams();
@@ -181,9 +183,12 @@ const resubmitMutation = useResubmitSubmission({
   const problem = problemQuery.data;
   const languages = languagesQuery.languages ?? [];
 
-  const allowedLanguages = problem?.judge0LanguageIds?.length
-    ? languages.filter((item) => problem.judge0LanguageIds.includes(item.id))
-    : languages;
+  const allowedLanguages = useMemo(() => {
+    if (problem?.judge0LanguageIds?.length) {
+      return languages.filter((item) => problem.judge0LanguageIds.includes(item.id));
+    }
+    return languages;
+  }, [languages, problem?.judge0LanguageIds]);
 
   const preferStatement = (markdown, fallback) => {
     if (typeof markdown === 'string' && markdown.trim()) {
@@ -258,6 +263,71 @@ const resubmitMutation = useResubmitSubmission({
     }
     return null;
   }, [problemAuthorRaw]);
+
+  const seoConfig = useMemo(() => {
+    if (!problem) {
+      return null;
+    }
+    const languageNames = allowedLanguages.map((language) => language.name).filter(Boolean);
+    const summaryEn =
+      summarizeText(problem.summary ?? statementSource ?? problem.statement ?? '') ||
+      'View the full statement, constraints, and submit your solution.';
+    const baseUrl = `${siteMeta.siteUrl}/problems/${problem.problemId}`;
+    const jsonLdEntries = [];
+    const softwareApplication = {
+      '@context': 'https://schema.org',
+      '@type': 'SoftwareApplication',
+      name: problem.title,
+      applicationCategory: 'EducationalApplication',
+      operatingSystem: 'Web',
+      url: baseUrl,
+      inLanguage: ['en', 'ko'],
+      identifier: problem.problemId,
+      programmingLanguage: languageNames,
+      audience: { '@type': 'Audience', audienceType: problem.difficulty || 'All levels' },
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+      mainEntityOfPage: baseUrl
+    };
+    if (problem.updatedAt || problem.createdAt) {
+      softwareApplication.dateModified = problem.updatedAt ?? problem.createdAt;
+    }
+    if (authorName) {
+      softwareApplication.creator = { '@type': 'Person', name: authorName };
+    } else {
+      softwareApplication.creator = { '@type': 'Organization', name: siteMeta.siteName };
+    }
+    if (Number.isFinite(problem.acceptedSubmissionCount) && problem.acceptedSubmissionCount > 0) {
+      softwareApplication.aggregateRating = {
+        '@type': 'AggregateRating',
+        ratingValue: '4.8',
+        ratingCount: problem.acceptedSubmissionCount
+      };
+    }
+    jsonLdEntries.push({ id: `problem-app-${problem.problemId}`, data: softwareApplication });
+    jsonLdEntries.push({
+      id: `problem-statement-${problem.problemId}`,
+      data: {
+        '@context': 'https://schema.org',
+        '@type': 'CreativeWork',
+        name: `${problem.title} problem statement`,
+        inLanguage: ['en', 'ko'],
+        text: summarizeText(statementSource || problem.statement || ''),
+        url: baseUrl
+      }
+    });
+
+    return {
+      title: `${problem.title} · #${problem.problemId} | WB Online Judge`,
+      titleKo: `${problem.title} 문제 | WB 온라인 저지`,
+      description: summaryEn,
+      descriptionKo: `${problem.title} 문제 설명과 테스트 케이스를 확인하세요.`,
+      path: `/problems/${problem.problemId}`,
+      ogType: 'article',
+      jsonLd: jsonLdEntries
+    };
+  }, [allowedLanguages, authorName, problem, statementSource]);
+
+  usePageSeo(seoConfig);
 
   useEffect(() => {
     if (!languageId && allowedLanguages.length) {
