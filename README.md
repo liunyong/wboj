@@ -1,4 +1,4 @@
-##Website: https://wboj.org##
+## Website: https://wboj.org
 
 # Online Judge System based on Judge0
 
