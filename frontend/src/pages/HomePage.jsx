@@ -103,10 +103,11 @@ function HomePage() {
     const latestUpdates = problemUpdates.slice(0, 5);
 
     return {
-      title: 'Home | WB Online Judge',
-      titleKo: '홈 | WB 온라인 저지',
-      description: 'Stay current on WB Online Judge announcements, downtime, and recently edited problems.',
-      descriptionKo: '플랫폼 공지, 점검 일정, 문제 업데이트를 한자리에서 확인하세요.',
+      title: 'WBOJ | WB Online Judge for Coding, Algorithms, and Competitive Programming',
+      description: 'Practice coding, solve algorithm problems, and track updates on the WB Online Judge platform.',
+      titleKo: 'WBOJ | WB 온라인 저지 플랫폼',
+      descriptionKo: '코딩 연습, 알고리즘 문제 풀이, 플랫폼 공지와 업데이트를 한곳에서 확인하세요.',
+
       path: '/',
       jsonLd: [
         {
