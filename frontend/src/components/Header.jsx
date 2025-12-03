@@ -54,15 +54,13 @@ function Header() {
         <NavLink to="/problems" className={({ isActive }) => (isActive ? 'active' : '')}>
           Problems
         </NavLink>
+        <NavLink to="/submissions" className={({ isActive }) => (isActive ? 'active' : '')}>
+          Submissions
+        </NavLink>
         {user ? (
-          <>
-            <NavLink to="/submissions" className={({ isActive }) => (isActive ? 'active' : '')}>
-              Submissions
-            </NavLink>
-            <NavLink to="/dashboard" className={({ isActive }) => (isActive ? 'active' : '')}>
-              Dashboard
-            </NavLink>
-          </>
+          <NavLink to="/dashboard" className={({ isActive }) => (isActive ? 'active' : '')}>
+            Dashboard
+          </NavLink>
         ) : null}
         {isAdminLike && (
           <NavLink to="/admin/create" className={({ isActive }) => (isActive ? 'active' : '')}>

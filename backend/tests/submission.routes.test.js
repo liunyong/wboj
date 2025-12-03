@@ -474,3 +474,46 @@ describe('Submission routes with auth', () => {
     expect(response.status).toBe(401);
   });
 });
+
+describe('Submission routes public access', () => {
+  it('allows guests to list submissions', async () => {
+    const { tokens } = await authenticateAsUser();
+    const problem = await Problem.create(buildProblem());
+
+    const createResponse = await request(app)
+      .post('/api/submissions')
+      .set(authHeader(tokens.accessToken))
+      .send({ problemId: problem._id.toString(), languageId: 71, sourceCode: 'code' });
+
+    expect(createResponse.status).toBe(202);
+    await waitForSubmissionCompletion(createResponse.body.submissionId);
+
+    const guestResponse = await request(app).get('/api/submissions');
+    expect(guestResponse.status).toBe(200);
+    expect(Array.isArray(guestResponse.body.items)).toBe(true);
+    expect(guestResponse.body.items.length).toBeGreaterThanOrEqual(1);
+    expect(guestResponse.body.items[0]).not.toHaveProperty('source');
+    expect(guestResponse.body.page).toBe(1);
+  });
+
+  it('allows guests to view submission metadata without source code', async () => {
+    const { tokens } = await authenticateAsUser();
+    const problem = await Problem.create(buildProblem());
+
+    const createResponse = await request(app)
+      .post('/api/submissions')
+      .set(authHeader(tokens.accessToken))
+      .send({ problemId: problem._id.toString(), languageId: 71, sourceCode: 'code' });
+
+    expect(createResponse.status).toBe(202);
+    const submissionId = createResponse.body.submissionId;
+    await waitForSubmissionCompletion(submissionId);
+
+    const detailResponse = await request(app).get(`/api/submissions/${submissionId}`);
+    expect(detailResponse.status).toBe(200);
+    expect(detailResponse.body.submission).toBeDefined();
+    expect(detailResponse.body.submission._id).toBe(submissionId);
+    expect(detailResponse.body.submission.canViewSource).toBe(false);
+    expect(detailResponse.body.submission.source).toBeUndefined();
+  });
+});

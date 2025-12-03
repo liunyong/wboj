@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import app from '../src/app.js';
 import Problem from '../src/models/Problem.js';
+import User from '../src/models/User.js';
 import Submission from '../src/models/Submission.js';
 import { authenticateAsAdmin, authenticateAsUser, authHeader } from './utils.js';
 
@@ -57,7 +58,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  await Promise.all([Problem.deleteMany({}), Submission.deleteMany({})]);
+  await Promise.all([Problem.deleteMany({}), Submission.deleteMany({}), User.deleteMany({})]);
   problemIdCounter = 100000;
   problemNumberCounter = 1;
 });
@@ -81,6 +82,23 @@ describe('Problem routes with auth', () => {
       .set(authHeader(adminTokens.accessToken));
     expect(adminResponse.status).toBe(200);
     expect(adminResponse.body.total).toBe(2);
+  });
+
+  it('includes author metadata in listings', async () => {
+    const author = await User.create({
+      username: 'problem_author',
+      email: 'author@example.com',
+      passwordHash: 'hashed'
+    });
+
+    await Problem.create(buildProblem({ title: 'Authored', author: author._id }));
+
+    const response = await request(app).get('/api/problems');
+    expect(response.status).toBe(200);
+    expect(response.body.items[0].author).toMatchObject({
+      username: 'problem_author'
+    });
+    expect(response.body.items[0].author.profile?.displayName).toBeUndefined();
   });
 
   it('allows admins to create problems', async () => {

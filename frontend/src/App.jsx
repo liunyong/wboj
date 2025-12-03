@@ -51,14 +51,7 @@ function App() {
         />
         <Route path="u/:username" element={<UserDashboardPage />} />
 
-        <Route
-          path="submissions"
-          element={
-            <RequireAuth>
-              <SubmissionsPage />
-            </RequireAuth>
-          }
-        />
+        <Route path="submissions" element={<SubmissionsPage />} />
 
         <Route
           path="dashboard/submissions"

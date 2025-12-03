@@ -132,13 +132,15 @@ export const getProblems = async (req, res, next) => {
       submissionCount: 1,
       acceptedSubmissionCount: 1,
       createdAt: 1,
-      updatedAt: 1
+      updatedAt: 1,
+      author: 1
     };
 
     await ensureProblemNumbersBackfilled();
 
     const query = Problem.find(filters, projection)
       .sort({ problemNumber: 1, problemId: 1 })
+      .populate('author', 'username profile.displayName')
       .skip(skip)
       .limit(limit);
 

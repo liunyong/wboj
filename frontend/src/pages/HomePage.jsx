@@ -103,8 +103,8 @@ function HomePage() {
     const latestUpdates = problemUpdates.slice(0, 5);
 
     return {
-      title: 'Updates & Announcements | WB Online Judge',
-      titleKo: '공지 및 업데이트 | WB 온라인 저지',
+      title: 'Home | WB Online Judge',
+      titleKo: '홈 | WB 온라인 저지',
       description: 'Stay current on WB Online Judge announcements, downtime, and recently edited problems.',
       descriptionKo: '플랫폼 공지, 점검 일정, 문제 업데이트를 한자리에서 확인하세요.',
       path: '/',

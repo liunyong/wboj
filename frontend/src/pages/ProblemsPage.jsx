@@ -163,6 +163,7 @@ function ProblemsPage() {
                 </th>
                 <th>ID</th>
                 <th>Title</th>
+                <th>Author</th>
                 <th>Difficulty</th>
                 <th>Submissions</th>
                 <th>AC Rate</th>
@@ -176,6 +177,13 @@ function ProblemsPage() {
                 const acceptanceRate =
                   total > 0 ? `${Math.round((accepted / total) * 100)}%` : '—';
                 const isSolved = solvedProblemIds.has(problem.problemId);
+                const authorUsername =
+                  problem.author?.username ?? problem.author?.userName ?? null;
+                const authorLabel =
+                  problem.author?.profile?.displayName ??
+                  problem.author?.displayName ??
+                  authorUsername ??
+                  '—';
 
                 return (
                   <tr key={problem._id}>
@@ -209,6 +217,13 @@ function ProblemsPage() {
                           {problem.algorithms.join(', ')}
                         </div>
                       ) : null}
+                    </td>
+                    <td>
+                      {authorUsername ? (
+                        <Link to={`/u/${authorUsername}`}>{authorLabel}</Link>
+                      ) : (
+                        <span className="muted">{authorLabel}</span>
+                      )}
                     </td>
                     <td>
                       <span
@@ -251,7 +266,7 @@ function ProblemsPage() {
               })}
               {!filtered.length && (
                 <tr>
-                  <td colSpan={isAdmin ? 7 : 6}>
+                  <td colSpan={isAdmin ? 8 : 7}>
                     <div className="problem-table__empty">No problems found.</div>
                   </td>
                 </tr>

@@ -9,7 +9,7 @@ import {
   resubmitSubmission,
   streamSubmissions
 } from '../controllers/submissionController.js';
-import { requireAuth, requireRole } from '../middlewares/auth.js';
+import { authenticateOptional, requireAuth, requireRole } from '../middlewares/auth.js';
 import {
   listRateLimiter,
   resubmitRateLimiter,
@@ -29,7 +29,7 @@ const router = Router();
 router.get('/mine', requireAuth, validate({ query: mySubmissionsQuerySchema }), listMySubmissions);
 router.get(
   '/',
-  requireAuth,
+  authenticateOptional,
   listRateLimiter,
   validate({ query: listSubmissionsQuerySchema }),
   listSubmissions
@@ -42,7 +42,7 @@ router.get(
   getSubmissionUpdates
 );
 router.get('/stream', requireAuth, streamSubmissions);
-router.get('/:id', requireAuth, validate({ params: submissionIdParamSchema }), getSubmission);
+router.get('/:id', authenticateOptional, validate({ params: submissionIdParamSchema }), getSubmission);
 router.post(
   '/',
   requireAuth,

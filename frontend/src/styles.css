@@ -847,15 +847,9 @@ textarea {
 }
 
 .home-page .home-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 2.25fr) minmax(0, 1.5fr);
+  display: flex;
+  flex-direction: column;
   gap: 1.5rem;
-}
-
-@media (max-width: 960px) {
-  .home-page .home-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 .home-announcements,
