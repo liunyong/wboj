@@ -18,6 +18,7 @@ import sessionRoutes from './routes/sessionRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
 import seoHeaders from './middlewares/seoHeaders.js';
 import searchBotLogger from './middlewares/searchBotLogger.js';
+import { serveSitemap } from './controllers/sitemapController.js';
 
 const app = express();
 const debugAuth = () => process.env.DEBUG_AUTH === '1';
@@ -90,6 +91,8 @@ app.use('/api/uploads', express.static(path.resolve('uploads'), uploadStaticOpti
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
+
+app.get('/api/sitemap.xml', serveSitemap);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
