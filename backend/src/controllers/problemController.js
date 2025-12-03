@@ -6,7 +6,6 @@ import { parseTestCasesFromZip } from '../services/testCaseZipService.js';
 import { buildProblemSlug } from '../utils/problemSlug.js';
 import { decodeHtmlEntities, sanitizeMarkdown, sanitizeOptionalRichText } from '../utils/sanitizeHtml.js';
 import { recomputeProblemCounters } from '../services/submissionService.js';
-import { invalidateSitemapCache } from '../services/sitemapService.js';
 
 const sanitizeTestCases = (testCases = []) => {
   const sanitized = (testCases ?? [])
@@ -299,7 +298,6 @@ export const createProblem = async (req, res, next) => {
         const created = decodeProblemRichText(problem.toObject());
         created.testCaseCount = sanitizedTestCases.length;
         created.totalPoints = sanitizedTestCases.reduce((sum, item) => sum + (item.points || 0), 0);
-        invalidateSitemapCache();
         res.status(201).json(created);
         return;
       } catch (error) {
@@ -434,7 +432,6 @@ export const updateProblem = async (req, res, next) => {
     problem.set(nextUpdates);
     await problem.save();
     await problem.populate('author', 'username profile.displayName');
-    invalidateSitemapCache();
 
     try {
       const changedFields = Object.keys(updates || {}).filter(
@@ -484,7 +481,6 @@ export const updateProblemVisibility = async (req, res, next) => {
       return res.status(404).json({ message: 'Problem not found' });
     }
 
-    invalidateSitemapCache();
     res.json(decodeProblemRichText(problem.toObject()));
   } catch (error) {
     next(error);
@@ -502,7 +498,6 @@ export const deleteProblem = async (req, res, next) => {
       return res.status(404).json({ message: 'Problem not found' });
     }
 
-    invalidateSitemapCache();
     res.status(204).send();
   } catch (error) {
     next(error);
