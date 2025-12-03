@@ -92,7 +92,6 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.get('/sitemap.xml', serveSitemap);
 app.get('/api/sitemap.xml', serveSitemap);
 
 app.use('/api/auth', authRoutes);

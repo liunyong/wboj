@@ -5,3 +5,4 @@ Disallow: /api/
 Disallow: /uploads/private/
 
 Sitemap: https://wboj.app/sitemap.xml
+Sitemap: https://wboj.app/api/sitemap.xml

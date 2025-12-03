@@ -18,9 +18,7 @@ wboj.app {
   }
 
   @api path /api/*
-  @sitemap path /sitemap.xml
   reverse_proxy @api backend:4000
-  reverse_proxy @sitemap backend:4000
 
   reverse_proxy frontend:80
 }
