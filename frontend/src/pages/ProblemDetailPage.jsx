@@ -317,14 +317,15 @@ const resubmitMutation = useResubmitSubmission({
     });
 
     return {
-      title: `${problem.title} · #${problem.problemId} | WB Online Judge`,
-      titleKo: `${problem.title} 문제 | WB 온라인 저지`,
-      description: summaryEn,
-      descriptionKo: `${problem.title} 문제 설명과 테스트 케이스를 확인하세요.`,
+      title: `${problem.title} · #${problem.problemId} | WBOJ - WB Online Judge`,
+      titleKo: `${problem.title} · 문제 #${problem.problemId} | WBOJ 온라인 저지`,
+      description: summaryEn || `${problem.title} (Problem #${problem.problemId}) on WBOJ. View description, constraints, and test cases to start solving.`,
+      descriptionKo: `${problem.title} 문제(#${problem.problemId})의 설명, 입력·출력 형식, 테스트 케이스를 확인하고 문제 풀이를 시작하세요.`,
       path: `/problems/${problem.problemId}`,
       ogType: 'article',
       jsonLd: jsonLdEntries
     };
+
   }, [allowedLanguages, authorName, problem, statementSource]);
 
   usePageSeo(seoConfig);

@@ -59,10 +59,11 @@ function DashboardPage() {
 
   const seoConfig = useMemo(
     () => ({
-      title: 'Dashboard Overview | WB Online Judge',
-      titleKo: '대시보드 개요 | WB 온라인 저지',
-      description: `Review ${solvedCount} solved challenges and keep your ${year} streak alive.`,
-      descriptionKo: `올해 ${solvedCount}개의 문제를 해결하고 제출 히트맵으로 진행률을 추적하세요.`,
+      title: 'WBOJ Dashboard | Progress Overview',
+      titleKo: 'WBOJ 대시보드 | 진행 현황',
+      description: `You’ve solved ${solvedCount} challenges this year. Track your coding progress and keep your ${year} streak going strong.`,
+      descriptionKo: `올해 ${solvedCount}문제를 해결했습니다. 제출 히트맵으로 학습 진행률을 확인하고 ${year} streak을 이어가세요.`,
+
       path: '/dashboard',
       ogType: 'profile',
       jsonLd: [

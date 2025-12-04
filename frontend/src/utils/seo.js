@@ -18,13 +18,13 @@ const defaultSiteUrl =
   normalizeSiteUrl(envSiteUrl) || (fallbackWindow ? fallbackWindow.location.origin : 'https://wboj.app');
 
 export const siteMeta = {
-  siteName: 'WB Online Judge',
-  title: 'WB Online Judge',
-  titleKo: 'WB 온라인 저지',
+  siteName: 'WBOJ - WB Online Judge',
+  title: 'WBOJ | WB Online Judge Platform',
+  titleKo: 'WBOJ | WB 온라인 저지 플랫폼',
   description:
-    'WB Online Judge helps teams and students practice competitive programming with Judge0-powered execution and dashboards.',
+    'WBOJ provides coding practice, algorithm problems, and competitive programming tools with Judge0-powered execution and performance dashboards.',
   descriptionKo:
-    'WB 온라인 저지는 Judge0 실행과 실시간 대시보드로 경쟁 프로그래밍을 연습할 수 있게 돕습니다.',
+    'WBOJ는 Judge0 기반 실행 환경과 실시간 대시보드를 통해 코딩 연습, 알고리즘 문제 풀이, 경쟁 프로그래밍 학습을 지원합니다.',
   siteUrl: defaultSiteUrl,
   shareImage: `${defaultSiteUrl}/social-card.svg`
 };
