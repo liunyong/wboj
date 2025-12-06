@@ -34,14 +34,14 @@ const parseDurationMs = (value, fallbackMs) => {
   if (!match) {
     const numeric = Number.parseInt(trimmed, 10);
     if (Number.isFinite(numeric)) {
-      return numeric * 1000;
+      return numeric;
     }
     return fallbackMs;
   }
 
   const amount = Number.parseInt(match[1], 10);
   const unitKey = match[2]?.toLowerCase();
-  const multiplier = unitKey ? DURATION_MULTIPLIERS[unitKey] : 1000;
+  const multiplier = unitKey ? DURATION_MULTIPLIERS[unitKey] : 1;
 
   return amount * multiplier;
 };

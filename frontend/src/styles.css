@@ -499,6 +499,37 @@ textarea {
   min-width: 180px;
 }
 
+.problem-tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.problem-tag-filter__button {
+  background: rgba(15, 23, 42, 0.08);
+  color: #0f172a;
+}
+
+.problem-tag-filter__button:hover {
+  background: rgba(15, 23, 42, 0.16);
+}
+
+.problem-tag-filter__button--active {
+  background: #2563eb;
+  color: #fff;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.35);
+}
+
+.problem-tag-filter__button--active:hover {
+  background: #1d4ed8;
+}
+
+.problem-tag-filter__button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
 .page-message {
   background: #e2e8f0;
   color: #0f172a;

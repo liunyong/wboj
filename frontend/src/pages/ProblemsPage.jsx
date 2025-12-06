@@ -16,6 +16,7 @@ function ProblemsPage() {
   const isAdminLike = ['admin', 'super_admin'].includes(user?.role);
   const [visibility, setVisibility] = useState(isAdminLike ? 'all' : 'public');
   const [difficulty, setDifficulty] = useState('');
+  const [tagFilter, setTagFilter] = useState('');
   const [pendingDeletion, setPendingDeletion] = useState(null);
   const [visibilityTarget, setVisibilityTarget] = useState(null);
 
@@ -86,26 +87,51 @@ function ProblemsPage() {
     }
   });
 
+  const tagOptions = useMemo(() => {
+    const items = problemsQuery.data ?? [];
+    const tags = new Set();
+    items.forEach((problem) => {
+      (problem.tags ?? []).forEach((tag) => {
+        if (typeof tag === 'string' && tag.trim()) {
+          tags.add(tag);
+        }
+      });
+    });
+    return Array.from(tags).sort((a, b) => a.localeCompare(b));
+  }, [problemsQuery.data]);
+
+  useEffect(() => {
+    if (tagFilter && !tagOptions.includes(tagFilter)) {
+      setTagFilter('');
+    }
+  }, [tagFilter, tagOptions]);
+
   const filtered = useMemo(() => {
     const items = problemsQuery.data ?? [];
     const trimmed = search.trim().toLowerCase();
-    if (!trimmed) {
-      return items;
+    let results = items;
+
+    if (trimmed) {
+      results = results.filter((problem) => {
+        const fields = [
+          problem.title,
+          problem.problemId ? `#${problem.problemId}` : '',
+          ...(problem.algorithms ?? []),
+          ...(problem.tags ?? [])
+        ];
+        return fields
+          .filter(Boolean)
+          .map((value) => value.toString().toLowerCase())
+          .some((value) => value.includes(trimmed));
+      });
     }
 
-    return items.filter((problem) => {
-      const fields = [
-        problem.title,
-        problem.problemId ? `#${problem.problemId}` : '',
-        ...(problem.algorithms ?? []),
-        ...(problem.tags ?? [])
-      ];
-      return fields
-        .filter(Boolean)
-        .map((value) => value.toString().toLowerCase())
-        .some((value) => value.includes(trimmed));
-    });
-  }, [problemsQuery.data, search]);
+    if (tagFilter) {
+      results = results.filter((problem) => (problem.tags ?? []).includes(tagFilter));
+    }
+
+    return results;
+  }, [problemsQuery.data, search, tagFilter]);
 
   const isAdmin = isAdminLike;
 
@@ -154,24 +180,50 @@ function ProblemsPage() {
       )}
 
       {!problemsQuery.isLoading && !problemsQuery.isError && (
-        <div className="problem-table-wrapper">
-          <table className="problem-table">
-            <thead>
-              <tr>
-                <th className="problem-table__status-header" aria-label="Solved">
-                  <span>✓</span>
-                </th>
-                <th>ID</th>
-                <th>Title</th>
-                <th>Author</th>
-                <th>Difficulty</th>
-                <th>Submissions</th>
-                <th>AC Rate</th>
-                {isAdmin && <th>Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((problem) => {
+        <>
+          {tagOptions.length > 0 && (
+            <div className="problem-tag-filter" role="group" aria-label="Filter by tag">
+              <button
+                type="button"
+                className={`secondary problem-tag-filter__button${
+                  !tagFilter ? ' problem-tag-filter__button--active' : ''
+                }`}
+                onClick={() => setTagFilter('')}
+              >
+                All
+              </button>
+              {tagOptions.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  className={`secondary problem-tag-filter__button${
+                    tagFilter === tag ? ' problem-tag-filter__button--active' : ''
+                  }`}
+                  onClick={() => setTagFilter(tag)}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="problem-table-wrapper">
+            <table className="problem-table">
+              <thead>
+                <tr>
+                  <th className="problem-table__status-header" aria-label="Solved">
+                    <span>✓</span>
+                  </th>
+                  <th>ID</th>
+                  <th>Title</th>
+                  <th>Author</th>
+                  <th>Difficulty</th>
+                  <th>Submissions</th>
+                  <th>AC Rate</th>
+                  {isAdmin && <th>Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((problem) => {
                 const total = problem.submissionCount ?? 0;
                 const accepted = problem.acceptedSubmissionCount ?? 0;
                 const acceptanceRate =
@@ -274,6 +326,7 @@ function ProblemsPage() {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       <ConfirmDialog

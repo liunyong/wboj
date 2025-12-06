@@ -66,8 +66,9 @@ wboj/
 
 **Pages & Components**
 - `src/pages/`: Dashboard, home, problems list/detail/edit, admin create/uploads/users, submissions, authentication (login/register/forgot/reset/verify), settings, and user dashboard.
+- `src/pages/ProblemsPage.jsx`: Problem archive view handling search, difficulty/visibility controls, solved states, and tag-based filtering buttons.
 - `src/components/`: Layout shell (header/footer), problem statement/editor, submission viewer modal, test-case modals, session expiry dialog, heatmap, auth/admin guards, markdown/code rendering, and reusable dialogs.
-- `src/styles.css`: Global Tailwind-like utility styles for layout, tables, forms, and modals.
+- `src/styles.css`: Global Tailwind-like utility styles for layout, tables, forms, modals, and helpers such as `.problem-tag-filter` used by the problem list tag buttons.
 
 **State, Hooks, and Utilities**
 - Context: `context/AuthContext.jsx` handles JWT persistence/refresh, user info, and login/logout helpers.
