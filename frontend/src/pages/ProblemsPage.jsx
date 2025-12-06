@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -8,21 +8,69 @@ import { useUserProgress, userProgressQueryKey } from '../hooks/useUserProgress.
 import { useSubmissionStream } from '../hooks/useSubmissionStream.js';
 
 const difficulties = ['BASIC', 'EASY', 'MEDIUM', 'HARD'];
+const SCROLL_STORAGE_KEY = 'problemsPageScrollY';
 
 function ProblemsPage() {
   const { authFetch, user } = useAuth();
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
   const isAdminLike = ['admin', 'super_admin'].includes(user?.role);
-  const [visibility, setVisibility] = useState(isAdminLike ? 'all' : 'public');
-  const [difficulty, setDifficulty] = useState('');
-  const [tagFilter, setTagFilter] = useState('');
+  const [search, setSearch] = useState(searchParams.get('q') ?? '');
+  const [visibility, setVisibility] = useState(
+    isAdminLike ? searchParams.get('visibility') || 'all' : 'public'
+  );
+  const [difficulty, setDifficulty] = useState(searchParams.get('difficulty') ?? '');
+  const [tagFilter, setTagFilter] = useState(searchParams.get('tag') ?? '');
   const [pendingDeletion, setPendingDeletion] = useState(null);
   const [visibilityTarget, setVisibilityTarget] = useState(null);
+  const [hasRestoredScroll, setHasRestoredScroll] = useState(false);
 
   useEffect(() => {
-    setVisibility(['admin', 'super_admin'].includes(user?.role) ? 'all' : 'public');
-  }, [user?.role]);
+    if (!isAdminLike && visibility !== 'public') {
+      setVisibility('public');
+      return;
+    }
+    if (isAdminLike && visibility === 'public') {
+      setVisibility(searchParams.get('visibility') || 'all');
+    }
+  }, [isAdminLike, searchParams, visibility]);
+
+  useEffect(() => {
+    const paramsSearch = searchParams.get('q') ?? '';
+    const paramsDifficulty = searchParams.get('difficulty') ?? '';
+    const paramsTag = searchParams.get('tag') ?? '';
+    const paramsVisibility = searchParams.get('visibility') || 'all';
+
+    setSearch(paramsSearch);
+    setDifficulty(paramsDifficulty);
+    setTagFilter(paramsTag);
+    if (isAdminLike) {
+      setVisibility(paramsVisibility);
+    }
+  }, [isAdminLike, searchParams]);
+
+  useEffect(() => {
+    const next = new URLSearchParams();
+    const trimmedSearch = search.trim();
+    if (trimmedSearch) {
+      next.set('q', trimmedSearch);
+    }
+    if (difficulty) {
+      next.set('difficulty', difficulty);
+    }
+    if (tagFilter) {
+      next.set('tag', tagFilter);
+    }
+    if (isAdminLike && visibility !== 'all') {
+      next.set('visibility', visibility);
+    }
+
+    const currentString = searchParams.toString();
+    const nextString = next.toString();
+    if (currentString !== nextString) {
+      setSearchParams(next, { replace: true });
+    }
+  }, [difficulty, isAdminLike, search, searchParams, setSearchParams, tagFilter, visibility]);
 
   const problemsQuery = useQuery({
     queryKey: ['problems', visibility, difficulty],
@@ -78,6 +126,26 @@ function ProblemsPage() {
       }
     }
   });
+
+  useEffect(() => {
+    if (hasRestoredScroll || problemsQuery.isFetching) {
+      return;
+    }
+    const stored = sessionStorage.getItem(SCROLL_STORAGE_KEY);
+    if (stored !== null) {
+      const savedScroll = Number(stored);
+      if (!Number.isNaN(savedScroll)) {
+        window.scrollTo({ top: savedScroll, behavior: 'auto' });
+      }
+    }
+    setHasRestoredScroll(true);
+  }, [hasRestoredScroll, problemsQuery.isFetching]);
+
+  useEffect(() => {
+    return () => {
+      sessionStorage.setItem(SCROLL_STORAGE_KEY, `${window.scrollY}`);
+    };
+  }, []);
 
   const deleteMutation = useMutation({
     mutationFn: (problemId) => authFetch(`/api/problems/${problemId}`, { method: 'DELETE' }),

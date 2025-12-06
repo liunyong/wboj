@@ -14,6 +14,21 @@ function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResending, setIsResending] = useState(false);
 
+  const buildRedirectTarget = () => {
+    const redirectParam = new URLSearchParams(location.search).get('redirect');
+    if (redirectParam && redirectParam.startsWith('/')) {
+      return redirectParam;
+    }
+    const fromState = location.state?.from;
+    if (typeof fromState === 'string' && fromState.trim()) {
+      return fromState;
+    }
+    if (fromState?.pathname) {
+      return `${fromState.pathname}${fromState.search || ''}${fromState.hash || ''}`;
+    }
+    return '/';
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
@@ -21,8 +36,7 @@ function LoginPage() {
     setIsSubmitting(true);
     try {
       await login({ email, password });
-      const redirectTarget = location.state?.from?.pathname || '/';
-      navigate(redirectTarget, { replace: true });
+      navigate(buildRedirectTarget(), { replace: true });
     } catch (err) {
       if (err.code === 'EMAIL_NOT_VERIFIED') {
         setNotice({

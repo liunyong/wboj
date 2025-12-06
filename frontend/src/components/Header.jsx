@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 
 function Header() {
+  const location = useLocation();
   const { user, logout, isLoading } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const triggerRef = useRef(null);
@@ -41,6 +42,16 @@ function Header() {
   const closeMenu = () => setIsMenuOpen(false);
 
   const isAdminLike = ['admin', 'super_admin'].includes(user?.role);
+  const loginRedirectState =
+    location.pathname === '/login'
+      ? undefined
+      : {
+          from: {
+            pathname: location.pathname,
+            search: location.search,
+            hash: location.hash
+          }
+        };
 
   return (
     <header className="app-header">
@@ -76,7 +87,9 @@ function Header() {
       <div className="app-header__actions">
         {!user && !isLoading && (
           <div className="auth-links">
-            <Link to="/login">Login</Link>
+            <Link to="/login" state={loginRedirectState}>
+              Login
+            </Link>
             <Link to="/register" className="primary">
               Register
             </Link>

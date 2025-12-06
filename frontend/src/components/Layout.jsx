@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSessionKeepAlive } from '../hooks/useSessionKeepAlive.js';
@@ -8,6 +8,7 @@ import SessionExpiryModal from './SessionExpiryModal.jsx';
 
 function Layout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { logout, tokens } = useAuth();
   const [modalOpen, setModalOpen] = useState(false);
   const [msRemaining, setMsRemaining] = useState(null);
@@ -42,9 +43,19 @@ function Layout() {
     logout()
       .catch(() => {})
       .finally(() => {
-        navigate('/login?expired=1', { replace: true });
+        const redirectState =
+          location.pathname === '/login'
+            ? undefined
+            : {
+                from: {
+                  pathname: location.pathname,
+                  search: location.search,
+                  hash: location.hash
+                }
+              };
+        navigate('/login?expired=1', { replace: true, state: redirectState });
       });
-  }, [handleHideWarning, logout, navigate]);
+  }, [handleHideWarning, location.hash, location.pathname, location.search, logout, navigate]);
 
   const { extendSession, notifySessionExpired } = useSessionKeepAlive({
     onShowWarning: handleShowWarning,
@@ -68,9 +79,27 @@ function Layout() {
       // ignore logout network errors; tokens are cleared client-side
     } finally {
       notifySessionExpired();
-      navigate('/login?expired=1', { replace: true });
+      const redirectState =
+        location.pathname === '/login'
+          ? undefined
+          : {
+              from: {
+                pathname: location.pathname,
+                search: location.search,
+                hash: location.hash
+              }
+            };
+      navigate('/login?expired=1', { replace: true, state: redirectState });
     }
-  }, [handleHideWarning, logout, navigate, notifySessionExpired]);
+  }, [
+    handleHideWarning,
+    location.hash,
+    location.pathname,
+    location.search,
+    logout,
+    navigate,
+    notifySessionExpired
+  ]);
 
   return (
     <div className="app-shell">
