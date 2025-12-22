@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import logo from '../assets/logo.svg';
 
 function Header() {
   const location = useLocation();
@@ -56,6 +57,7 @@ function Header() {
   return (
     <header className="app-header">
       <div className="app-header__brand">
+        <Link to="/"> <img src={logo} alt="WB Online Judge" className="app-logo" /> </Link>
         <Link to="/">WB Online Judge</Link>
       </div>
       <nav className="app-header__nav">

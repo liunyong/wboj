@@ -9,6 +9,8 @@
   box-sizing: border-box;
 }
 
+.app-logo { height: 32px; width: auto; }
+
 body {
   margin: 0;
   background: #f1f5f9;
