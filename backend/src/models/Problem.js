@@ -28,6 +28,7 @@ const problemSchema = new mongoose.Schema(
     statement: { type: String, required: true },
     statementMd: { type: String, default: '' },
     statementHtmlCache: { type: String },
+    source: { type: String, trim: true },
     inputFormat: { type: String },
     outputFormat: { type: String },
     constraints: { type: String },

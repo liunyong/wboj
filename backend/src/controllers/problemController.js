@@ -52,6 +52,13 @@ const normalizeAlgorithms = (algorithms = []) =>
     new Set((Array.isArray(algorithms) ? algorithms : []).map((name) => name.trim()).filter(Boolean))
   );
 
+const normalizeSource = (source) => {
+  if (typeof source !== 'string') {
+    return '';
+  }
+  return source.trim();
+};
+
 const isAdmin = (user) => ['admin', 'super_admin'].includes(user?.role);
 
 const assignIfDefined = (target, key, value) => {
@@ -233,6 +240,7 @@ export const createProblem = async (req, res, next) => {
     const sanitizedInputFormat = sanitizeOptionalRichText(clientPayload.inputFormat);
     const sanitizedOutputFormat = sanitizeOptionalRichText(clientPayload.outputFormat);
     const sanitizedConstraints = sanitizeOptionalRichText(clientPayload.constraints);
+    const sanitizedSource = normalizeSource(clientPayload.source);
     const rawStatement =
       typeof clientPayload.statementMd === 'string'
         ? clientPayload.statementMd
@@ -274,6 +282,7 @@ export const createProblem = async (req, res, next) => {
         assignIfDefined(problemData, 'inputFormat', sanitizedInputFormat);
         assignIfDefined(problemData, 'outputFormat', sanitizedOutputFormat);
         assignIfDefined(problemData, 'constraints', sanitizedConstraints);
+        assignIfDefined(problemData, 'source', sanitizedSource || undefined);
         assignIfDefined(problemData, 'cpuTimeLimit', clientPayload.cpuTimeLimit);
         assignIfDefined(problemData, 'memoryLimit', clientPayload.memoryLimit);
         assignIfDefined(
@@ -389,6 +398,11 @@ export const updateProblem = async (req, res, next) => {
 
     if (Object.prototype.hasOwnProperty.call(updates, 'constraints')) {
       assignIfDefined(nextUpdates, 'constraints', sanitizeOptionalRichText(updates.constraints));
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'source')) {
+      const normalizedSource = normalizeSource(updates.source);
+      nextUpdates.source = normalizedSource || undefined;
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, 'difficulty')) {
@@ -547,6 +561,20 @@ export const getProblemAlgorithms = async (req, res, next) => {
     res.json({
       items: results.map((item) => item._id)
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getProblemSources = async (req, res, next) => {
+  try {
+    const sources = await Problem.distinct('source', { source: { $exists: true, $ne: '' } });
+    const cleaned = sources
+      .map((value) => (typeof value === 'string' ? value.trim() : ''))
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b));
+
+    res.json({ items: cleaned });
   } catch (error) {
     next(error);
   }

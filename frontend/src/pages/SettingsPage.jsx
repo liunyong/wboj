@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '../context/AuthContext.jsx';
@@ -29,6 +29,7 @@ function SettingsPage() {
   const [sessionsMessage, setSessionsMessage] = useState('');
   const [sessionActionId, setSessionActionId] = useState(null);
   const userTimeZone = getUserTZ();
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const sessionPolicyQuery = useSessionPolicy({ enabled: Boolean(user) });
 
   const sessionsQuery = useQuery({
@@ -37,7 +38,9 @@ function SettingsPage() {
       const response = await authFetch('/api/session/sessions');
       return response?.sessions ?? [];
     },
-    enabled: Boolean(user)
+    enabled: Boolean(user),
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true
   });
 
   useEffect(() => {
@@ -163,6 +166,62 @@ function SettingsPage() {
   const sortedSessions = sessions
     .slice()
     .sort((a, b) => new Date(b.lastTouchedAt ?? 0) - new Date(a.lastTouchedAt ?? 0));
+
+  const formatRemaining = useMemo(
+    () => (targetMs) => {
+      if (!targetMs) {
+        return '—';
+      }
+      const remaining = Math.max(0, Math.floor((targetMs - nowMs) / 1000));
+      const minutes = Math.floor(remaining / 60);
+      const seconds = remaining % 60;
+      return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    },
+    [nowMs]
+  );
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+    let channel;
+    const handleMessage = (event) => {
+      const payload = event?.data ?? null;
+      if (!payload || typeof payload.type !== 'string') {
+        return;
+      }
+      if (payload.type === 'SESSION_EXTENDED' || payload.type === 'SESSION_EXPIRED') {
+        refreshSessions();
+      }
+    };
+
+    if (typeof window.BroadcastChannel === 'function') {
+      channel = new BroadcastChannel('session-life');
+      channel.onmessage = handleMessage;
+      return () => channel.close();
+    }
+
+    const storageHandler = (event) => {
+      if (event.key !== 'session-life-sync' || !event.newValue) {
+        return;
+      }
+      try {
+        const payload = JSON.parse(event.newValue);
+        handleMessage({ data: payload });
+      } catch (error) {
+        // ignore malformed payload
+      }
+    };
+    window.addEventListener('storage', storageHandler);
+    return () => window.removeEventListener('storage', storageHandler);
+  }, [refreshSessions]);
 
   return (
     <section className="page settings-page">
@@ -305,6 +364,13 @@ function SettingsPage() {
                   const lastTouched = session.lastTouchedAt ?? session.createdAt;
                   const lastSeenLabel = formatRelativeOrDate(lastTouched, Date.now(), userTimeZone);
                   const lastSeenTooltip = formatTooltip(lastTouched, userTimeZone);
+                  const expiresAtMs = session.inactivityExpiresAt
+                    ? new Date(session.inactivityExpiresAt).getTime()
+                    : null;
+                  const expiresLabel = expiresAtMs ? formatRemaining(expiresAtMs) : '—';
+                  const expiresTooltip = session.inactivityExpiresAt
+                    ? formatTooltip(session.inactivityExpiresAt, userTimeZone)
+                    : '—';
                   const deviceLabel = session.userAgent
                     ? session.userAgent.split(')')[0]?.slice(0, 80)
                     : 'Unknown device';
@@ -318,6 +384,7 @@ function SettingsPage() {
                         </div>
                         <div className="settings-session__meta">
                           <span title={lastSeenTooltip}>Last active: {lastSeenLabel}</span>
+                          <span title={expiresTooltip}>· Expires in: {expiresLabel}</span>
                           {session.ip ? <span>· IP: {session.ip}</span> : null}
                         </div>
                       </div>

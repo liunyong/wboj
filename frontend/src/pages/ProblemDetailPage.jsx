@@ -447,6 +447,7 @@ const resubmitMutation = useResubmitSubmission({
                 {!problem.isPublic && <span className="problem-card__badge">Private</span>}
               </div>
               {authorName && <div className="problem-author">Author: {authorName}</div>}
+              {problem.source && <div className="problem-source">Source: {problem.source}</div>}
             </div>
             <div className="problem-detail__meta">
               <div className="problem-stats">

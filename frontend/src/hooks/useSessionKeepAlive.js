@@ -36,7 +36,12 @@ export function useSessionKeepAlive({
   const expiredRef = useRef(false);
   const lastExtendRef = useRef(0);
   const pendingExtendRef = useRef(null);
+  const pendingStateRef = useRef(null);
+  const lastStateFetchRef = useRef(0);
   const broadcastImplRef = useRef(() => {});
+  const safeStatePollIntervalMs = Number.isFinite(Number(statePollIntervalMs))
+    ? Math.max(Number(statePollIntervalMs), 5000)
+    : DEFAULT_STATE_POLL_MS;
 
   const resetState = useCallback(() => {
     expiresAtRef.current = null;
@@ -129,8 +134,17 @@ export function useSessionKeepAlive({
     if (!tokens.accessToken) {
       return;
     }
+    const now = Date.now();
+    if (pendingStateRef.current) {
+      return pendingStateRef.current;
+    }
+    if (now - lastStateFetchRef.current < 5000) {
+      return null;
+    }
+    lastStateFetchRef.current = now;
     try {
-      const response = await authFetch('/api/session/state');
+      pendingStateRef.current = authFetch('/api/session/state');
+      const response = await pendingStateRef.current;
       if (!response) {
         return;
       }
@@ -144,6 +158,8 @@ export function useSessionKeepAlive({
       if (error?.status === 401) {
         handleExpire();
       }
+    } finally {
+      pendingStateRef.current = null;
     }
   }, [applyNewExpiry, authFetch, handleExpire, tokens.accessToken]);
 
@@ -325,7 +341,7 @@ export function useSessionKeepAlive({
       if (!cancelled) {
         fetchSessionState();
       }
-    }, statePollIntervalMs);
+    }, safeStatePollIntervalMs);
 
     const timerIntervalId = window.setInterval(() => {
       if (!cancelled) {
@@ -338,7 +354,7 @@ export function useSessionKeepAlive({
       window.clearInterval(stateIntervalId);
       window.clearInterval(timerIntervalId);
     };
-  }, [fetchSessionState, onHideWarning, resetState, statePollIntervalMs, tokens.accessToken, updateTimers]);
+  }, [fetchSessionState, onHideWarning, resetState, safeStatePollIntervalMs, tokens.accessToken, updateTimers]);
 
   return {
     extendSession,

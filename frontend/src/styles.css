@@ -143,6 +143,12 @@ textarea {
   font-size: 0.95rem;
 }
 
+.problem-source {
+  margin-top: 0.25rem;
+  color: #475569;
+  font-size: 0.95rem;
+}
+
 .markdown-body blockquote {
   border-left: 3px solid #2563eb;
   padding-left: 1rem;

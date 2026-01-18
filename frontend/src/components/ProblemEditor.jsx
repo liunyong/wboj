@@ -20,6 +20,7 @@ const selectStatementSource = (markdown, fallback) => {
 const buildDefaultForm = () => ({
   title: '',
   statementMd: '',
+  source: '',
   difficulty: 'BASIC',
   isPublic: true,
   inputFormat: '',
@@ -61,6 +62,8 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
   const [editingSampleIndex, setEditingSampleIndex] = useState(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
+  const isReady = !isEdit || Boolean(initialProblem);
+
   const allowedImageMimeTypes = useMemo(
     () => new Set(['image/png', 'image/jpeg', 'image/webp', 'image/avif']),
     []
@@ -77,6 +80,16 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
       return response?.items ?? [];
     },
     enabled: false,
+    staleTime: 5 * 60 * 1000
+  });
+
+  const sourcesQuery = useQuery({
+    queryKey: ['problems', 'sources'],
+    queryFn: async () => {
+      const response = await authFetch('/api/problems/sources');
+      return response?.items ?? [];
+    },
+    enabled: isReady,
     staleTime: 5 * 60 * 1000
   });
 
@@ -109,6 +122,7 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
     setForm({
       title: initialProblem.title ?? '',
       statementMd: selectStatementSource(initialProblem.statementMd, initialProblem.statement),
+      source: initialProblem.source ?? '',
       difficulty: initialProblem.difficulty ?? 'BASIC',
       isPublic: initialProblem.isPublic ?? true,
       inputFormat: initialProblem.inputFormat ?? '',
@@ -222,13 +236,15 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
 
       if (isEdit) {
         if (problemId) {
-        queryClient.invalidateQueries({ queryKey: ['problem', String(problemId)] });
-      }
-      queryClient.invalidateQueries({ queryKey: ['problems'] });
-      queryClient.invalidateQueries({ queryKey: ['problems', 'algorithms'] });
-      setForm({
-        title: response.title ?? form.title,
-        statementMd: selectStatementSource(response.statementMd, response.statement),
+          queryClient.invalidateQueries({ queryKey: ['problem', String(problemId)] });
+        }
+        queryClient.invalidateQueries({ queryKey: ['problems'] });
+        queryClient.invalidateQueries({ queryKey: ['problems', 'algorithms'] });
+        queryClient.invalidateQueries({ queryKey: ['problems', 'sources'] });
+        setForm({
+          title: response.title ?? form.title,
+          statementMd: selectStatementSource(response.statementMd, response.statement),
+          source: response.source ?? form.source ?? '',
           difficulty: response.difficulty ?? form.difficulty,
           isPublic: response.isPublic ?? form.isPublic,
           inputFormat: response.inputFormat ?? '',
@@ -271,6 +287,7 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
         resetForm();
         queryClient.invalidateQueries({ queryKey: ['problems'] });
         queryClient.invalidateQueries({ queryKey: ['problems', 'algorithms'] });
+        queryClient.invalidateQueries({ queryKey: ['problems', 'sources'] });
       }
     },
     onError: (err) => {
@@ -651,6 +668,7 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
       })),
       algorithms: form.algorithms,
       tags: form.tags,
+      source: form.source,
       cpuTimeLimit: form.cpuTimeLimit ? Number(form.cpuTimeLimit) : undefined,
       memoryLimit: form.memoryLimit ? Number(form.memoryLimit) : undefined
     };
@@ -670,11 +688,11 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
 
   const languages = languagesQuery.data ?? [];
   const selectedLanguageObjects = languages.filter((lang) => selectedLanguages.includes(lang.id));
+  const sourceOptions = sourcesQuery.data ?? [];
 
   const submitLabel = isEdit ? 'Update problem' : 'Create problem';
   const submitBusyLabel = isEdit ? 'Updating…' : 'Creating…';
   const isSubmitting = submitMutation.isLoading;
-  const isReady = !isEdit || Boolean(initialProblem);
 
   return (
     <section className="page admin-create-page">
@@ -726,6 +744,24 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
           />
           Public
         </label>
+
+        <label htmlFor="problem-source-input">
+          Source
+          <input
+            id="problem-source-input"
+            name="source"
+            list="problem-source-options"
+            value={form.source}
+            onChange={handleInputChange}
+            disabled={!isReady}
+            placeholder="e.g. BOJ"
+          />
+        </label>
+        <datalist id="problem-source-options">
+          {sourceOptions.map((source) => (
+            <option key={source} value={source} />
+          ))}
+        </datalist>
 
         <div className="markdown-editor">
           <div className="markdown-editor__header">

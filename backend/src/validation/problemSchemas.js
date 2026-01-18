@@ -59,6 +59,14 @@ const statementOptionalTransform = (value) => {
   return trimmed ? trimmed : undefined;
 };
 
+const sourceOptionalTransform = (value) => {
+  if (!value) {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+};
+
 export const listProblemsQuerySchema = z
   .object({
     page: z.coerce.number().int().min(1).default(1),
@@ -92,6 +100,11 @@ export const createProblemSchema = z
     statement: buildStatementSchema('Statement is required').optional(),
     statementMd: buildStatementSchema('Statement markdown is required').optional(),
     statementHtmlCache: z.string().optional().transform(statementOptionalTransform),
+    source: z
+      .string()
+      .max(200, 'Source must be 200 characters or fewer')
+      .optional()
+      .transform(sourceOptionalTransform),
     inputFormat: z.string().optional().transform(statementOptionalTransform),
     outputFormat: z.string().optional().transform(statementOptionalTransform),
     constraints: z.string().optional().transform(statementOptionalTransform),
@@ -149,6 +162,11 @@ export const updateProblemSchema = z
     statement: buildStatementSchema('Statement is required').optional(),
     statementMd: buildStatementSchema('Statement markdown is required').optional(),
     statementHtmlCache: z.string().optional().transform(statementOptionalTransform),
+    source: z
+      .string()
+      .max(200, 'Source must be 200 characters or fewer')
+      .optional()
+      .transform(sourceOptionalTransform),
     inputFormat: z.string().optional().transform(statementOptionalTransform),
     outputFormat: z.string().optional().transform(statementOptionalTransform),
     constraints: z.string().optional().transform(statementOptionalTransform),

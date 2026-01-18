@@ -9,6 +9,7 @@ import {
   updateProblemVisibility,
   deleteProblem,
   getProblemAlgorithms,
+  getProblemSources,
   parseProblemTestCasesZip,
   recountProblemCounters
 } from '../controllers/problemController.js';
@@ -42,6 +43,11 @@ router.get(
   requireAuth,
   requireRole('admin'),
   getProblemAlgorithms
+);
+router.get(
+  '/sources',
+  requireAuth,
+  getProblemSources
 );
 router.get('/slug/:slug', validate({ params: legacySlugParamSchema }), getProblemBySlug);
 router.get(

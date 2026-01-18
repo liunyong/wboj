@@ -331,35 +331,6 @@ export function AuthProvider({ children }) {
   );
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !tokens.refreshToken) {
-      return undefined;
-    }
-
-    const handleBeforeUnload = () => {
-      try {
-        const payload = JSON.stringify({ refreshToken: tokens.refreshToken });
-        const url = buildUrl('/api/auth/logout');
-        if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
-          const blob = new Blob([payload], { type: 'application/json' });
-          navigator.sendBeacon(url, blob);
-        } else {
-          fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: payload,
-            keepalive: true
-          }).catch(() => {});
-        }
-      } catch (error) {
-        // ignore unload failures
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [tokens.refreshToken]);
-
-  useEffect(() => {
     if (typeof window === 'undefined') {
       return undefined;
     }
