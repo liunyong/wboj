@@ -1495,9 +1495,9 @@ textarea {
   color: #475569;
 }
 
-.settings-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+.settings-stack {
+  display: flex;
+  flex-direction: column;
   gap: 1.5rem;
 }
 
@@ -1518,6 +1518,41 @@ textarea {
 
 .settings-card button {
   align-self: flex-start;
+}
+
+.settings-sessions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.settings-session {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #f8fafc;
+  align-items: center;
+}
+
+.settings-session__device {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.settings-session__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: #475569;
 }
 
 .settings-page label,

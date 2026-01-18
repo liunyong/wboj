@@ -9,9 +9,14 @@ import SubmissionViewerModal from '../components/SubmissionViewerModal.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useDeleteSubmission } from '../hooks/useDeleteSubmission.js';
 import { useLanguages } from '../hooks/useLanguages.js';
+import { useMySubmissions } from '../hooks/useMySubmissions.js';
 import { useResubmitSubmission } from '../hooks/useResubmitSubmission.js';
 import { detailToEvent } from '../utils/submissions.js';
-import { applyEventToSubmissionList, buildOptimisticSubmission } from '../utils/submissions.js';
+import {
+  applyEventToSubmissionList,
+  buildOptimisticSubmission,
+  getPendingProblemIdSet
+} from '../utils/submissions.js';
 import { usePageSeo } from '../hooks/useSeo.js';
 import { siteMeta, summarizeText } from '../utils/seo.js';
 
@@ -58,6 +63,7 @@ function ProblemDetailPage() {
   });
 
   const languagesQuery = useLanguages();
+  const userSubmissionsQuery = useMySubmissions();
   const submissionMutation = useMutation({
     mutationFn: async () => {
       if (!problemQuery.data?._id) {
@@ -182,6 +188,16 @@ const resubmitMutation = useResubmitSubmission({
 
   const problem = problemQuery.data;
   const languages = languagesQuery.languages ?? [];
+  const pendingProblemIds = useMemo(
+    () => getPendingProblemIdSet(userSubmissionsQuery.data, currentUserId),
+    [currentUserId, userSubmissionsQuery.data]
+  );
+  const isSubmissionBlocked = Boolean(
+    problem?.problemId && pendingProblemIds.has(String(problem.problemId))
+  );
+  const submitBlockedMessage = isSubmissionBlocked
+    ? 'Grading in progress. You can submit again after it finishes.'
+    : '';
 
   const allowedLanguages = useMemo(() => {
     if (problem?.judge0LanguageIds?.length) {
@@ -357,6 +373,9 @@ const resubmitMutation = useResubmitSubmission({
         return;
       }
       const isOwner = submission?.userId && submission.userId === currentUserId;
+      if (isOwner && isSubmissionBlocked) {
+        return;
+      }
       if (!isAdmin && !isOwner) {
         return;
       }
@@ -364,7 +383,7 @@ const resubmitMutation = useResubmitSubmission({
       setResubmittingId(submissionId);
       resubmitMutation.mutate({ submissionId, baseSubmission: submission });
     },
-    [currentUserId, isAdmin, resubmitMutation]
+    [currentUserId, isAdmin, isSubmissionBlocked, resubmitMutation]
   );
 
   const handleDeleteSubmission = useCallback(
@@ -580,6 +599,9 @@ const resubmitMutation = useResubmitSubmission({
                 className="submission-form"
                 onSubmit={(event) => {
                   event.preventDefault();
+                  if (isSubmissionBlocked) {
+                    return;
+                  }
                   setMessage(null);
                   submissionMutation.mutate();
                 }}
@@ -607,9 +629,20 @@ const resubmitMutation = useResubmitSubmission({
                     required
                   />
                 </label>
-                <button type="submit" disabled={submissionMutation.isLoading}>
-                  {submissionMutation.isLoading ? 'Submitting…' : 'Submit'}
+                <button
+                  type="submit"
+                  disabled={submissionMutation.isLoading || isSubmissionBlocked}
+                  title={isSubmissionBlocked ? submitBlockedMessage : undefined}
+                >
+                  {submissionMutation.isLoading
+                    ? 'Submitting…'
+                    : isSubmissionBlocked
+                    ? 'Grading…'
+                    : 'Submit'}
                 </button>
+                {isSubmissionBlocked && (
+                  <div className="form-message warning">{submitBlockedMessage}</div>
+                )}
                 {message && (
                   <div className={`form-message ${message.type}`}>{message.text}</div>
                 )}
@@ -634,6 +667,7 @@ const resubmitMutation = useResubmitSubmission({
               isResubmitPending={resubmitMutation.isPending}
               deletingId={deletingId}
               isDeletePending={deleteSubmissionMutation.isPending}
+              isResubmitBlocked={isSubmissionBlocked}
             />
           ) : null}
         </div>
@@ -671,6 +705,9 @@ const resubmitMutation = useResubmitSubmission({
           }}
           isResubmitting={
             resubmitMutation.isPending && resubmittingId === activeSubmissionId
+          }
+          isResubmitDisabled={
+            isSubmissionBlocked && cachedActiveSubmission?.userId === currentUserId
           }
           allowDelete={isSuperAdmin}
           onDelete={(submission) => {

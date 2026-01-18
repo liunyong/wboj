@@ -7,48 +7,23 @@ import { useSubmissionStream } from '../hooks/useSubmissionStream.js';
 import { useResubmitSubmission } from '../hooks/useResubmitSubmission.js';
 import { useDeleteSubmission } from '../hooks/useDeleteSubmission.js';
 import { useLanguages } from '../hooks/useLanguages.js';
+import { useMySubmissions } from '../hooks/useMySubmissions.js';
 import {
   formatRelativeOrDate,
   formatTooltip,
   getUserTZ
 } from '../utils/time.js';
-import { detailToEvent } from '../utils/submissions.js';
+import { detailToEvent, getPendingProblemIdSet } from '../utils/submissions.js';
+import {
+  STATUS_CLASS,
+  STATUS_LABELS,
+  STATUS_OPTIONS
+} from '../utils/submissionStatus.js';
 import SubmissionViewerModal from '../components/SubmissionViewerModal.jsx';
 
-const STATUS_OPTIONS = [
-  { value: 'queued', label: 'Queued' },
-  { value: 'running', label: 'Grading…' },
-  { value: 'accepted', label: 'Accepted' },
-  { value: 'wrong_answer', label: 'Wrong Answer' },
-  { value: 'tle', label: 'Time Limit' },
-  { value: 'rte', label: 'Runtime Error' },
-  { value: 'ce', label: 'Compile Error' },
-  { value: 'failed', label: 'Failed' }
-];
-
-const STATUS_LABELS = {
-  queued: 'Queued',
-  running: 'Grading…',
-  accepted: 'Accepted',
-  wrong_answer: 'Wrong Answer',
-  tle: 'Time Limit',
-  rte: 'Runtime Error',
-  ce: 'Compile Error',
-  failed: 'Failed'
-};
-
-const STATUS_CLASS = {
-  queued: 'status-queued',
-  running: 'status-running',
-  accepted: 'status-accepted',
-  wrong_answer: 'status-wrong-answer',
-  tle: 'status-tle',
-  rte: 'status-rte',
-  ce: 'status-ce',
-  failed: 'status-failed'
-};
-
 const PAGE_SIZE = 20;
+const RESUBMIT_BLOCKED_TITLE =
+  'Grading in progress. Re-submit is disabled until it finishes.';
 
 const matchesFilters = (event, filters) => {
   if (!filters) {
@@ -176,6 +151,7 @@ function SubmissionsPage() {
     },
     keepPreviousData: true
   });
+  const userSubmissionsQuery = useMySubmissions();
 
   const handleStreamEvent = useCallback(
     (event) => {
@@ -231,6 +207,11 @@ function SubmissionsPage() {
     enabled: Boolean(user),
     onEvent: handleStreamEvent
   });
+
+  const pendingProblemIds = useMemo(
+    () => getPendingProblemIdSet(userSubmissionsQuery.data, currentUserId),
+    [currentUserId, userSubmissionsQuery.data]
+  );
 
   const resubmitMutation = useResubmitSubmission(
     {
@@ -305,6 +286,10 @@ function SubmissionsPage() {
         return;
       }
       const isOwner = submission.userId && submission.userId === currentUserId;
+      const problemId = submission.problemId ?? submission.problem?.problemId ?? null;
+      if (isOwner && problemId && pendingProblemIds.has(String(problemId))) {
+        return;
+      }
       if (!isAdmin && !isOwner) {
         return;
       }
@@ -312,7 +297,7 @@ function SubmissionsPage() {
       setResubmittingId(submission._id);
       resubmitMutation.mutate({ submissionId: submission._id, baseSubmission: submission });
     },
-    [currentUserId, isAdmin, resubmitMutation]
+    [currentUserId, isAdmin, pendingProblemIds, resubmitMutation]
   );
 
   const handleDelete = useCallback(
@@ -496,6 +481,12 @@ function SubmissionsPage() {
                 const isOwner = submission.userId && submission.userId === currentUserId;
                 const allowResubmit = submission._id && (isOwner || isAdmin);
                 const allowDelete = submission._id && isSuperAdmin;
+                const isResubmitBlocked =
+                  isOwner &&
+                  (submission.problemId ?? submission.problem?.problemId) != null &&
+                  pendingProblemIds.has(
+                    String(submission.problemId ?? submission.problem?.problemId)
+                  );
                 const lastRunLabel = formatRelativeOrDate(lastRunAt, nowMs, userTimeZone);
                 const lastRunTooltip = lastRunAt ? formatTooltip(lastRunAt, userTimeZone) : '—';
 
@@ -542,8 +533,11 @@ function SubmissionsPage() {
                             className="secondary"
                             onClick={() => handleResubmit(submission)}
                             disabled={
-                              resubmitMutation.isPending && resubmittingId === submission._id
+                              (resubmitMutation.isPending &&
+                                resubmittingId === submission._id) ||
+                              isResubmitBlocked
                             }
+                            title={isResubmitBlocked ? RESUBMIT_BLOCKED_TITLE : undefined}
                           >
                             {resubmitMutation.isPending && resubmittingId === submission._id
                               ? 'Re-submitting…'
@@ -612,6 +606,13 @@ function SubmissionsPage() {
           }}
           isResubmitting={
             resubmitMutation.isPending && resubmittingId === activeSubmissionId
+          }
+          isResubmitDisabled={
+            activeSubmission?.userId === currentUserId &&
+            (activeSubmission?.problemId ?? activeSubmission?.problem?.problemId) != null &&
+            pendingProblemIds.has(
+              String(activeSubmission.problemId ?? activeSubmission.problem?.problemId)
+            )
           }
           allowDelete={isSuperAdmin}
           onDelete={(submission) => handleDelete(submission)}

@@ -2,8 +2,9 @@ import crypto from 'node:crypto';
 import User from '../models/User.js';
 import {
   createAuthTokens,
-  findUserByRefreshToken,
+  consumeRefreshToken,
   hashPassword,
+  revokeAllSessions,
   revokeRefreshToken,
   verifyPassword
 } from '../services/authService.js';
@@ -329,7 +330,9 @@ export const login = async (req, res, next) => {
       return res.status(401).json({ code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' });
     }
 
-    const tokens = await createAuthTokens(user);
+    const userAgent = req.get('user-agent') ?? null;
+    const ip = req.ip ?? null;
+    const tokens = await createAuthTokens(user, { userAgent, ip });
 
     logAuth('info', 'user logged in', { userId: user._id.toString() });
 
@@ -435,15 +438,28 @@ export const refresh = async (req, res, next) => {
         .json({ code: 'INVALID_REQUEST', message: 'Refresh token is required' });
     }
 
-    const user = await findUserByRefreshToken(refreshToken);
-    if (!user) {
+    const result = await consumeRefreshToken(refreshToken);
+    if (!result?.user) {
       return res.status(401).json({ code: 'INVALID_TOKEN', message: 'Refresh token is invalid' });
     }
+    if (result.expired) {
+      return res
+        .status(401)
+        .json({ code: 'SESSION_EXPIRED', message: 'Session has expired' });
+    }
+    if (result.reused) {
+      await revokeAllSessions(result.user._id);
+      return res
+        .status(401)
+        .json({ code: 'TOKEN_REUSED', message: 'Refresh token reuse detected' });
+    }
 
-    const tokens = await createAuthTokens(user);
+    const userAgent = result.session?.userAgent ?? req.get('user-agent') ?? null;
+    const ip = result.session?.ip ?? req.ip ?? null;
+    const tokens = await createAuthTokens(result.user, { userAgent, ip });
 
     res.json({
-      user: sanitizeUser(user),
+      user: sanitizeUser(result.user),
       tokens
     });
   } catch (error) {

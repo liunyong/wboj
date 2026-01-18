@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useSubmissionStream } from '../hooks/useSubmissionStream.js';
 import { useLanguages } from '../hooks/useLanguages.js';
 import { applyEventToSubmissionList } from '../utils/submissions.js';
+import { STATUS_CLASS, STATUS_LABELS } from '../utils/submissionStatus.js';
 import {
   formatRelativeOrDate,
   formatTooltip,
@@ -13,28 +14,6 @@ import {
 } from '../utils/time.js';
 
 const PAGE_SIZE = 20;
-
-const STATUS_LABELS = {
-  queued: 'Queued',
-  running: 'Grading…',
-  accepted: 'Accepted',
-  wrong_answer: 'Wrong Answer',
-  tle: 'Time Limit',
-  rte: 'Runtime Error',
-  ce: 'Compile Error',
-  failed: 'Failed'
-};
-
-const STATUS_CLASS = {
-  queued: 'status-queued',
-  running: 'status-running',
-  accepted: 'status-accepted',
-  wrong_answer: 'status-wrong-answer',
-  tle: 'status-tle',
-  rte: 'status-rte',
-  ce: 'status-ce',
-  failed: 'status-failed'
-};
 
 const DEFAULT_RESULT = {
   items: [],
@@ -44,6 +23,9 @@ const DEFAULT_RESULT = {
   limit: PAGE_SIZE,
   scope: 'mine'
 };
+
+const RESUBMIT_BLOCKED_TITLE =
+  'Grading in progress. Re-submit is disabled until it finishes.';
 
 const buildQueryKey = (problemId, scope, page) => [
   'problemSubmissions',
@@ -72,6 +54,7 @@ function ProblemSubmissionsPanel({
   onDelete = null,
   resubmittingId,
   isResubmitPending,
+  isResubmitBlocked = false,
   deletingId = null,
   isDeletePending = false
 }) {
@@ -297,6 +280,9 @@ function ProblemSubmissionsPanel({
                   const allowResubmit =
                     submission._id && (isOwner || isAdmin) && (activeScope === 'mine' ? isOwner : true);
                   const allowDelete = Boolean(onDelete) && canDelete && submission._id;
+                  const isPendingResubmit =
+                    isResubmitPending && resubmittingId === submission._id;
+                  const isBlockedResubmit = isResubmitBlocked && isOwner;
 
                   return (
                     <tr key={submission._id}>
@@ -326,7 +312,7 @@ function ProblemSubmissionsPanel({
                       {(isAdmin || canDelete || activeScope === 'mine') && (
                         <td className="submission-actions">
                           {allowResubmit ? (
-                            <button
+                          <button
                               type="button"
                               className="secondary"
                               onClick={() =>
@@ -340,9 +326,10 @@ function ProblemSubmissionsPanel({
                                   }
                                 })
                               }
-                              disabled={isResubmitPending && resubmittingId === submission._id}
+                              disabled={isPendingResubmit || isBlockedResubmit}
+                              title={isBlockedResubmit ? RESUBMIT_BLOCKED_TITLE : undefined}
                             >
-                              {isResubmitPending && resubmittingId === submission._id
+                              {isPendingResubmit
                                 ? 'Re-submitting…'
                                 : 'Re-submit'}
                             </button>

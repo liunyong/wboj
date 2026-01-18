@@ -41,7 +41,9 @@ const userSchema = new mongoose.Schema(
             expiresAt: { type: Date, required: true },
             inactivityExpiresAt: { type: Date, default: null },
             lastTouchedAt: { type: Date, default: Date.now },
-            createdAt: { type: Date, default: Date.now }
+            createdAt: { type: Date, default: Date.now },
+            userAgent: { type: String, default: null },
+            ip: { type: String, default: null }
           },
           { _id: false }
         )

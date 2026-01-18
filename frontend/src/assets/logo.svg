@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="WB Online Judge">
+  <rect width="128" height="128" rx="24" fill="#1f2933" />
+  <path
+    d="M30 40h10l10 36 10-28h8l10 28 10-36h10l-14 48h-10l-10-28-10 28h-10z"
+    fill="#f2c94c"
+  />
+  <circle cx="96" cy="40" r="8" fill="#27ae60" />
+</svg>

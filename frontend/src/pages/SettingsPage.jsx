@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '../context/AuthContext.jsx';
+import { useSessionPolicy } from '../hooks/useSessionPolicy.js';
+import { formatRelativeOrDate, formatTooltip, getUserTZ } from '../utils/time.js';
 
 function SettingsPage() {
   const { user, authFetch } = useAuth();
@@ -24,6 +26,19 @@ function SettingsPage() {
   const [profilePublic, setProfilePublic] = useState(Boolean(user?.profilePublic));
   const [visibilityMessage, setVisibilityMessage] = useState('');
   const [isVisibilitySaving, setIsVisibilitySaving] = useState(false);
+  const [sessionsMessage, setSessionsMessage] = useState('');
+  const [sessionActionId, setSessionActionId] = useState(null);
+  const userTimeZone = getUserTZ();
+  const sessionPolicyQuery = useSessionPolicy({ enabled: Boolean(user) });
+
+  const sessionsQuery = useQuery({
+    queryKey: ['sessions', 'me'],
+    queryFn: async () => {
+      const response = await authFetch('/api/session/sessions');
+      return response?.sessions ?? [];
+    },
+    enabled: Boolean(user)
+  });
 
   useEffect(() => {
     setProfilePublic(Boolean(user?.profilePublic));
@@ -109,6 +124,46 @@ function SettingsPage() {
     }
   };
 
+  const refreshSessions = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['sessions', 'me'] });
+  };
+
+  const handleRevokeSession = async (sessionId) => {
+    if (!sessionId) {
+      return;
+    }
+    setSessionsMessage('');
+    setSessionActionId(sessionId);
+    try {
+      await authFetch(`/api/session/sessions/${sessionId}`, { method: 'DELETE' });
+      setSessionsMessage('Session revoked.');
+      await refreshSessions();
+    } catch (error) {
+      setSessionsMessage(error.message || 'Failed to revoke session.');
+    } finally {
+      setSessionActionId(null);
+    }
+  };
+
+  const handleRevokeOthers = async () => {
+    setSessionsMessage('');
+    setSessionActionId('others');
+    try {
+      await authFetch('/api/session/sessions', { method: 'DELETE', body: { scope: 'others' } });
+      setSessionsMessage('Logged out other sessions.');
+      await refreshSessions();
+    } catch (error) {
+      setSessionsMessage(error.message || 'Failed to log out other sessions.');
+    } finally {
+      setSessionActionId(null);
+    }
+  };
+
+  const sessions = Array.isArray(sessionsQuery.data) ? sessionsQuery.data : [];
+  const sortedSessions = sessions
+    .slice()
+    .sort((a, b) => new Date(b.lastTouchedAt ?? 0) - new Date(a.lastTouchedAt ?? 0));
+
   return (
     <section className="page settings-page">
       <header className="page-header">
@@ -118,7 +173,7 @@ function SettingsPage() {
         </div>
       </header>
 
-      <div className="settings-grid">
+      <div className="settings-stack">
         <form className="settings-card" onSubmit={submitProfile}>
           <h2>Profile</h2>
           <label>
@@ -217,6 +272,71 @@ function SettingsPage() {
             administrators.
           </p>
           {visibilityMessage && <div className="form-message info">{visibilityMessage}</div>}
+        </div>
+
+        <div className="settings-card">
+          <h2>Sessions</h2>
+          <p className="muted">
+            Manage active sessions across devices. Inactive sessions expire automatically.
+          </p>
+          {sessionPolicyQuery.data && (
+            <p className="muted">
+              Session timeout: {Math.round(sessionPolicyQuery.data.inactivityTtlMs / 60000)} min ·
+              Warning at {Math.round(sessionPolicyQuery.data.warningLeadMs / 60000)} min
+            </p>
+          )}
+          <button
+            type="button"
+            className="secondary"
+            onClick={handleRevokeOthers}
+            disabled={sessionActionId === 'others' || sessionsQuery.isLoading}
+          >
+            {sessionActionId === 'others' ? 'Logging out…' : 'Log out other devices'}
+          </button>
+          {sessionsMessage && <div className="form-message info">{sessionsMessage}</div>}
+          {sessionsQuery.isLoading && <div className="page-message">Loading sessions…</div>}
+          {sessionsQuery.isError && (
+            <div className="page-message error">Failed to load sessions.</div>
+          )}
+          {!sessionsQuery.isLoading && !sessionsQuery.isError && (
+            <ul className="settings-sessions">
+              {sortedSessions.length ? (
+                sortedSessions.map((session) => {
+                  const lastTouched = session.lastTouchedAt ?? session.createdAt;
+                  const lastSeenLabel = formatRelativeOrDate(lastTouched, Date.now(), userTimeZone);
+                  const lastSeenTooltip = formatTooltip(lastTouched, userTimeZone);
+                  const deviceLabel = session.userAgent
+                    ? session.userAgent.split(')')[0]?.slice(0, 80)
+                    : 'Unknown device';
+                  const isCurrent = Boolean(session.isCurrent);
+                  return (
+                    <li key={session.id} className="settings-session">
+                      <div>
+                        <div className="settings-session__device">
+                          {deviceLabel}
+                          {isCurrent ? <span className="badge">Current</span> : null}
+                        </div>
+                        <div className="settings-session__meta">
+                          <span title={lastSeenTooltip}>Last active: {lastSeenLabel}</span>
+                          {session.ip ? <span>· IP: {session.ip}</span> : null}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => handleRevokeSession(session.id)}
+                        disabled={isCurrent || sessionActionId === session.id}
+                      >
+                        {sessionActionId === session.id ? 'Logging out…' : 'Log out'}
+                      </button>
+                    </li>
+                  );
+                })
+              ) : (
+                <li className="muted">No active sessions.</li>
+              )}
+            </ul>
+          )}
         </div>
       </div>
     </section>

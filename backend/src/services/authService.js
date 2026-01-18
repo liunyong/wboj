@@ -58,6 +58,21 @@ const timeValue = (value) => {
   return Number.isNaN(time) ? null : time;
 };
 
+const isSessionExpired = (session, now) => {
+  if (!session) {
+    return true;
+  }
+  const expiresAtMs = timeValue(session.expiresAt);
+  const inactivityExpiresAtMs = timeValue(session.inactivityExpiresAt);
+  if (expiresAtMs !== null && expiresAtMs <= now) {
+    return true;
+  }
+  if (inactivityExpiresAtMs !== null && inactivityExpiresAtMs <= now) {
+    return true;
+  }
+  return false;
+};
+
 const refreshTtlMs = parseDurationMs(REFRESH_TOKEN_TTL, 7 * 24 * 60 * 60 * 1000);
 const refreshTtlSeconds = Math.round(refreshTtlMs / 1000);
 
@@ -120,7 +135,9 @@ const pruneExpiredSessions = (sessions = [], now = Date.now()) => {
       expiresAt: new Date(expiresAtMs),
       inactivityExpiresAt: new Date(inactivityExpiresAtMs),
       lastTouchedAt: new Date(lastTouchedAtMs),
-      createdAt: new Date(createdAtMs)
+      createdAt: new Date(createdAtMs),
+      userAgent: session.userAgent ?? null,
+      ip: session.ip ?? null
     });
   }
 
@@ -158,6 +175,12 @@ const sessionsEqual = (current = [], next = []) => {
     if (timeValue(left.createdAt) !== timeValue(right.createdAt)) {
       return false;
     }
+    if ((left.userAgent ?? null) !== (right.userAgent ?? null)) {
+      return false;
+    }
+    if ((left.ip ?? null) !== (right.ip ?? null)) {
+      return false;
+    }
   }
 
   return true;
@@ -170,7 +193,7 @@ const persistSessionsIfChanged = async (user, nextSessions) => {
   }
 };
 
-export const issueRefreshToken = async (user) => {
+export const issueRefreshToken = async (user, { userAgent = null, ip = null } = {}) => {
   const now = Date.now();
   const sessions = pruneExpiredSessions(user.sessions ?? [], now);
 
@@ -182,7 +205,9 @@ export const issueRefreshToken = async (user) => {
     expiresAt: new Date(now + refreshTtlMs),
     inactivityExpiresAt: new Date(now + inactivityTtlMs),
     lastTouchedAt: new Date(now),
-    createdAt: new Date(now)
+    createdAt: new Date(now),
+    userAgent,
+    ip
   });
 
   while (sessions.length > MAX_SESSIONS_PER_USER) {
@@ -205,8 +230,8 @@ export const issueRefreshToken = async (user) => {
   return { refreshToken, sid: tokenHash };
 };
 
-export const createAuthTokens = async (user) => {
-  const { refreshToken, sid } = await issueRefreshToken(user);
+export const createAuthTokens = async (user, meta = {}) => {
+  const { refreshToken, sid } = await issueRefreshToken(user, meta);
   const accessToken = signAccessToken(user, sid);
   return { accessToken, refreshToken };
 };
@@ -227,27 +252,42 @@ export const decodeRefreshToken = (token) => {
   }
 };
 
-export const findUserByRefreshToken = async (token) => {
+export const consumeRefreshToken = async (token) => {
   const payload = decodeRefreshToken(token);
   if (!payload?.sub || !payload?.sid) {
-    return null;
+    return { user: null, invalid: true };
   }
 
   const user = await User.findById(payload.sub);
   if (!user) {
-    return null;
+    return { user: null, invalid: true };
   }
 
-  const sessions = pruneExpiredSessions(user.sessions ?? []);
+  const now = Date.now();
+  const rawSessions = Array.isArray(user.sessions) ? user.sessions : [];
+  const storedMatch = rawSessions.find((session) => session.tokenHash === payload.sid);
+  const sessions = pruneExpiredSessions(rawSessions, now);
   const matchIndex = sessions.findIndex((session) => session.tokenHash === payload.sid);
+
+  if (!storedMatch) {
+    await persistSessionsIfChanged(user, sessions);
+    return { user, reused: true };
+  }
+
+  if (isSessionExpired(storedMatch, now)) {
+    await persistSessionsIfChanged(user, sessions);
+    return { user, expired: true };
+  }
+
   if (matchIndex === -1) {
     await persistSessionsIfChanged(user, sessions);
-    return null;
+    return { user, reused: true };
   }
 
+  const session = sessions[matchIndex];
   sessions.splice(matchIndex, 1);
   await persistSessionsIfChanged(user, sessions);
-  return user;
+  return { user, session, reused: false };
 };
 
 export const revokeRefreshToken = async (token) => {
@@ -275,6 +315,41 @@ export const revokeAllSessions = async (userId) => {
   }
   user.sessions = [];
   await user.save();
+};
+
+export const revokeSessionById = async (userId, sessionId) => {
+  if (!sessionId) {
+    return false;
+  }
+  const user = await User.findById(userId);
+  if (!user) {
+    return false;
+  }
+  const sessions = pruneExpiredSessions(user.sessions ?? []);
+  const nextSessions = sessions.filter((session) => session.tokenHash !== sessionId);
+  await persistSessionsIfChanged(user, nextSessions);
+  return nextSessions.length !== sessions.length;
+};
+
+export const revokeOtherSessions = async (userId, currentSessionId) => {
+  const user = await User.findById(userId);
+  if (!user) {
+    return 0;
+  }
+  const sessions = pruneExpiredSessions(user.sessions ?? []);
+  const nextSessions = sessions.filter((session) => session.tokenHash === currentSessionId);
+  await persistSessionsIfChanged(user, nextSessions);
+  return sessions.length - nextSessions.length;
+};
+
+export const listUserSessions = async (userId) => {
+  const user = await User.findById(userId).select('sessions');
+  if (!user) {
+    return [];
+  }
+  const sessions = pruneExpiredSessions(user.sessions ?? []);
+  await persistSessionsIfChanged(user, sessions);
+  return sessions;
 };
 
 export const touchSession = async (userId, sid, { force = false } = {}) => {

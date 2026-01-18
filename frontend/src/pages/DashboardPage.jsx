@@ -9,17 +9,24 @@ import {
   formatTooltip,
   getUserTZ
 } from '../utils/time.js';
-import { applyEventToSubmissionList, detailToEvent } from '../utils/submissions.js';
+import {
+  applyEventToSubmissionList,
+  detailToEvent,
+  getPendingProblemIdSet
+} from '../utils/submissions.js';
 import { useSubmissionStream } from '../hooks/useSubmissionStream.js';
 import { useResubmitSubmission } from '../hooks/useResubmitSubmission.js';
 import { useLanguages } from '../hooks/useLanguages.js';
 import { useUserProgress, userProgressQueryKey } from '../hooks/useUserProgress.js';
 import SubmissionViewerModal from '../components/SubmissionViewerModal.jsx';
+import { useMySubmissions } from '../hooks/useMySubmissions.js';
 import { usePageSeo } from '../hooks/useSeo.js';
 import { siteMeta } from '../utils/seo.js';
 
 const currentYear = new Date().getUTCFullYear();
 const selectableYears = [currentYear, currentYear - 1, currentYear - 2];
+const RESUBMIT_BLOCKED_TITLE =
+  'Grading in progress. Re-submit is disabled until it finishes.';
 
 function DashboardPage() {
   const queryClient = useQueryClient();
@@ -41,13 +48,7 @@ function DashboardPage() {
     queryFn: async () => authFetch(`/api/dashboard/me/heatmap?year=${year}`)
   });
 
-  const submissionsQuery = useQuery({
-    queryKey: ['submissions', 'mine', 'dashboard'],
-    queryFn: async () => {
-      const response = await authFetch('/api/submissions/mine');
-      return response?.items ?? [];
-    }
-  });
+  const submissionsQuery = useMySubmissions();
 
   const progressQuery = useUserProgress();
   const solvedProblems = progressQuery.solved;
@@ -158,6 +159,11 @@ function DashboardPage() {
     onEvent: handleSubmissionEvent
   });
 
+  const pendingProblemIds = useMemo(
+    () => getPendingProblemIdSet(submissionsQuery.data, user?.id),
+    [submissionsQuery.data, user?.id]
+  );
+
   const getSubmissionFromCache = useCallback(
     (id) => {
       if (!id) {
@@ -182,11 +188,15 @@ function DashboardPage() {
       if (!submissionId) {
         return;
       }
+      const problemId = submission?.problem?.problemId ?? submission?.problemId ?? null;
+      if (problemId && pendingProblemIds.has(String(problemId))) {
+        return;
+      }
       setMessage(null);
       setResubmittingId(submissionId);
       resubmitMutation.mutate({ submissionId, baseSubmission: submission });
     },
-    [resubmitMutation]
+    [pendingProblemIds, resubmitMutation]
   );
 
   const closeSubmissionModal = useCallback(() => setActiveSubmissionId(null), []);
@@ -387,6 +397,8 @@ function DashboardPage() {
                 const lastRunTooltip = lastRunAt ? formatTooltip(lastRunAt, userTimeZone) : '—';
                 const isResubmitPending =
                   resubmittingId === submissionKey && resubmitMutation.isPending;
+                const isResubmitBlocked =
+                  problemLinkId && pendingProblemIds.has(String(problemLinkId));
 
                 return (
                   <tr key={submissionKey}>
@@ -418,7 +430,8 @@ function DashboardPage() {
                         type="button"
                         className="secondary"
                         onClick={() => handleResubmit(submission)}
-                        disabled={isResubmitPending}
+                        disabled={isResubmitPending || isResubmitBlocked}
+                        title={isResubmitBlocked ? RESUBMIT_BLOCKED_TITLE : undefined}
                       >
                         {isResubmitPending ? 'Re-submitting…' : 'Re-submit'}
                       </button>
@@ -444,6 +457,10 @@ function DashboardPage() {
           }}
           isResubmitting={
             resubmitMutation.isPending && resubmittingId === activeSubmissionId
+          }
+          isResubmitDisabled={
+            activeSubmission?.problem?.problemId &&
+            pendingProblemIds.has(String(activeSubmission.problem.problemId))
           }
         />
       ) : null}

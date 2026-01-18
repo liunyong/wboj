@@ -1,3 +1,5 @@
+import { isPendingStatus } from './submissionStatus.js';
+
 export const transformEventToRow = (event, { problem = null } = {}) => {
   if (!event) {
     return null;
@@ -42,6 +44,51 @@ export const transformEventToRow = (event, { problem = null } = {}) => {
     userId: event.userId ?? null,
     userName: event.userName ?? null
   };
+};
+
+const getSubmissionProblemId = (submission) =>
+  submission?.problemId ??
+  submission?.problem?.problemId ??
+  submission?.problem?.id ??
+  submission?.problem?._id ??
+  null;
+
+const getSubmissionUserId = (submission) =>
+  submission?.userId ??
+  submission?.user?.id ??
+  submission?.user?._id ??
+  null;
+
+export const isSubmissionPending = (submission) =>
+  Boolean(submission && isPendingStatus(submission.status));
+
+export const getPendingProblemIdSet = (submissions, userId) => {
+  const pendingIds = new Set();
+  if (!Array.isArray(submissions)) {
+    return pendingIds;
+  }
+  submissions.forEach((submission) => {
+    if (!isSubmissionPending(submission)) {
+      return;
+    }
+    const ownerId = getSubmissionUserId(submission);
+    if (userId && ownerId && String(ownerId) !== String(userId)) {
+      return;
+    }
+    const problemId = getSubmissionProblemId(submission);
+    if (problemId != null) {
+      pendingIds.add(String(problemId));
+    }
+  });
+  return pendingIds;
+};
+
+export const hasPendingSubmissionForProblem = ({ submissions, problemId, userId }) => {
+  if (!problemId) {
+    return false;
+  }
+  const pendingIds = getPendingProblemIdSet(submissions, userId);
+  return pendingIds.has(String(problemId));
 };
 
 export const applyEventToSubmissionList = (

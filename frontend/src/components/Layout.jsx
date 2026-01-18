@@ -3,13 +3,17 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSessionKeepAlive } from '../hooks/useSessionKeepAlive.js';
+import { useSessionPolicy } from '../hooks/useSessionPolicy.js';
 import Header from './Header.jsx';
 import SessionExpiryModal from './SessionExpiryModal.jsx';
+
+const AUTH_EXPIRED_EVENT = 'auth:expired';
 
 function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout, tokens } = useAuth();
+  const sessionPolicyQuery = useSessionPolicy({ enabled: Boolean(tokens.accessToken) });
   const [modalOpen, setModalOpen] = useState(false);
   const [msRemaining, setMsRemaining] = useState(null);
   const contentRef = useRef(null);
@@ -60,7 +64,9 @@ function Layout() {
   const { extendSession, notifySessionExpired } = useSessionKeepAlive({
     onShowWarning: handleShowWarning,
     onHideWarning: handleHideWarning,
-    onExpire: handleExpire
+    onExpire: handleExpire,
+    warningLeadMs: sessionPolicyQuery.data?.warningLeadMs,
+    minTouchIntervalMs: sessionPolicyQuery.data?.minTouchIntervalMs
   });
 
   const handleExtend = useCallback(async () => {
@@ -100,6 +106,14 @@ function Layout() {
     navigate,
     notifySessionExpired
   ]);
+
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      handleExpire();
+    };
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+  }, [handleExpire]);
 
   return (
     <div className="app-shell">

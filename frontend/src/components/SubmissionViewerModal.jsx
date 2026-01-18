@@ -21,12 +21,16 @@ const RUN_STATUS_LABELS = {
   running: 'Grading…'
 };
 
+const RESUBMIT_BLOCKED_TITLE =
+  'Grading in progress. Re-submit is disabled until it finishes.';
+
 function SubmissionViewerModal({
   submissionId,
   onClose,
   allowResubmit = false,
   onResubmit,
   isResubmitting = false,
+  isResubmitDisabled = false,
   allowDelete = false,
   onDelete,
   isDeleting = false
@@ -216,7 +220,8 @@ function SubmissionViewerModal({
               type="button"
               className="primary"
               onClick={handleResubmit}
-              disabled={isResubmitting || submissionQuery.isLoading}
+              disabled={isResubmitting || isResubmitDisabled || submissionQuery.isLoading}
+              title={isResubmitDisabled ? RESUBMIT_BLOCKED_TITLE : undefined}
             >
               {isResubmitting ? 'Re-submitting…' : 'Re-submit'}
             </button>

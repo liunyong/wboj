@@ -462,6 +462,21 @@ export const createSubmission = async (req, res, next) => {
       return res.status(403).json({ code: 'FORBIDDEN', message: 'Problem is not accessible' });
     }
 
+    const pendingSubmission = await Submission.findOne({
+      user: userId,
+      problem: problem._id,
+      deletedAt: null,
+      status: { $in: ['queued', 'running'] }
+    }).select('_id status submittedAt');
+
+    if (pendingSubmission) {
+      return res.status(409).json({
+        code: 'SUBMISSION_PENDING',
+        message: 'Submission already in progress for this problem',
+        submissionId: pendingSubmission._id.toString()
+      });
+    }
+
     const allowedLanguages = Array.isArray(problem.judge0LanguageIds)
       ? problem.judge0LanguageIds
       : [];

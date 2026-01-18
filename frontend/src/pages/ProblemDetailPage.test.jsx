@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ProblemDetailPage from './ProblemDetailPage.jsx';
 
 const submissionCalls = [];
+let mySubmissionsResponse = { items: [] };
 
 const authFetchMock = vi.fn(async (path, options = {}, _meta = {}) => {
   if (path.startsWith('/api/problems/')) {
@@ -42,6 +43,10 @@ const authFetchMock = vi.fn(async (path, options = {}, _meta = {}) => {
   if (path === '/api/submissions') {
     submissionCalls.push(options.body);
     return { submissionId: 'submission-xyz' };
+  }
+
+  if (path === '/api/submissions/mine') {
+    return mySubmissionsResponse;
   }
 
   return null;
@@ -110,6 +115,7 @@ vi.mock('../components/SubmissionViewerModal.jsx', () => ({
 describe('ProblemDetailPage submission form', () => {
   beforeEach(() => {
     submissionCalls.length = 0;
+    mySubmissionsResponse = { items: [] };
     authFetchMock.mockClear();
   });
 
@@ -158,6 +164,47 @@ describe('ProblemDetailPage submission form', () => {
 
     expect(submissionCalls[0].sourceCode).toBe(codeSample);
     expect(submissionCalls[0].sourceCode).not.toContain('class="token');
+
+    queryClient.clear();
+  });
+
+  it('disables submit when a pending submission exists for the problem', async () => {
+    mySubmissionsResponse = {
+      items: [
+        {
+          _id: 'submission-abc',
+          problemId: 345,
+          status: 'queued',
+          userId: 'user-1'
+        }
+      ]
+    };
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false
+        }
+      }
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/problems/345']}>
+          <Routes>
+            <Route path="/problems/:problemId" element={<ProblemDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    await screen.findByText('Author: Problem Maker');
+
+    const submitButton = await screen.findByRole('button', { name: /grading/i });
+    expect(submitButton).toBeDisabled();
+    expect(
+      screen.getByText('Grading in progress. You can submit again after it finishes.')
+    ).toBeInTheDocument();
 
     queryClient.clear();
   });

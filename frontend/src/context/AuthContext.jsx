@@ -1,14 +1,45 @@
-import { createContext, useContext, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 const STORAGE_KEY = 'oj.tokens';
+const LOGOUT_BROADCAST_KEY = 'oj.logout';
+const AUTH_EXPIRED_EVENT = 'auth:expired';
 const API_URL = import.meta.env.VITE_API_URL || '';
+
+const getTokenStorage = () => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  try {
+    return window.sessionStorage;
+  } catch (error) {
+    return null;
+  }
+};
 
 const loadTokens = () => {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) {
+    const storage = getTokenStorage();
+    if (!storage) {
       return { accessToken: null, refreshToken: null };
+    }
+    const stored = storage.getItem(STORAGE_KEY);
+    if (!stored) {
+      if (typeof window === 'undefined') {
+        return { accessToken: null, refreshToken: null };
+      }
+      const legacy = window.localStorage.getItem(STORAGE_KEY);
+      if (!legacy) {
+        return { accessToken: null, refreshToken: null };
+      }
+      const parsedLegacy = JSON.parse(legacy);
+      const migrated = {
+        accessToken: parsedLegacy.accessToken ?? null,
+        refreshToken: parsedLegacy.refreshToken ?? null
+      };
+      storage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+      window.localStorage.removeItem(STORAGE_KEY);
+      return migrated;
     }
     const parsed = JSON.parse(stored);
     return {
@@ -55,12 +86,26 @@ export function AuthProvider({ children }) {
       refreshToken: nextTokens?.refreshToken ?? null
     };
     setTokens(normalized);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+    const storage = getTokenStorage();
+    if (storage) {
+      storage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+    }
   };
 
   const clearTokens = () => {
     setTokens({ accessToken: null, refreshToken: null });
-    localStorage.removeItem(STORAGE_KEY);
+    const storage = getTokenStorage();
+    if (storage) {
+      storage.removeItem(STORAGE_KEY);
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(LOGOUT_BROADCAST_KEY, String(Date.now()));
+        window.localStorage.removeItem(LOGOUT_BROADCAST_KEY);
+      } catch (error) {
+        // ignore storage broadcast failures
+      }
+    }
     queryClient.removeQueries({ queryKey: ['me'] });
   };
 
@@ -142,6 +187,9 @@ export function AuthProvider({ children }) {
     if (!response.ok) {
       if (response.status === 401 && !skipAuth) {
         clearTokens();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT));
+        }
       }
       throw await createError(response);
     }
@@ -281,6 +329,48 @@ export function AuthProvider({ children }) {
       verifyEmail
     ]
   );
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !tokens.refreshToken) {
+      return undefined;
+    }
+
+    const handleBeforeUnload = () => {
+      try {
+        const payload = JSON.stringify({ refreshToken: tokens.refreshToken });
+        const url = buildUrl('/api/auth/logout');
+        if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+          const blob = new Blob([payload], { type: 'application/json' });
+          navigator.sendBeacon(url, blob);
+        } else {
+          fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload,
+            keepalive: true
+          }).catch(() => {});
+        }
+      } catch (error) {
+        // ignore unload failures
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [tokens.refreshToken]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+    const handleStorage = (event) => {
+      if (event.key === LOGOUT_BROADCAST_KEY) {
+        clearTokens();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [clearTokens]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
