@@ -9,6 +9,7 @@ import { useSubmissionStream } from '../hooks/useSubmissionStream.js';
 
 const difficulties = ['BASIC', 'EASY', 'MEDIUM', 'HARD'];
 const SCROLL_STORAGE_KEY = 'problemsPageScrollY';
+const PAGE_SIZE = 20;
 
 function ProblemsPage() {
   const { authFetch, user } = useAuth();
@@ -21,6 +22,10 @@ function ProblemsPage() {
   );
   const [difficulty, setDifficulty] = useState(searchParams.get('difficulty') ?? '');
   const [tagFilter, setTagFilter] = useState(searchParams.get('tag') ?? '');
+  const [page, setPage] = useState(() => {
+    const parsed = Number(searchParams.get('page') ?? '1');
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+  });
   const [pendingDeletion, setPendingDeletion] = useState(null);
   const [visibilityTarget, setVisibilityTarget] = useState(null);
   const [hasRestoredScroll, setHasRestoredScroll] = useState(false);
@@ -40,10 +45,16 @@ function ProblemsPage() {
     const paramsDifficulty = searchParams.get('difficulty') ?? '';
     const paramsTag = searchParams.get('tag') ?? '';
     const paramsVisibility = searchParams.get('visibility') || 'all';
+    const paramsPage = Number(searchParams.get('page') ?? '1');
 
     setSearch(paramsSearch);
     setDifficulty(paramsDifficulty);
     setTagFilter(paramsTag);
+    if (Number.isFinite(paramsPage) && paramsPage > 0) {
+      setPage(paramsPage);
+    } else {
+      setPage(1);
+    }
     if (isAdminLike) {
       setVisibility(paramsVisibility);
     }
@@ -64,13 +75,16 @@ function ProblemsPage() {
     if (isAdminLike && visibility !== 'all') {
       next.set('visibility', visibility);
     }
+    if (page > 1) {
+      next.set('page', String(page));
+    }
 
     const currentString = searchParams.toString();
     const nextString = next.toString();
     if (currentString !== nextString) {
       setSearchParams(next, { replace: true });
     }
-  }, [difficulty, isAdminLike, search, searchParams, setSearchParams, tagFilter, visibility]);
+  }, [difficulty, isAdminLike, page, search, searchParams, setSearchParams, tagFilter, visibility]);
 
   const problemsQuery = useQuery({
     queryKey: ['problems', visibility, difficulty],
@@ -201,6 +215,63 @@ function ProblemsPage() {
     return results;
   }, [problemsQuery.data, search, tagFilter]);
 
+  const totalProblems = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalProblems / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginationItems = useMemo(() => {
+    if (totalPages <= 10) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    const items = [1];
+    let start = Math.max(2, currentPage - 2);
+    let end = Math.min(totalPages - 1, currentPage + 2);
+
+    if (start === 2) {
+      end = Math.min(totalPages - 1, start + 4);
+    }
+    if (end === totalPages - 1) {
+      start = Math.max(2, end - 4);
+    }
+
+    if (start > 2) {
+      items.push('ellipsis-left');
+    }
+
+    for (let pageNumber = start; pageNumber <= end; pageNumber += 1) {
+      items.push(pageNumber);
+    }
+
+    if (end < totalPages - 1) {
+      items.push('ellipsis-right');
+    }
+
+    items.push(totalPages);
+    return items;
+  }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    if (page !== currentPage) {
+      setPage(currentPage);
+    }
+  }, [currentPage, page]);
+
+  const pageItems = useMemo(() => {
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    return filtered.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [currentPage, filtered]);
+
+  const canPrev = currentPage > 1;
+  const canNext = currentPage < totalPages;
+
+  const handlePageChange = (nextPage) => {
+    if (nextPage === currentPage) {
+      return;
+    }
+    setPage(nextPage);
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  };
+
   const isAdmin = isAdminLike;
 
   const handleDeleteConfirm = () => {
@@ -222,9 +293,18 @@ function ProblemsPage() {
             type="search"
             placeholder="Search problems"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
           />
-          <select value={difficulty} onChange={(event) => setDifficulty(event.target.value)}>
+          <select
+            value={difficulty}
+            onChange={(event) => {
+              setDifficulty(event.target.value);
+              setPage(1);
+            }}
+          >
             <option value="">All difficulties</option>
             {difficulties.map((level) => (
               <option key={level} value={level}>
@@ -233,7 +313,13 @@ function ProblemsPage() {
             ))}
           </select>
           {isAdmin && (
-            <select value={visibility} onChange={(event) => setVisibility(event.target.value)}>
+            <select
+              value={visibility}
+              onChange={(event) => {
+                setVisibility(event.target.value);
+                setPage(1);
+              }}
+            >
               <option value="all">All</option>
               <option value="public">Public</option>
               <option value="private">Private</option>
@@ -256,7 +342,10 @@ function ProblemsPage() {
                 className={`secondary problem-tag-filter__button${
                   !tagFilter ? ' problem-tag-filter__button--active' : ''
                 }`}
-                onClick={() => setTagFilter('')}
+                onClick={() => {
+                  setTagFilter('');
+                  setPage(1);
+                }}
               >
                 All
               </button>
@@ -267,7 +356,10 @@ function ProblemsPage() {
                   className={`secondary problem-tag-filter__button${
                     tagFilter === tag ? ' problem-tag-filter__button--active' : ''
                   }`}
-                  onClick={() => setTagFilter(tag)}
+                  onClick={() => {
+                    setTagFilter(tag);
+                    setPage(1);
+                  }}
                 >
                   {tag}
                 </button>
@@ -291,7 +383,7 @@ function ProblemsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((problem) => {
+                {pageItems.map((problem) => {
                 const total = problem.submissionCount ?? 0;
                 const accepted = problem.acceptedSubmissionCount ?? 0;
                 const acceptanceRate =
@@ -384,7 +476,7 @@ function ProblemsPage() {
                   </tr>
                 );
               })}
-              {!filtered.length && (
+              {!pageItems.length && (
                 <tr>
                   <td colSpan={isAdmin ? 8 : 7}>
                     <div className="problem-table__empty">No problems found.</div>
@@ -394,6 +486,51 @@ function ProblemsPage() {
             </tbody>
           </table>
         </div>
+        <footer className="table-footer table-footer--stacked">
+          <div className="pagination problem-pagination">
+            <button
+              type="button"
+              className="secondary"
+              disabled={!canPrev}
+              onClick={() => handlePageChange(currentPage - 1)}
+            >
+              Previous
+            </button>
+            {paginationItems.map((item) => {
+              if (typeof item === 'string') {
+                return (
+                  <span key={item} className="pagination-ellipsis" aria-hidden="true">
+                    …
+                  </span>
+                );
+              }
+
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  className="secondary"
+                  disabled={item === currentPage}
+                  aria-current={item === currentPage ? 'page' : undefined}
+                  onClick={() => handlePageChange(item)}
+                >
+                  {item}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              className="secondary"
+              disabled={!canNext}
+              onClick={() => handlePageChange(currentPage + 1)}
+            >
+              Next
+            </button>
+          </div>
+          <div className="table-footer__summary">
+            Showing {pageItems.length} of {totalProblems} problems
+          </div>
+        </footer>
         </>
       )}
 

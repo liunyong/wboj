@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useSessionKeepAlive } from '../hooks/useSessionKeepAlive.js';
 import { useSessionPolicy } from '../hooks/useSessionPolicy.js';
 import Header from './Header.jsx';
+import Footer from './Footer.jsx';
 import SessionExpiryModal from './SessionExpiryModal.jsx';
 
 const AUTH_EXPIRED_EVENT = 'auth:expired';
@@ -122,6 +123,7 @@ function Layout() {
         <main className="app-main">
           <Outlet />
         </main>
+        <Footer />
       </div>
       <SessionExpiryModal
         open={modalOpen && Boolean(tokens.accessToken)}

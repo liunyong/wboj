@@ -484,6 +484,59 @@ textarea {
   padding: 2rem 1.25rem 3rem;
 }
 
+.app-footer {
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  background: #fff;
+  padding: 2rem 1.5rem 1.5rem;
+}
+
+.app-footer__content {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.app-footer__brand {
+  max-width: 520px;
+}
+
+.app-footer__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.app-footer__description {
+  margin: 0;
+  color: #475569;
+}
+
+.app-footer__links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.app-footer__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-weight: 600;
+}
+
+.app-footer__support {
+  color: #475569;
+}
+
+.app-footer__bottom {
+  max-width: 1100px;
+  margin: 1.25rem auto 0;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
 .page {
   display: flex;
   flex-direction: column;
@@ -505,6 +558,25 @@ textarea {
 .page-header p {
   margin: 0.25rem 0 0;
   color: #475569;
+}
+
+.page-updated {
+  font-size: 0.95rem;
+}
+
+.legal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.legal-content h2 {
+  margin: 0 0 0.5rem;
+}
+
+.legal-content p,
+.legal-content ul {
+  margin: 0;
 }
 
 .page-controls {
@@ -1123,10 +1195,29 @@ textarea {
   flex-wrap: wrap;
 }
 
+.table-footer--stacked {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.table-footer__summary {
+  text-align: left;
+}
+
 .pagination {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+
+.problem-pagination {
+  justify-content: center;
+}
+
+.pagination-ellipsis {
+  color: #64748b;
+  font-weight: 600;
+  padding: 0 0.25rem;
 }
 
 .user-dashboard-grid {
