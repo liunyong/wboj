@@ -89,12 +89,25 @@ function ProblemsPage() {
   const problemsQuery = useQuery({
     queryKey: ['problems', visibility, difficulty],
     queryFn: async () => {
-      const params = new URLSearchParams({ limit: '100', visibility });
+      const params = new URLSearchParams({ limit: '100', visibility, page: '1' });
       if (difficulty) {
         params.set('difficulty', difficulty);
       }
-      const response = await authFetch(`/api/problems?${params.toString()}`);
-      return response?.items ?? [];
+      const firstResponse = await authFetch(`/api/problems?${params.toString()}`);
+      const allItems = Array.isArray(firstResponse?.items) ? [...firstResponse.items] : [];
+      const totalPages = Number.isFinite(firstResponse?.totalPages)
+        ? Math.max(1, firstResponse.totalPages)
+        : 1;
+
+      for (let currentPage = 2; currentPage <= totalPages; currentPage += 1) {
+        params.set('page', String(currentPage));
+        const pageResponse = await authFetch(`/api/problems?${params.toString()}`);
+        if (Array.isArray(pageResponse?.items)) {
+          allItems.push(...pageResponse.items);
+        }
+      }
+
+      return allItems;
     }
   });
 

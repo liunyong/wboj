@@ -879,31 +879,108 @@ textarea {
 
 .samples-grid,
 .testcase-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .sample-card,
 .testcase-card {
   background: #f8fafc;
   border-radius: 0.75rem;
-  padding: 1rem;
+  padding: 0.85rem;
   border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.sample-card h4 {
+  margin: 0 0 0.5rem;
+}
+
+.case-title {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.case-io {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.50rem;
+}
+
+.case-io-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.case-io-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.code-block {
+  position: relative;
 }
 
 .sample-card pre,
 .testcase-card pre {
   background: rgba(15, 23, 42, 0.75);
   color: #f8fafc;
-  padding: 0.75rem;
+  padding: 0.65rem 0.75rem;
   border-radius: 0.5rem;
   font-size: 0.85rem;
   overflow: auto;
+  max-height: 12.5rem;
+  margin: 0;
+}
+
+.code-copy {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  border: none;
+  border-radius: 999px;
+  padding: 0.2rem 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  line-height: 1;
+  background: rgba(248, 250, 252, 0.92);
+  color: #0f172a;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 1;
+}
+
+.code-block:hover .code-copy,
+.code-copy:focus-visible {
+  opacity: 1;
+}
+
+.code-copy svg {
+  display: block;
+  width: 0.9rem;
+  height: 0.9rem;
+  fill: currentColor;
+}
+
+.code-copy-text {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .sample-card .sample-explanation {
   margin: 0.5rem 0 0;
+}
+
+@media (max-width: 720px) {
+  .case-io {
+    grid-template-columns: 1fr;
+  }
 }
 
 .callout {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
@@ -33,6 +33,8 @@ function ProblemDetailPage() {
   const [activeSubmissionId, setActiveSubmissionId] = useState(null);
   const [resubmittingId, setResubmittingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [copiedKey, setCopiedKey] = useState(null);
+  const copyTimeoutsRef = useRef(new Map());
 
   const isAdmin = ['admin', 'super_admin'].includes(user?.role);
   const isSuperAdmin = user?.role === 'super_admin';
@@ -198,6 +200,37 @@ const resubmitMutation = useResubmitSubmission({
   const submitBlockedMessage = isSubmissionBlocked
     ? 'Grading in progress. You can submit again after it finishes.'
     : '';
+  const copyToClipboard = useCallback(async (text, key) => {
+    if (!text) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'absolute';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
+    if (!key) {
+      return;
+    }
+    const timeouts = copyTimeoutsRef.current;
+    if (timeouts.has(key)) {
+      clearTimeout(timeouts.get(key));
+    }
+    setCopiedKey(key);
+    const timeoutId = window.setTimeout(() => {
+      setCopiedKey((current) => (current === key ? null : current));
+      timeouts.delete(key);
+    }, 1400);
+    timeouts.set(key, timeoutId);
+  }, []);
 
   const allowedLanguages = useMemo(() => {
     if (problem?.judge0LanguageIds?.length) {
@@ -545,13 +578,51 @@ const resubmitMutation = useResubmitSubmission({
                   return (
                     <div key={index} className="sample-card">
                       <h4>Sample {index + 1}</h4>
-                      <div>
-                        <strong>Input</strong>
-                        <pre>{sample.input}</pre>
-                      </div>
-                      <div>
-                        <strong>Output</strong>
-                        <pre>{sample.output}</pre>
+                      <div className="case-io">
+                        <div className="case-io-block">
+                          <div className="case-io-label">Input</div>
+                          <div className="code-block">
+                            <button
+                              type="button"
+                              className="code-copy"
+                              onClick={() =>
+                                copyToClipboard(sample.input, `sample-${index}-input`)
+                              }
+                              aria-label={`Copy sample ${index + 1} input`}
+                            >
+                              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M16 1H6a2 2 0 0 0-2 2v10h2V3h10V1z" />
+                                <path d="M20 5H10a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H10V7h10v14z" />
+                              </svg>
+                              {copiedKey === `sample-${index}-input` && (
+                                <span className="code-copy-text">Copied</span>
+                              )}
+                            </button>
+                            <pre>{sample.input}</pre>
+                          </div>
+                        </div>
+                        <div className="case-io-block">
+                          <div className="case-io-label">Output</div>
+                          <div className="code-block">
+                            <button
+                              type="button"
+                              className="code-copy"
+                              onClick={() =>
+                                copyToClipboard(sample.output, `sample-${index}-output`)
+                              }
+                              aria-label={`Copy sample ${index + 1} output`}
+                            >
+                              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M16 1H6a2 2 0 0 0-2 2v10h2V3h10V1z" />
+                                <path d="M20 5H10a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H10V7h10v14z" />
+                              </svg>
+                              {copiedKey === `sample-${index}-output` && (
+                                <span className="code-copy-text">Copied</span>
+                              )}
+                            </button>
+                            <pre>{sample.output}</pre>
+                          </div>
+                        </div>
                       </div>
                       {hasExplanation && (
                         <div>
@@ -575,17 +646,55 @@ const resubmitMutation = useResubmitSubmission({
               <div className="testcase-list">
                 {problem.testCases.map((testCase, index) => (
                   <div key={`${testCase.input}-${index}`} className="testcase-card">
-                    <strong>
+                    <strong className="case-title">
                       Case {index + 1} · {testCase.points ?? 1} pt
                       {testCase.points === 1 ? '' : 's'}
                     </strong>
-                    <div>
-                      <span>Input</span>
-                      <pre>{testCase.input}</pre>
-                    </div>
-                    <div>
-                      <span>Output</span>
-                      <pre>{testCase.output}</pre>
+                    <div className="case-io">
+                      <div className="case-io-block">
+                        <div className="case-io-label">Input</div>
+                        <div className="code-block">
+                          <button
+                            type="button"
+                            className="code-copy"
+                            onClick={() =>
+                              copyToClipboard(testCase.input, `testcase-${index}-input`)
+                            }
+                            aria-label={`Copy test case ${index + 1} input`}
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                              <path d="M16 1H6a2 2 0 0 0-2 2v10h2V3h10V1z" />
+                              <path d="M20 5H10a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H10V7h10v14z" />
+                            </svg>
+                            {copiedKey === `testcase-${index}-input` && (
+                              <span className="code-copy-text">Copied</span>
+                            )}
+                          </button>
+                          <pre>{testCase.input}</pre>
+                        </div>
+                      </div>
+                      <div className="case-io-block">
+                        <div className="case-io-label">Output</div>
+                        <div className="code-block">
+                          <button
+                            type="button"
+                            className="code-copy"
+                            onClick={() =>
+                              copyToClipboard(testCase.output, `testcase-${index}-output`)
+                            }
+                            aria-label={`Copy test case ${index + 1} output`}
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                              <path d="M16 1H6a2 2 0 0 0-2 2v10h2V3h10V1z" />
+                              <path d="M20 5H10a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H10V7h10v14z" />
+                            </svg>
+                            {copiedKey === `testcase-${index}-output` && (
+                              <span className="code-copy-text">Copied</span>
+                            )}
+                          </button>
+                          <pre>{testCase.output}</pre>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}
