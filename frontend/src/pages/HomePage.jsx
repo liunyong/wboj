@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
 import {
@@ -27,14 +26,6 @@ function HomePage() {
     queryKey: ['announcements'],
     queryFn: async () => {
       const response = await authFetch('/api/announcements?limit=20&pinnedFirst=true', {}, { skipAuth: true });
-      return response?.items ?? [];
-    }
-  });
-
-  const updatesQuery = useQuery({
-    queryKey: ['problem-updates'],
-    queryFn: async () => {
-      const response = await authFetch('/api/problem-updates?limit=20', {}, { skipAuth: true });
       return response?.items ?? [];
     }
   });
@@ -96,17 +87,15 @@ function HomePage() {
   });
 
   const announcements = announcementsQuery.data ?? [];
-  const problemUpdates = updatesQuery.data ?? [];
 
   const seoConfig = useMemo(() => {
     const latestAnnouncements = announcements.slice(0, 5);
-    const latestUpdates = problemUpdates.slice(0, 5);
 
     return {
       title: 'WBOJ | WB Online Judge for Coding, Algorithms, and Competitive Programming',
-      description: 'Practice coding, solve algorithm problems, and track updates on the WB Online Judge platform.',
+      description: 'Practice coding, solve algorithm problems, and read the latest platform announcements.',
       titleKo: 'WBOJ | WB 온라인 저지 플랫폼',
-      descriptionKo: '코딩 연습, 알고리즘 문제 풀이, 플랫폼 공지와 업데이트를 한곳에서 확인하세요.',
+      descriptionKo: '코딩 연습, 알고리즘 문제 풀이, 플랫폼 공지를 한곳에서 확인하세요.',
 
       path: '/',
       jsonLd: [
@@ -129,22 +118,6 @@ function HomePage() {
           }
         },
         {
-          id: 'home-updates',
-          data: {
-            '@context': 'https://schema.org',
-            '@type': 'Blog',
-            name: 'Problem Changelog',
-            url: `${siteMeta.siteUrl}/problems`,
-            blogPost: latestUpdates.map((entry) => ({
-              '@type': 'BlogPosting',
-              headline: entry.title ?? entry.problemTitle ?? 'Problem update',
-              url: `${siteMeta.siteUrl}/problems/${entry.problemId ?? ''}`,
-              dateModified: entry.updatedAt ?? entry.createdAt ?? new Date().toISOString(),
-              inLanguage: ['en', 'ko']
-            }))
-          }
-        },
-        {
           id: 'site-search',
           data: {
             '@context': 'https://schema.org',
@@ -161,7 +134,7 @@ function HomePage() {
         }
       ]
     };
-  }, [announcements, problemUpdates]);
+  }, [announcements]);
 
   usePageSeo(seoConfig);
 
@@ -204,7 +177,7 @@ function HomePage() {
       <header className="page-header">
         <div>
           <h1>Welcome</h1>
-          <p>Catch up on platform announcements and recent problem changes.</p>
+          <p>Catch up on the latest platform announcements and notices.</p>
         </div>
       </header>
 
@@ -407,41 +380,6 @@ function HomePage() {
             })}
           </ul>
         </div>
-
-        <aside className="home-updates">
-          <div className="section-header">
-            <h2>Problem Updates</h2>
-            <Link to="/problems" className="secondary">
-              Browse Problems
-            </Link>
-          </div>
-
-          {updatesQuery.isLoading && <div className="page-message">Loading updates…</div>}
-          {updatesQuery.isError && (
-            <div className="page-message error">Failed to load problem updates.</div>
-          )}
-
-          {!updatesQuery.isLoading && problemUpdates.length === 0 && (
-            <div className="page-message">No recent updates.</div>
-          )}
-
-          <ul className="updates-list">
-            {problemUpdates.map((update) => (
-              <li key={update.id}>
-                <h3>
-                  <Link to={`/problems/${update.problemId}`}>{update.titleSnapshot}</Link>
-                </h3>
-                <p>{update.summary}</p>
-                <span
-                  className="update-date"
-                  title={update.createdAt ? formatTooltip(update.createdAt, userTimeZone) : '—'}
-                >
-                  {formatRelativeOrDate(update.createdAt, nowMs, userTimeZone)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </aside>
       </div>
     </section>
   );
