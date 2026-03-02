@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useSubmissionStream } from '../hooks/useSubmissionStream.js';
 import { useLanguages } from '../hooks/useLanguages.js';
 import { applyEventToSubmissionList } from '../utils/submissions.js';
-import { STATUS_CLASS, STATUS_LABELS } from '../utils/submissionStatus.js';
+import { STATUS_CLASS, getCaseProgressLabel } from '../utils/submissionStatus.js';
 import {
   formatRelativeOrDate,
   formatTooltip,
@@ -302,7 +302,7 @@ function ProblemSubmissionsPanel({
                           onClick={() => onVerdictClick(submission._id)}
                         >
                           <span className={`status-badge ${STATUS_CLASS[submission.status] || ''}`}>
-                            {STATUS_LABELS[submission.status] ?? submission.status}
+                            {getCaseProgressLabel(submission)}
                           </span>
                         </button>
                       </td>

@@ -2210,6 +2210,104 @@ textarea {
   color: #475569;
 }
 
+.status-text {
+  font-weight: 700;
+}
+
+.submission-modal__history,
+.submission-modal__cases {
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 0.75rem;
+  padding: 0.9rem;
+  background: #f8fafc;
+}
+
+.submission-modal__history h3,
+.submission-modal__cases h3 {
+  margin: 0 0 0.75rem;
+}
+
+.submission-modal__history ul,
+.submission-modal__case-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.submission-modal__history-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.6rem;
+  background: #fff;
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.history-time {
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.history-verdict {
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.history-metrics {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  color: #475569;
+  font-size: 0.88rem;
+}
+
+.history-error {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.submission-modal__case-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.6rem;
+  background: #fff;
+}
+
+.submission-modal__case-label {
+  font-weight: 600;
+}
+
+.submission-modal__case-mark {
+  font-weight: 700;
+}
+
+.submission-modal__case-mark.is-correct {
+  color: #15803d;
+}
+
+.submission-modal__case-mark.is-wrong {
+  color: #b91c1c;
+}
+
+.submission-modal__private {
+  padding: 1rem;
+  color: #cbd5e1;
+}
+
 .submission-modal__code {
   flex: 1 1 auto;
   min-height: 200px;

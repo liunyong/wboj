@@ -103,7 +103,7 @@ const fetchSubmissionList = async ({
       .skip(skip)
       .limit(limit)
       .select(
-        '_id user userName problemId problemTitle language languageId status score runtimeMs execTimeMs memoryKB memoryKb createdAt queuedAt startedAt finishedAt lastRunAt'
+        '_id user userName problemId problemTitle language languageId status score runtimeMs execTimeMs memoryKB memoryKb createdAt queuedAt startedAt finishedAt lastRunAt resultSummary'
       )
       .lean(),
     Submission.countDocuments(filters)
@@ -248,6 +248,7 @@ const sanitizedGlobalSubmission = (submission, extra = {}, { resolveLanguageLabe
     finishedAt: submission.finishedAt,
     lastRunAt: submission.lastRunAt,
     deletedAt: submission.deletedAt ?? null,
+    resultSummary: submission.resultSummary ?? { score: 0, cases: [] },
     ...extra
   };
 };
@@ -290,6 +291,8 @@ const buildSubmissionDetail = (submission, { resolveLanguageLabel } = {}) => {
     startedAt: submission.startedAt,
     finishedAt: submission.finishedAt,
     lastRunAt: submission.lastRunAt,
+    resultSummary: submission.resultSummary ?? { score: 0, cases: [] },
+    testCaseResults: Array.isArray(submission.testCaseResults) ? submission.testCaseResults : [],
     runs: Array.isArray(submission.runs)
       ? submission.runs.map((run) => ({
           at: run.at,

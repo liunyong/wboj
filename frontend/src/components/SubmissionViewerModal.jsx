@@ -8,6 +8,10 @@ import {
   getUserTZ
 } from '../utils/time.js';
 import { useLanguages } from '../hooks/useLanguages.js';
+import {
+  extractCaseOutcomes,
+  getCaseProgressLabel
+} from '../utils/submissionStatus.js';
 import CodeBlock from './CodeBlock.jsx';
 
 const RUN_STATUS_LABELS = {
@@ -65,6 +69,7 @@ function SubmissionViewerModal({
   const languageSlug =
     submission?.language ??
     (submission?.languageId != null ? `language-${submission.languageId}` : null);
+  const caseOutcomes = extractCaseOutcomes(submission);
 
   const lastRunAtIso =
     submission?.lastRunAt ??
@@ -134,7 +139,7 @@ function SubmissionViewerModal({
               <div>
                 <span className="label">Status</span>
                 <span className={`status-text status-${submission.status}`}>
-                  {submission.status}
+                  {getCaseProgressLabel(submission)}
                 </span>
               </div>
               <div>
@@ -195,6 +200,26 @@ function SubmissionViewerModal({
                       </li>
                     );
                   })}
+                </ul>
+              </div>
+            ) : null}
+
+            {caseOutcomes.length ? (
+              <div className="submission-modal__cases">
+                <h3>Case Results</h3>
+                <ul className="submission-modal__case-list">
+                  {caseOutcomes.map((item) => (
+                    <li key={item.index} className="submission-modal__case-item">
+                      <span className="submission-modal__case-label">Case {item.index}</span>
+                      <span
+                        className={`submission-modal__case-mark ${
+                          item.passed ? 'is-correct' : 'is-wrong'
+                        }`}
+                      >
+                        {item.passed ? '✓ Correct' : '✗ Wrong'}
+                      </span>
+                    </li>
+                  ))}
                 </ul>
               </div>
             ) : null}

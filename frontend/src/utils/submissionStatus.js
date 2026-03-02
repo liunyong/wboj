@@ -34,3 +34,43 @@ export const STATUS_OPTIONS = [
 export const PENDING_STATUSES = new Set(['queued', 'running']);
 
 export const isPendingStatus = (status) => PENDING_STATUSES.has(status);
+
+const asFiniteInteger = (value) => (Number.isInteger(value) && value > 0 ? value : null);
+
+export const extractCaseOutcomes = (submission) => {
+  const summaryCases = Array.isArray(submission?.resultSummary?.cases)
+    ? submission.resultSummary.cases
+    : [];
+  if (summaryCases.length > 0) {
+    return summaryCases.map((item, index) => ({
+      index: asFiniteInteger(item?.i) ?? index + 1,
+      passed: Boolean(item?.pass)
+    }));
+  }
+
+  const testCaseResults = Array.isArray(submission?.testCaseResults)
+    ? submission.testCaseResults
+    : [];
+  if (testCaseResults.length > 0) {
+    return testCaseResults.map((item, index) => ({
+      index: asFiniteInteger(item?.index) ?? index + 1,
+      passed: Boolean(item?.passed)
+    }));
+  }
+
+  return [];
+};
+
+export const getCaseProgressLabel = (submission) => {
+  if (isPendingStatus(submission?.status)) {
+    return STATUS_LABELS[submission.status] ?? submission.status ?? 'Pending';
+  }
+
+  const outcomes = extractCaseOutcomes(submission);
+  if (outcomes.length === 0) {
+    return STATUS_LABELS[submission?.status] ?? submission?.status ?? 'Unknown';
+  }
+
+  const passedCount = outcomes.filter((item) => item.passed).length;
+  return `${passedCount}/${outcomes.length}`;
+};

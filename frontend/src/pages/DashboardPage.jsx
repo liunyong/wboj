@@ -22,6 +22,10 @@ import SubmissionViewerModal from '../components/SubmissionViewerModal.jsx';
 import { useMySubmissions } from '../hooks/useMySubmissions.js';
 import { usePageSeo } from '../hooks/useSeo.js';
 import { siteMeta } from '../utils/seo.js';
+import {
+  STATUS_CLASS,
+  getCaseProgressLabel
+} from '../utils/submissionStatus.js';
 
 const currentYear = new Date().getUTCFullYear();
 const selectableYears = [currentYear, currentYear - 1, currentYear - 2];
@@ -371,73 +375,68 @@ function DashboardPage() {
                 return submissionsQuery.data.map((submission) => {
                   const submissionKey = submission.id ?? submission._id;
                   const problemLinkId = submission.problem?.problemId;
-                const isProcessing =
-                  submission.status === 'queued' || submission.status === 'running';
-                const displayVerdict = isProcessing
-                  ? 'Grading…'
-                  : submission.verdict ?? submission.status;
-                const verdictClassKey = submission.verdict
-                  ? submission.verdict.toLowerCase()
-                  : submission.status ?? 'pending';
-                const languageSlug =
-                  submission.language ??
-                  (submission.languageId != null ? `language-${submission.languageId}` : null);
-                const displayLanguage =
-                  resolveLanguageLabel(
-                    submission.languageId,
-                    languageSlug ?? (submission.languageId != null ? String(submission.languageId) : null)
-                  ) ?? '—';
-                const submittedAt = submission.submittedAt ?? submission.createdAt;
-                const lastRunAt =
-                  submission.lastRunAt ??
-                  submission.finishedAt ??
-                  submission.startedAt ??
-                  submittedAt;
-                const lastRunLabel = formatRelativeOrDate(lastRunAt, nowMs, userTimeZone);
-                const lastRunTooltip = lastRunAt ? formatTooltip(lastRunAt, userTimeZone) : '—';
-                const isResubmitPending =
-                  resubmittingId === submissionKey && resubmitMutation.isPending;
-                const isResubmitBlocked =
-                  problemLinkId && pendingProblemIds.has(String(problemLinkId));
+                  const languageSlug =
+                    submission.language ??
+                    (submission.languageId != null ? `language-${submission.languageId}` : null);
+                  const displayLanguage =
+                    resolveLanguageLabel(
+                      submission.languageId,
+                      languageSlug ??
+                        (submission.languageId != null ? String(submission.languageId) : null)
+                    ) ?? '—';
+                  const submittedAt = submission.submittedAt ?? submission.createdAt;
+                  const lastRunAt =
+                    submission.lastRunAt ??
+                    submission.finishedAt ??
+                    submission.startedAt ??
+                    submittedAt;
+                  const lastRunLabel = formatRelativeOrDate(lastRunAt, nowMs, userTimeZone);
+                  const lastRunTooltip = lastRunAt ? formatTooltip(lastRunAt, userTimeZone) : '—';
+                  const isResubmitPending =
+                    resubmittingId === submissionKey && resubmitMutation.isPending;
+                  const isResubmitBlocked =
+                    problemLinkId && pendingProblemIds.has(String(problemLinkId));
 
-                return (
-                  <tr key={submissionKey}>
-                    <td>
-                      {submission.problem?.title && problemLinkId ? (
-                        <Link to={`/problems/${problemLinkId}`}>
-                          {submission.problem.title} (#{problemLinkId})
-                        </Link>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className="link-button verdict-link"
-                        onClick={() => handleVerdictClick(submissionKey)}
-                      >
-                        <span className={`verdict verdict-${verdictClassKey}`}>{displayVerdict}</span>
-                      </button>
-                    </td>
-                    <td>{
-                      typeof submission.score === 'number' ? `${submission.score}%` : '—'
-                    }</td>
-                    <td>{displayLanguage}</td>
-                    <td title={lastRunTooltip}>{lastRunLabel}</td>
-                    <td className="submission-actions">
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() => handleResubmit(submission)}
-                        disabled={isResubmitPending || isResubmitBlocked}
-                        title={isResubmitBlocked ? RESUBMIT_BLOCKED_TITLE : undefined}
-                      >
-                        {isResubmitPending ? 'Re-submitting…' : 'Re-submit'}
-                      </button>
-                    </td>
-                  </tr>
-                );
+                  return (
+                    <tr key={submissionKey}>
+                      <td>
+                        {submission.problem?.title && problemLinkId ? (
+                          <Link to={`/problems/${problemLinkId}`}>
+                            {submission.problem.title} (#{problemLinkId})
+                          </Link>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="link-button verdict-link"
+                          onClick={() => handleVerdictClick(submissionKey)}
+                        >
+                          <span className={`status-badge ${STATUS_CLASS[submission.status] || ''}`}>
+                            {getCaseProgressLabel(submission)}
+                          </span>
+                        </button>
+                      </td>
+                      <td>{
+                        typeof submission.score === 'number' ? `${submission.score}%` : '—'
+                      }</td>
+                      <td>{displayLanguage}</td>
+                      <td title={lastRunTooltip}>{lastRunLabel}</td>
+                      <td className="submission-actions">
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => handleResubmit(submission)}
+                          disabled={isResubmitPending || isResubmitBlocked}
+                          title={isResubmitBlocked ? RESUBMIT_BLOCKED_TITLE : undefined}
+                        >
+                          {isResubmitPending ? 'Re-submitting…' : 'Re-submit'}
+                        </button>
+                      </td>
+                    </tr>
+                  );
                 });
               })()}
             </tbody>

@@ -16,8 +16,8 @@ import {
 import { detailToEvent, getPendingProblemIdSet } from '../utils/submissions.js';
 import {
   STATUS_CLASS,
-  STATUS_LABELS,
-  STATUS_OPTIONS
+  STATUS_OPTIONS,
+  getCaseProgressLabel
 } from '../utils/submissionStatus.js';
 import SubmissionViewerModal from '../components/SubmissionViewerModal.jsx';
 
@@ -518,7 +518,7 @@ function SubmissionsPage() {
                         onClick={() => handleVerdictClick(submission._id)}
                       >
                         <span className={`status-badge ${STATUS_CLASS[submission.status] || ''}`}>
-                          {STATUS_LABELS[submission.status] ?? submission.status}
+                          {getCaseProgressLabel(submission)}
                         </span>
                       </button>
                     </td>

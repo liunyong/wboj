@@ -42,7 +42,8 @@ export const transformEventToRow = (event, { problem = null } = {}) => {
     lastRunAt:
       event.lastRunAt ?? event.finishedAt ?? event.startedAt ?? event.createdAt ?? createdAt,
     userId: event.userId ?? null,
-    userName: event.userName ?? null
+    userName: event.userName ?? null,
+    resultSummary: event.resultSummary ?? { score: 0, cases: [] }
   };
 };
 
@@ -127,7 +128,8 @@ export const applyEventToSubmissionList = (
         event.lastRunAt ?? existing.lastRunAt ?? event.finishedAt ?? existing.finishedAt ?? null,
       problemTitle: event.problemTitle ?? existing.problemTitle,
       language: event.language ?? existing.language,
-      languageId: event.languageId ?? existing.languageId
+      languageId: event.languageId ?? existing.languageId,
+      resultSummary: event.resultSummary ?? existing.resultSummary
     };
     return updated;
   }
@@ -220,6 +222,7 @@ export const detailToEvent = (detail) => {
     queuedAt: detail.queuedAt ?? null,
     startedAt: detail.startedAt ?? null,
     finishedAt: detail.finishedAt ?? null,
-    lastRunAt: detail.lastRunAt ?? detail.finishedAt ?? null
+    lastRunAt: detail.lastRunAt ?? detail.finishedAt ?? null,
+    resultSummary: detail.resultSummary ?? { score: 0, cases: [] }
   };
 };
