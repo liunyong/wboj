@@ -19,6 +19,14 @@ const sampleSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const languageTemplateSchema = new mongoose.Schema(
+  {
+    languageId: { type: Number, required: true, min: 1 },
+    template: { type: String, required: true }
+  },
+  { _id: false }
+);
+
 const problemSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
@@ -50,6 +58,7 @@ const problemSchema = new mongoose.Schema(
     },
     samples: { type: [sampleSchema], default: [] },
     judge0LanguageIds: { type: [Number], default: [71] },
+    languageTemplates: { type: [languageTemplateSchema], default: [] },
     testCases: {
       type: [testCaseSchema],
       default: [],

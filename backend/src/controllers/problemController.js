@@ -59,6 +59,36 @@ const normalizeSource = (source) => {
   return source.trim();
 };
 
+const normalizeLanguageTemplates = (templates = [], allowedLanguageIds = []) => {
+  const allowedSet = new Set(
+    (Array.isArray(allowedLanguageIds) ? allowedLanguageIds : [])
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value) && value > 0)
+  );
+  const entries = Array.isArray(templates) ? templates : [];
+  const deduped = new Map();
+
+  for (const entry of entries) {
+    const languageId = Number(entry?.languageId);
+    if (!Number.isFinite(languageId) || languageId <= 0) {
+      continue;
+    }
+    if (allowedSet.size > 0 && !allowedSet.has(languageId)) {
+      continue;
+    }
+    const template = typeof entry?.template === 'string' ? entry.template : '';
+    if (!template.trim()) {
+      continue;
+    }
+    deduped.set(languageId, template);
+  }
+
+  return Array.from(deduped.entries()).map(([languageId, template]) => ({
+    languageId,
+    template
+  }));
+};
+
 const isAdmin = (user) => ['admin', 'super_admin'].includes(user?.role);
 
 const assignIfDefined = (target, key, value) => {
@@ -236,6 +266,10 @@ export const createProblem = async (req, res, next) => {
     }
     const tags = normalizeTags(clientPayload.tags);
     const algorithms = normalizeAlgorithms(clientPayload.algorithms);
+    const languageTemplates = normalizeLanguageTemplates(
+      clientPayload.languageTemplates,
+      clientPayload.judge0LanguageIds
+    );
     const sanitizedSamples = sanitizeSamples(clientPayload.samples);
     const sanitizedInputFormat = sanitizeOptionalRichText(clientPayload.inputFormat);
     const sanitizedOutputFormat = sanitizeOptionalRichText(clientPayload.outputFormat);
@@ -272,6 +306,7 @@ export const createProblem = async (req, res, next) => {
           algorithms,
           samples: sanitizedSamples,
           judge0LanguageIds: clientPayload.judge0LanguageIds,
+          languageTemplates,
           testCases: sanitizedTestCases,
           author: req.user?.id ?? null,
           problemId,
@@ -419,6 +454,22 @@ export const updateProblem = async (req, res, next) => {
 
     if (Object.prototype.hasOwnProperty.call(updates, 'judge0LanguageIds')) {
       nextUpdates.judge0LanguageIds = updates.judge0LanguageIds;
+    }
+
+    if (
+      Object.prototype.hasOwnProperty.call(updates, 'languageTemplates') ||
+      Object.prototype.hasOwnProperty.call(updates, 'judge0LanguageIds')
+    ) {
+      const targetLanguageIds = Object.prototype.hasOwnProperty.call(updates, 'judge0LanguageIds')
+        ? updates.judge0LanguageIds
+        : problem.judge0LanguageIds;
+      const targetTemplates = Object.prototype.hasOwnProperty.call(updates, 'languageTemplates')
+        ? updates.languageTemplates
+        : problem.languageTemplates;
+      nextUpdates.languageTemplates = normalizeLanguageTemplates(
+        targetTemplates,
+        targetLanguageIds
+      );
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, 'tags')) {

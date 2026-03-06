@@ -46,6 +46,7 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
   const [testCases, setTestCases] = useState([]);
   const [samples, setSamples] = useState([]);
   const [selectedLanguages, setSelectedLanguages] = useState([71]);
+  const [languageTemplates, setLanguageTemplates] = useState({});
   const [languageSelection, setLanguageSelection] = useState('71');
   const [error, setError] = useState('');
   const [algorithmInput, setAlgorithmInput] = useState('');
@@ -146,6 +147,19 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
     setSelectedLanguages(initialLanguages.length ? initialLanguages : [71]);
     setLanguageSelection(String((initialLanguages.length ? initialLanguages[0] : 71) ?? 71));
 
+    const nextLanguageTemplates = Object.fromEntries(
+      (initialProblem.languageTemplates ?? [])
+        .filter(
+          (item) =>
+            item &&
+            Number.isFinite(Number(item.languageId)) &&
+            typeof item.template === 'string' &&
+            item.template.length > 0
+        )
+        .map((item) => [String(Number(item.languageId)), item.template])
+    );
+    setLanguageTemplates(nextLanguageTemplates);
+
     setTestCases(
       (initialProblem.testCases ?? []).map((testCase) => ({
         uid: generateUid(),
@@ -177,6 +191,7 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
     setTestCases([]);
     setSamples([]);
     setSelectedLanguages([71]);
+    setLanguageTemplates({});
     setLanguageSelection('71');
     setAlgorithmInput('');
     setTagInput('');
@@ -282,6 +297,18 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
           : selectedLanguages;
         setSelectedLanguages(nextLanguages.length ? nextLanguages : [71]);
         setLanguageSelection(String((nextLanguages.length ? nextLanguages[0] : 71) ?? 71));
+        const nextLanguageTemplates = Object.fromEntries(
+          (response.languageTemplates ?? [])
+            .filter(
+              (item) =>
+                item &&
+                Number.isFinite(Number(item.languageId)) &&
+                typeof item.template === 'string' &&
+                item.template.length > 0
+            )
+            .map((item) => [String(Number(item.languageId)), item.template])
+        );
+        setLanguageTemplates(nextLanguageTemplates);
         onSuccess?.(response);
       } else {
         resetForm();
@@ -400,6 +427,32 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
 
   const handleRemoveLanguage = (value) => {
     setSelectedLanguages((prev) => prev.filter((item) => item !== value));
+    setLanguageTemplates((prev) => {
+      if (!Object.prototype.hasOwnProperty.call(prev, String(value))) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[String(value)];
+      return next;
+    });
+  };
+
+  const handleLanguageTemplateChange = (languageId, template) => {
+    const key = String(languageId);
+    setLanguageTemplates((prev) => {
+      if (!template) {
+        if (!Object.prototype.hasOwnProperty.call(prev, key)) {
+          return prev;
+        }
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return {
+        ...prev,
+        [key]: template
+      };
+    });
   };
 
   const handleOpenAddTestCase = () => {
@@ -519,18 +572,18 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
     validateMutation.mutate({ languageId, sourceCode });
   };
 
-  const insertImageMarkdown = (url) => {
+  const insertStatementSnippet = (snippet, cursorOffset = snippet.length) => {
     const textarea = statementTextareaRef.current;
     setForm((prev) => {
       const start = textarea?.selectionStart ?? prev.statementMd.length;
       const end = textarea?.selectionEnd ?? start;
       const before = prev.statementMd.slice(0, start);
       const after = prev.statementMd.slice(end);
-      const prefix = before.length === 0 ? '' : before.endsWith('\n') ? '\n' : '\n\n';
-      const suffix = after.length === 0 ? '\n\n' : after.startsWith('\n') ? '\n' : '\n\n';
-      const snippet = `${prefix}![](${url})${suffix}`;
-      const nextValue = `${before}${snippet}${after}`;
-      const cursor = before.length + snippet.length;
+      const prefix = before.length === 0 ? '' : before.endsWith('\n') ? '' : '\n';
+      const suffix = after.length === 0 ? '' : after.startsWith('\n') ? '' : '\n';
+      const insertion = `${prefix}${snippet}${suffix}`;
+      const nextValue = `${before}${insertion}${after}`;
+      const cursor = before.length + prefix.length + cursorOffset;
 
       const scheduler =
         typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function'
@@ -546,6 +599,16 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
 
       return { ...prev, statementMd: nextValue };
     });
+  };
+
+  const insertImageMarkdown = (url) => {
+    const snippet = `![](${url})\n`;
+    insertStatementSnippet(snippet, snippet.length);
+  };
+
+  const handleInsertCodeBlock = () => {
+    const snippet = '```cpp\nint main() {\n  return 0;\n}\n```\n';
+    insertStatementSnippet(snippet, '```cpp\n'.length);
   };
 
   const handleImageUploadClick = () => {
@@ -651,6 +714,15 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
       outputFormat: form.outputFormat || undefined,
       constraints: form.constraints || undefined,
       judge0LanguageIds: selectedLanguages,
+      languageTemplates: selectedLanguages
+        .map((languageId) => {
+          const template = languageTemplates[String(languageId)] ?? '';
+          return {
+            languageId,
+            template
+          };
+        })
+        .filter((item) => item.template.trim().length > 0),
       samples: samples.map((sample) => {
         const next = {
           input: sample.input,
@@ -688,6 +760,13 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
 
   const languages = languagesQuery.data ?? [];
   const selectedLanguageObjects = languages.filter((lang) => selectedLanguages.includes(lang.id));
+  const selectedLanguageTemplateItems = selectedLanguages.map((languageId) => {
+    const found = languages.find((language) => language.id === languageId);
+    return {
+      id: languageId,
+      name: found?.name ?? `Language ${languageId}`
+    };
+  });
   const sourceOptions = sourcesQuery.data ?? [];
 
   const submitLabel = isEdit ? 'Update problem' : 'Create problem';
@@ -767,12 +846,22 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
           <div className="markdown-editor__header">
             <div className="markdown-editor__title">
               <label htmlFor="problem-statement-input">Statement</label>
-              <span className="markdown-editor__hint">Markdown + LaTeX supported</span>
+              <span className="markdown-editor__hint">
+                Markdown + LaTeX + fenced code blocks supported
+              </span>
             </div>
             <div className="markdown-editor__actions">
               {isUploadingImage && (
                 <span className="markdown-editor__uploading">Uploading image…</span>
               )}
+              <button
+                type="button"
+                className="secondary"
+                onClick={handleInsertCodeBlock}
+                disabled={!isReady || isUploadingImage}
+              >
+                Insert Code Block
+              </button>
               <button
                 type="button"
                 className="secondary"
@@ -799,7 +888,7 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
               rows={12}
               required
               disabled={!isReady}
-              placeholder="Describe the problem. Use $...$ for inline math and $$...$$ for displayed equations."
+              placeholder="Describe the problem. Use $...$ for inline math, $$...$$ for displayed equations, and ```lang ... ``` for code blocks."
               ref={statementTextareaRef}
             />
             <div className="markdown-editor__preview" aria-live="polite">
@@ -1009,6 +1098,35 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
             )}
           </div>
         </div>
+
+        <section className="language-template-section">
+          <header className="language-template-section__header">
+            <h3>Language Templates</h3>
+            <span className="helper-text">
+              Optional. Leave blank to start with an empty editor.
+            </span>
+          </header>
+          {selectedLanguageTemplateItems.length ? (
+            <div className="language-template-section__list">
+              {selectedLanguageTemplateItems.map((language) => (
+                <label key={language.id}>
+                  {language.name}
+                  <textarea
+                    value={languageTemplates[String(language.id)] ?? ''}
+                    onChange={(event) =>
+                      handleLanguageTemplateChange(language.id, event.target.value)
+                    }
+                    rows={8}
+                    placeholder={`Optional starter code for ${language.name}`}
+                    disabled={!isReady}
+                  />
+                </label>
+              ))}
+            </div>
+          ) : (
+            <span className="helper-text">Add at least one language to configure templates.</span>
+          )}
+        </section>
 
         <section className="testcase-section">
           <header className="testcase-section__header">

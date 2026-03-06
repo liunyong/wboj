@@ -45,6 +45,17 @@ const judge0LanguageIdsSchema = z
   .array(z.coerce.number().int().positive('Language id must be positive'))
   .min(1, 'At least one language id is required');
 
+const languageTemplateSchema = z.object({
+  languageId: z.coerce.number().int().positive('Language id must be positive'),
+  template: z.string().max(50000, 'Template must be 50000 characters or fewer')
+});
+
+const languageTemplatesSchema = z
+  .array(languageTemplateSchema)
+  .max(50, 'A maximum of 50 language templates is supported')
+  .optional()
+  .default([]);
+
 const buildStatementSchema = (message) =>
   z
     .string()
@@ -112,6 +123,7 @@ export const createProblemSchema = z
     tags: tagsArraySchema.optional().default([]),
     samples: z.array(sampleSchema).optional().default([]),
     judge0LanguageIds: judge0LanguageIdsSchema.optional().default([71]),
+    languageTemplates: languageTemplatesSchema,
     testCases: z
       .array(testCaseSchema)
       .min(1, 'At least one test case is required')
@@ -174,6 +186,7 @@ export const updateProblemSchema = z
     tags: tagsArraySchema.optional(),
     samples: z.array(sampleSchema).optional(),
     judge0LanguageIds: judge0LanguageIdsSchema.optional(),
+    languageTemplates: languageTemplatesSchema.optional(),
     testCases: z
       .array(testCaseSchema)
       .min(1, 'At least one test case is required')

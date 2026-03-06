@@ -56,4 +56,18 @@ describe('ProblemStatement', () => {
     expect(screen.queryByRole('img')).toBeNull();
     expect(screen.getByText(/Attack/)).toBeInTheDocument();
   });
+
+  it('renders fenced code blocks with language class', () => {
+    const { container } = render(
+      <ProblemStatement source={"```python\nprint('hello')\n```"} />
+    );
+
+    const pre = container.querySelector('pre');
+    const code = container.querySelector('pre code');
+
+    expect(pre).not.toBeNull();
+    expect(code).not.toBeNull();
+    expect(code?.textContent).toContain("print('hello')");
+    expect(code?.className).toContain('language-python');
+  });
 });

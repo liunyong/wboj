@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import CodeEditor from './CodeEditor.jsx';
 
 const statusLabels = {
   0: 'Skipped',
@@ -32,6 +33,10 @@ function ValidateTestCasesModal({
   const [sourceCode, setSourceCode] = useState('');
 
   const resolvedLanguageId = languageId || defaultLanguageId || (languages?.[0]?.id ?? '');
+  const selectedLanguageName = useMemo(
+    () => languages.find((language) => String(language.id) === String(resolvedLanguageId))?.name ?? '',
+    [languages, resolvedLanguageId]
+  );
 
   useEffect(() => {
     if (open) {
@@ -88,10 +93,12 @@ function ValidateTestCasesModal({
           </label>
           <label>
             Reference Solution
-            <textarea
+            <CodeEditor
+              id="validate-reference-solution"
               rows={10}
+              languageName={selectedLanguageName}
               value={sourceCode}
-              onChange={(event) => setSourceCode(event.target.value)}
+              onChange={setSourceCode}
               placeholder="Paste a correct solution snippet for this language"
               required
             />

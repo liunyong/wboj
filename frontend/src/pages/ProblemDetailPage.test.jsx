@@ -1,36 +1,19 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup } from '@testing-library/react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ProblemDetailPage from './ProblemDetailPage.jsx';
 
 const submissionCalls = [];
 let mySubmissionsResponse = { items: [] };
+let problemResponse = null;
 
 const authFetchMock = vi.fn(async (path, options = {}, _meta = {}) => {
   if (path.startsWith('/api/problems/')) {
-    return {
-      _id: '507f1f77bcf86cd799439011',
-      problemId: 345,
-      title: 'Sample Problem',
-      statement: 'Add two numbers.',
-      statementMd: 'Add two numbers.',
-      author: {
-        _id: '64f1f77bcf86cd799439012',
-        username: 'problem_maker',
-        profile: { displayName: 'Problem Maker' }
-      },
-      judge0LanguageIds: [71],
-      isPublic: true,
-      testCases: [
-        { input: '1 2', output: '3', points: 1 },
-        { input: '5 7', output: '12', points: 1 }
-      ],
-      submissionCount: 0,
-      acceptedSubmissionCount: 0
-    };
+    return problemResponse;
   }
 
   if (path === '/api/languages') {
@@ -113,9 +96,33 @@ vi.mock('../components/SubmissionViewerModal.jsx', () => ({
 }));
 
 describe('ProblemDetailPage submission form', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   beforeEach(() => {
     submissionCalls.length = 0;
     mySubmissionsResponse = { items: [] };
+    problemResponse = {
+      _id: '507f1f77bcf86cd799439011',
+      problemId: 345,
+      title: 'Sample Problem',
+      statement: 'Add two numbers.',
+      statementMd: 'Add two numbers.',
+      author: {
+        _id: '64f1f77bcf86cd799439012',
+        username: 'problem_maker',
+        profile: { displayName: 'Problem Maker' }
+      },
+      judge0LanguageIds: [71],
+      isPublic: true,
+      testCases: [
+        { input: '1 2', output: '3', points: 1 },
+        { input: '5 7', output: '12', points: 1 }
+      ],
+      submissionCount: 0,
+      acceptedSubmissionCount: 0
+    };
     authFetchMock.mockClear();
   });
 
@@ -157,13 +164,69 @@ describe('ProblemDetailPage submission form', () => {
       ([path]) => path === '/api/submissions'
     );
     expect(submissionCallEntry).toBeDefined();
-    expect(submissionCallEntry[1]).toMatchObject({
-      method: 'POST',
-      body: { sourceCode: codeSample, languageId: 71 }
-    });
+    expect(submissionCallEntry[1]?.method).toBe('POST');
+    expect(submissionCallEntry[1]?.body?.sourceCode).toBe(codeSample);
+    expect(submissionCallEntry[1]?.body?.languageId).toBe(71);
 
     expect(submissionCalls[0].sourceCode).toBe(codeSample);
     expect(submissionCalls[0].sourceCode).not.toContain('class="token');
+
+    queryClient.clear();
+  });
+
+  it('uses problem-defined templates and keeps drafts per language', async () => {
+    problemResponse = {
+      ...problemResponse,
+      judge0LanguageIds: [71, 63],
+      languageTemplates: [{ languageId: 71, template: 'def solve():\n  pass' }]
+    };
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false
+        }
+      }
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/problems/345']}>
+          <Routes>
+            <Route path="/problems/:problemId" element={<ProblemDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    await screen.findByText('Author: Problem Maker');
+
+    const textarea = await screen.findByLabelText('Source Code');
+    await waitFor(() => {
+      const field = screen.getByLabelText('Source Code');
+      expect(String(field.value)).toContain('def solve():');
+    });
+
+    fireEvent.change(textarea, { target: { value: 'print(123)' } });
+
+    const languageSelect = screen.getByLabelText('Language');
+    fireEvent.change(languageSelect, { target: { value: '63' } });
+
+    await waitFor(() => {
+      const field = screen.getByLabelText('Source Code');
+      expect(field).toHaveValue('');
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Load Template' })).toBeDisabled();
+    });
+
+    fireEvent.change(languageSelect, { target: { value: '71' } });
+
+    await waitFor(() => {
+      const field = screen.getByLabelText('Source Code');
+      expect(field).toHaveValue('print(123)');
+    });
 
     queryClient.clear();
   });

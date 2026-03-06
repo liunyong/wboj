@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
+import CodeEditor from '../components/CodeEditor.jsx';
 import ProblemStatement from '../components/ProblemStatement.jsx';
 import ProblemSubmissionsPanel from '../components/ProblemSubmissionsPanel.jsx';
 import SubmissionViewerModal from '../components/SubmissionViewerModal.jsx';
@@ -28,6 +29,7 @@ function ProblemDetailPage() {
   const location = useLocation();
   const [languageId, setLanguageId] = useState('');
   const [sourceCode, setSourceCode] = useState('');
+  const [sourceDrafts, setSourceDrafts] = useState({});
   const [message, setMessage] = useState(null);
   const [pendingDeletion, setPendingDeletion] = useState(false);
   const [activeSubmissionId, setActiveSubmissionId] = useState(null);
@@ -238,6 +240,21 @@ const resubmitMutation = useResubmitSubmission({
     }
     return languages;
   }, [languages, problem?.judge0LanguageIds]);
+  const selectedLanguageId = languageId || (allowedLanguages[0]?.id ?? '');
+  const languageTemplateMap = useMemo(() => {
+    const next = new Map();
+    for (const item of problem?.languageTemplates ?? []) {
+      const id = Number(item?.languageId);
+      const template = typeof item?.template === 'string' ? item.template : '';
+      if (!Number.isFinite(id) || !template.trim()) {
+        continue;
+      }
+      if (allowedLanguages.some((language) => language.id === id)) {
+        next.set(String(id), template);
+      }
+    }
+    return next;
+  }, [allowedLanguages, problem?.languageTemplates]);
 
   const preferStatement = (markdown, fallback) => {
     if (typeof markdown === 'string' && markdown.trim()) {
@@ -386,6 +403,16 @@ const resubmitMutation = useResubmitSubmission({
   }, [allowedLanguages, languageId]);
 
   useEffect(() => {
+    const currentLanguageId = String(selectedLanguageId || '');
+    if (!currentLanguageId) {
+      return;
+    }
+    const draft = sourceDrafts[currentLanguageId];
+    const template = languageTemplateMap.get(currentLanguageId) ?? '';
+    setSourceCode(typeof draft === 'string' ? draft : template);
+  }, [languageTemplateMap, selectedLanguageId]);
+
+  useEffect(() => {
     if (location.state?.flash) {
       setMessage(location.state.flash);
       navigate(location.pathname, { replace: true });
@@ -438,7 +465,6 @@ const resubmitMutation = useResubmitSubmission({
     setActiveSubmissionId(null);
   }, []);
 
-  const selectedLanguageId = languageId || (allowedLanguages[0]?.id ?? '');
   const testCaseCount = problem?.testCaseCount ?? problem?.testCases?.length ?? 0;
   const totalPoints = problem?.totalPoints ??
     (problem?.testCases?.reduce((sum, testCase) => sum + (testCase.points || 0), 0) ?? 0);
@@ -459,6 +485,65 @@ const resubmitMutation = useResubmitSubmission({
   const cachedActiveSubmission = activeSubmissionId
     ? getSubmissionFromCaches(activeSubmissionId)
     : null;
+
+  const handleLanguageChange = (event) => {
+    const nextLanguageId = event.target.value;
+    const currentLanguageId = String(selectedLanguageId || '');
+
+    if (currentLanguageId) {
+      setSourceDrafts((prev) => ({
+        ...prev,
+        [currentLanguageId]: sourceCode
+      }));
+    }
+
+    const nextDraft = sourceDrafts[nextLanguageId];
+    const template = languageTemplateMap.get(nextLanguageId) ?? '';
+    const nextSourceCode = typeof nextDraft === 'string' ? nextDraft : template;
+
+    if (typeof nextDraft !== 'string' && template) {
+      setSourceDrafts((prev) => ({
+        ...prev,
+        [nextLanguageId]: template
+      }));
+    }
+
+    setLanguageId(nextLanguageId);
+    setSourceCode(nextSourceCode);
+  };
+
+  const handleSourceCodeChange = (nextValue) => {
+    const nextSourceCode =
+      typeof nextValue === 'string'
+        ? nextValue
+        : nextValue?.target?.value ?? '';
+    const currentLanguageId = String(selectedLanguageId || '');
+
+    setSourceCode(nextSourceCode);
+
+    if (currentLanguageId) {
+      setSourceDrafts((prev) => ({
+        ...prev,
+        [currentLanguageId]: nextSourceCode
+      }));
+    }
+  };
+
+  const handleLoadTemplate = () => {
+    const currentLanguageId = String(selectedLanguageId || '');
+    if (!currentLanguageId) {
+      return;
+    }
+    const template = languageTemplateMap.get(currentLanguageId);
+    if (!template) {
+      return;
+    }
+    setSourceCode(template);
+    setSourceDrafts((prev) => ({
+      ...prev,
+      [currentLanguageId]: template
+    }));
+  };
 
   return (
     <section className="page">
@@ -720,7 +805,7 @@ const resubmitMutation = useResubmitSubmission({
                   Language
                   <select
                     value={selectedLanguageId}
-                    onChange={(event) => setLanguageId(event.target.value)}
+                    onChange={handleLanguageChange}
                   >
                     {allowedLanguages.map((lang) => (
                       <option key={lang.id} value={lang.id}>
@@ -729,16 +814,30 @@ const resubmitMutation = useResubmitSubmission({
                     ))}
                   </select>
                 </label>
-                <label>
-                  Source Code
-                  <textarea
+                <div className="submission-form__field">
+                  <div className="submission-form__code-header">
+                    <label htmlFor="problem-submit-source-code">Source Code</label>
+                    <button
+                      type="button"
+                      className="secondary submission-form__template-button"
+                      onClick={handleLoadTemplate}
+                      disabled={!languageTemplateMap.get(String(selectedLanguageId || ''))}
+                    >
+                      Load Template
+                    </button>
+                  </div>
+                  <CodeEditor
+                    id="problem-submit-source-code"
+                    languageName={allowedLanguages.find(
+                      (language) => String(language.id) === String(selectedLanguageId)
+                    )?.name}
                     value={sourceCode}
-                    onChange={(event) => setSourceCode(event.target.value)}
+                    onChange={handleSourceCodeChange}
                     rows={12}
                     placeholder="Write your solution here…"
                     required
                   />
-                </label>
+                </div>
                 <button
                   type="submit"
                   disabled={submissionMutation.isLoading || isSubmissionBlocked}
