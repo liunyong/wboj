@@ -397,6 +397,28 @@ export const touchSession = async (userId, sid, { force = false } = {}) => {
   };
 };
 
+export const validateSession = async (userId, sid) => {
+  if (!sid) {
+    return null;
+  }
+
+  const user = await User.findById(userId).select('sessions');
+  if (!user) {
+    return null;
+  }
+
+  const sessions = pruneExpiredSessions(user.sessions ?? []);
+  const session = sessions.find((entry) => entry.tokenHash === sid);
+
+  await persistSessionsIfChanged(user, sessions);
+
+  if (!session) {
+    return null;
+  }
+
+  return { inactivityExpiresAt: session.inactivityExpiresAt.getTime() };
+};
+
 export const getSessionMeta = async (userId, sid) => {
   if (!sid) {
     return null;

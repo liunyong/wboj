@@ -79,6 +79,11 @@ export function AuthProvider({ children }) {
   const queryClient = useQueryClient();
   const [tokens, setTokens] = useState(loadTokens);
   const refreshPromiseRef = useRef(null);
+  const tokensRef = useRef(tokens);
+
+  useEffect(() => {
+    tokensRef.current = tokens;
+  }, [tokens]);
 
   const saveTokens = (nextTokens) => {
     const normalized = {
@@ -342,6 +347,43 @@ export function AuthProvider({ children }) {
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
   }, [clearTokens]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const handlePageHide = () => {
+      const refreshToken = tokensRef.current?.refreshToken;
+      if (!refreshToken) {
+        return;
+      }
+
+      const body = JSON.stringify({ refreshToken });
+      const url = buildUrl('/api/auth/logout');
+      let sent = false;
+
+      if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+        try {
+          sent = navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
+        } catch (_error) {
+          sent = false;
+        }
+      }
+
+      if (!sent) {
+        fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+          keepalive: true
+        }).catch(() => {});
+      }
+    };
+
+    window.addEventListener('pagehide', handlePageHide);
+    return () => window.removeEventListener('pagehide', handlePageHide);
+  }, []);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -1,5 +1,5 @@
 import User from '../models/User.js';
-import { decodeAccessToken, touchSession } from '../services/authService.js';
+import { decodeAccessToken, touchSession, validateSession } from '../services/authService.js';
 
 const extractBearerToken = (req) => {
   const header = req.headers['authorization'] || req.headers['Authorization'];
@@ -13,7 +13,7 @@ const extractBearerToken = (req) => {
   return token?.trim() ?? '';
 };
 
-const resolveUserFromToken = async (token) => {
+const resolveUserFromToken = async (token, { touch = false } = {}) => {
   const payload = decodeAccessToken(token);
   if (!payload?.sub || !payload?.sid) {
     return null;
@@ -24,8 +24,10 @@ const resolveUserFromToken = async (token) => {
   if (!user || !user.isActive || user.deletedAt) {
     return null;
   }
-  const touchResult = await touchSession(payload.sub, payload.sid);
-  if (!touchResult) {
+  const sessionResult = touch
+    ? await touchSession(payload.sub, payload.sid)
+    : await validateSession(payload.sub, payload.sid);
+  if (!sessionResult) {
     return null;
   }
   return {
@@ -41,7 +43,7 @@ const resolveUserFromToken = async (token) => {
     updatedAt: user.updatedAt,
     session: {
       sid: payload.sid,
-      inactivityExpiresAt: touchResult.inactivityExpiresAt
+      inactivityExpiresAt: sessionResult.inactivityExpiresAt
     }
   };
 };
@@ -52,7 +54,7 @@ export const authenticateOptional = async (req, res, next) => {
     if (!token) {
       return next();
     }
-    const resolved = await resolveUserFromToken(token);
+    const resolved = await resolveUserFromToken(token, { touch: false });
     if (resolved) {
       const { session, ...user } = resolved;
       req.user = user;
@@ -71,7 +73,28 @@ export const requireAuth = async (req, res, next) => {
       return res.status(401).json({ code: 'UNAUTHENTICATED', message: 'Authentication required' });
     }
 
-    const resolved = await resolveUserFromToken(token);
+    const resolved = await resolveUserFromToken(token, { touch: false });
+    if (!resolved) {
+      return res.status(401).json({ code: 'UNAUTHENTICATED', message: 'Invalid or expired token' });
+    }
+
+    const { session, ...user } = resolved;
+    req.user = user;
+    req.session = session;
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const requireAuthAndTouch = async (req, res, next) => {
+  try {
+    const token = extractBearerToken(req);
+    if (!token) {
+      return res.status(401).json({ code: 'UNAUTHENTICATED', message: 'Authentication required' });
+    }
+
+    const resolved = await resolveUserFromToken(token, { touch: true });
     if (!resolved) {
       return res.status(401).json({ code: 'UNAUTHENTICATED', message: 'Invalid or expired token' });
     }

@@ -72,7 +72,7 @@ export const getSessionPolicy = async (_req, res) => {
     accessTokenTtl: ACCESS_TOKEN_TTL,
     refreshTokenTtl: REFRESH_TOKEN_TTL,
     inactivityTtlMs: SESSION_INACTIVITY_TTL_MS,
-    warningLeadMs: parseDurationMs(WARNING_LEAD_MS, 15 * 60 * 1000),
+    warningLeadMs: parseDurationMs(WARNING_LEAD_MS, 5 * 60 * 1000),
     minTouchIntervalMs: SESSION_MIN_TOUCH_INTERVAL_MS
   });
 };

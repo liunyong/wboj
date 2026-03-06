@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 
 import { useAuth } from '../context/AuthContext.jsx';
 
-const DEFAULT_WARNING_LEAD_MS = 15 * 60 * 1000;
+const DEFAULT_WARNING_LEAD_MS = 5 * 60 * 1000;
 const DEFAULT_MIN_TOUCH_INTERVAL_MS = 60 * 1000;
 const DEFAULT_STATE_POLL_MS = 60 * 1000;
 const TIMER_INTERVAL_MS = 1000;
