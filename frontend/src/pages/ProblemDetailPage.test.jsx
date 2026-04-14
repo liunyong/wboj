@@ -231,6 +231,39 @@ describe('ProblemDetailPage submission form', () => {
     queryClient.clear();
   });
 
+  it('matches templates even when judge0LanguageIds are strings', async () => {
+    problemResponse = {
+      ...problemResponse,
+      judge0LanguageIds: ['71'],
+      languageTemplates: [{ languageId: 71, template: 'print("from-template")' }]
+    };
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false
+        }
+      }
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/problems/345']}>
+          <Routes>
+            <Route path="/problems/:problemId" element={<ProblemDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    await screen.findByText('Author: Problem Maker');
+    await waitFor(() => {
+      expect(screen.getByLabelText('Source Code')).toHaveValue('print("from-template")');
+    });
+
+    queryClient.clear();
+  });
+
   it('disables submit when a pending submission exists for the problem', async () => {
     mySubmissionsResponse = {
       items: [

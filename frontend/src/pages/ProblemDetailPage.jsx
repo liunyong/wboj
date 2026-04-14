@@ -234,13 +234,21 @@ const resubmitMutation = useResubmitSubmission({
     timeouts.set(key, timeoutId);
   }, []);
 
+  const allowedLanguageIdSet = useMemo(() => {
+    const ids = Array.isArray(problem?.judge0LanguageIds) ? problem.judge0LanguageIds : [];
+    return new Set(
+      ids.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0)
+    );
+  }, [problem?.judge0LanguageIds]);
+
   const allowedLanguages = useMemo(() => {
-    if (problem?.judge0LanguageIds?.length) {
-      return languages.filter((item) => problem.judge0LanguageIds.includes(item.id));
+    if (allowedLanguageIdSet.size > 0) {
+      return languages.filter((item) => allowedLanguageIdSet.has(Number(item.id)));
     }
     return languages;
-  }, [languages, problem?.judge0LanguageIds]);
-  const selectedLanguageId = languageId || (allowedLanguages[0]?.id ?? '');
+  }, [allowedLanguageIdSet, languages]);
+
+  const selectedLanguageId = languageId || String(allowedLanguages[0]?.id ?? '');
   const languageTemplateMap = useMemo(() => {
     const next = new Map();
     for (const item of problem?.languageTemplates ?? []) {
@@ -249,12 +257,12 @@ const resubmitMutation = useResubmitSubmission({
       if (!Number.isFinite(id) || !template.trim()) {
         continue;
       }
-      if (allowedLanguages.some((language) => language.id === id)) {
+      if (allowedLanguageIdSet.size === 0 || allowedLanguageIdSet.has(id)) {
         next.set(String(id), template);
       }
     }
     return next;
-  }, [allowedLanguages, problem?.languageTemplates]);
+  }, [allowedLanguageIdSet, problem?.languageTemplates]);
 
   const preferStatement = (markdown, fallback) => {
     if (typeof markdown === 'string' && markdown.trim()) {
