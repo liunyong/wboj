@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import Problem from '../models/Problem.js';
 import Submission from '../models/Submission.js';
-import { incrementUserDailyStats } from '../services/statsService.js';
+import { reconcilePendingSubmissionAccounting } from '../services/submissionAccountingService.js';
 import {
   publishSubmissionEvent,
   subscribeSubmissionStream,
@@ -9,6 +9,7 @@ import {
 } from '../services/submissionStreamService.js';
 import { sanitizeSourceCode } from '../utils/sourceSanitizer.js';
 import { getLanguageResolver } from '../utils/languageResolver.js';
+import { env } from '../config/env.js';
 import {
   resubmitAndUpdate,
   deleteSubmission as deleteSubmissionService,
@@ -19,9 +20,9 @@ import {
 
 const loadLanguageResolver = async () => {
   try {
-    return await getLanguageResolver();
+    return await getLanguageResolver({ allowStale: true });
   } catch (error) {
-    console.warn('Failed to load Judge0 language metadata', error);
+    console.warn('Failed to load Judge0 language metadata', { message: error.message });
     return null;
   }
 };
@@ -325,6 +326,7 @@ const markSubmissionFailed = async (submission, { verdict = 'IE', save = true, e
   submission.verdict = submission.verdict ?? verdict;
   submission.finishedAt = finishedAt;
   submission.lastRunAt = finishedAt;
+  submission.activeKey = undefined;
   if (error) {
     const message = error?.message ?? 'Execution failed';
     submission.runs = Array.isArray(submission.runs) ? submission.runs : [];
@@ -346,8 +348,17 @@ const markSubmissionFailed = async (submission, { verdict = 'IE', save = true, e
   emitSubmissionEvent(submission);
 };
 
-const processSubmission = async (submissionId) => {
-  const submission = await Submission.findById(submissionId)
+export const processSubmission = async (submissionId) => {
+  const claimed = await Submission.findOneAndUpdate(
+    { _id: submissionId, status: 'queued', deletedAt: null },
+    { $set: { status: 'running', startedAt: new Date(), lastRunAt: new Date() } },
+    { new: true }
+  );
+  if (!claimed) {
+    return;
+  }
+
+  const submission = await Submission.findById(claimed._id)
     .populate('problem')
     .populate('user', 'username');
 
@@ -362,18 +373,16 @@ const processSubmission = async (submissionId) => {
     return;
   }
 
-  submission.status = 'running';
-  submission.startedAt = new Date();
-  submission.lastRunAt = submission.startedAt;
-  await submission.save();
   emitSubmissionEvent(submission);
 
+  let finalized = false;
   try {
     const evaluation = await evaluateSubmissionRun({ submission, problem });
     const finishedAt = new Date();
 
     submission.verdict = evaluation.verdict;
-    submission.status = evaluation.status;
+    const finalStatus = evaluation.status;
+    submission.status = 'running';
     submission.score = evaluation.score;
     submission.execTimeMs = evaluation.execTimeMs;
     submission.runtimeMs = evaluation.execTimeMs;
@@ -384,6 +393,7 @@ const processSubmission = async (submissionId) => {
     submission.judge0 = evaluation.judge0;
     submission.finishedAt = finishedAt;
     submission.lastRunAt = finishedAt;
+    submission.accountingPending = true;
     submission.runs = Array.isArray(submission.runs) ? submission.runs : [];
     submission.runs.push({
       at: finishedAt,
@@ -396,35 +406,21 @@ const processSubmission = async (submissionId) => {
       time: evaluation.execTimeMs ?? null,
       memory: evaluation.memoryKb ?? null
     });
+    submission.runs = submission.runs.slice(-env.maxRunHistory);
 
     await submission.save();
+    await reconcilePendingSubmissionAccounting();
+    submission.status = finalStatus;
+    submission.activeKey = undefined;
+    submission.accountingPending = false;
+    await submission.save();
+    finalized = true;
     emitSubmissionEvent(submission);
-
-    await Problem.updateOne(
-      { _id: problem._id },
-      {
-        $inc: {
-          submissionCount: 1,
-          acceptedSubmissionCount: evaluation.verdict === 'AC' ? 1 : 0
-        }
-      },
-      { timestamps: false }
-    );
-
-    const userId =
-      submission.user?._id?.toString() ??
-      submission.user?.id ??
-      submission.user?.toString() ??
-      submission.userId;
-
-    if (userId) {
-      await incrementUserDailyStats(new mongoose.Types.ObjectId(userId), submission.submittedAt, {
-        submitDelta: 1,
-        acDelta: evaluation.verdict === 'AC' ? 1 : 0
-      });
-    }
   } catch (error) {
     console.error(`Failed to process submission ${submissionId}`, error);
+    if (finalized) {
+      return;
+    }
     await markSubmissionFailed(submission, { error });
   }
 };
@@ -528,6 +524,7 @@ export const createSubmission = async (req, res, next) => {
       sourceLen: normalizedSourceCode.length,
       verdict: 'PENDING',
       status: 'queued',
+      activeKey: `${userId}:${problem._id}`,
       score: 0,
       submittedAt: now,
       queuedAt: now
@@ -541,6 +538,12 @@ export const createSubmission = async (req, res, next) => {
       initialStatus: 'queued'
     });
   } catch (error) {
+    if (error?.code === 11000 && error?.keyPattern?.activeKey) {
+      return res.status(409).json({
+        code: 'SUBMISSION_PENDING',
+        message: 'Submission already in progress for this problem'
+      });
+    }
     next(error);
   }
 };

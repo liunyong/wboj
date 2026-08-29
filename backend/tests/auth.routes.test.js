@@ -95,6 +95,37 @@ describe('Auth routes', () => {
     expect(response.body.details[0].message).toContain('Password must include at least three');
   });
 
+  it('rejects usernames that violate the naming policy', async () => {
+    const response = await request(app).post('/api/auth/register').send({
+      username: 'admin123',
+      email: 'policy@example.com',
+      password: 'Password123!',
+      confirmPassword: 'Password123!'
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe('VALIDATION_ERROR');
+    expect(response.body.details).toContainEqual({
+      path: 'username',
+      message: 'Username does not meet our naming policy'
+    });
+  });
+
+  it('rejects obfuscated prohibited usernames', async () => {
+    const response = await request(app).post('/api/auth/register').send({
+      username: 'f_u_c_k_123',
+      email: 'obfuscated-policy@example.com',
+      password: 'Password123!',
+      confirmPassword: 'Password123!'
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.details).toContainEqual({
+      path: 'username',
+      message: 'Username does not meet our naming policy'
+    });
+  });
+
   it('returns duplicate error when registering with an existing email', async () => {
     await request(app).post('/api/auth/register').send({
       username: 'uniqueuser1',

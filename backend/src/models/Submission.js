@@ -108,7 +108,9 @@ const submissionSchema = new mongoose.Schema(
     finishedAt: { type: Date },
     runs: { type: [runHistorySchema], default: [] },
     lastRunAt: { type: Date, default: null },
-    deletedAt: { type: Date, default: null }
+    deletedAt: { type: Date, default: null },
+    accountingPending: { type: Boolean, default: false, index: true },
+    activeKey: { type: String, default: undefined, select: false }
   },
   { timestamps: true }
 );
@@ -122,6 +124,10 @@ submissionSchema.index({ status: 1, createdAt: -1 });
 submissionSchema.index({ problemId: 1, deletedAt: 1, createdAt: -1 });
 submissionSchema.index({ user: 1, deletedAt: 1, createdAt: -1 });
 submissionSchema.index({ deletedAt: 1, createdAt: -1 });
+submissionSchema.index(
+  { activeKey: 1 },
+  { unique: true, partialFilterExpression: { activeKey: { $type: 'string' } } }
+);
 
 const Submission = mongoose.model('Submission', submissionSchema);
 

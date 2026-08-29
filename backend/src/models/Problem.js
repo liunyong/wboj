@@ -30,7 +30,7 @@ const languageTemplateSchema = new mongoose.Schema(
 const problemSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
-    slug: { type: String, unique: true, lowercase: true, trim: true },
+    slug: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
     problemId: { type: Number, required: true, unique: true, min: 100000, immutable: true },
     problemNumber: { type: Number, required: true, unique: true, min: 1, immutable: true },
     statement: { type: String, required: true },

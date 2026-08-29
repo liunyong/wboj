@@ -2,6 +2,8 @@ import AdmZip from '../utils/zipAdapter.js';
 
 const MAX_ZIP_BYTES = 50 * 1024 * 1024;
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
+const MAX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024;
+const MAX_ENTRIES = 1_100;
 
 const normalizeContent = (buffer, { trimTrailingWhitespace }) => {
   const content = buffer.toString('utf8').replace(/\r\n/g, '\n');
@@ -36,6 +38,17 @@ export const parseTestCasesFromZip = (buffer, { trimTrailingWhitespace = false }
 
   const zip = new AdmZip(buffer);
   const entries = zip.getEntries();
+  if (entries.length > MAX_ENTRIES) {
+    throw new Error('ZIP contains too many entries');
+  }
+
+  const totalUncompressedBytes = entries.reduce(
+    (sum, entry) => sum + (entry.isDirectory ? 0 : Number(entry.header.size || 0)),
+    0
+  );
+  if (totalUncompressedBytes > MAX_UNCOMPRESSED_BYTES) {
+    throw new Error('ZIP exceeds the uncompressed size limit');
+  }
   const warnings = [];
   const pairs = new Map();
 

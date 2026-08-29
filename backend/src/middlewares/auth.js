@@ -75,6 +75,9 @@ export const requireAuth = async (req, res, next) => {
 
     const resolved = await resolveUserFromToken(token, { touch: false });
     if (!resolved) {
+      if (req.baseUrl === '/api/session') {
+        return res.status(401).json({ code: 'SESSION_EXPIRED', message: 'Session has expired' });
+      }
       return res.status(401).json({ code: 'UNAUTHENTICATED', message: 'Invalid or expired token' });
     }
 

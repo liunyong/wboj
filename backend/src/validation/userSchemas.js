@@ -37,8 +37,24 @@ export const listUsersQuerySchema = z
   .object({
     search: z.string().max(64).optional(),
     role: z.enum(['user', 'admin', 'super_admin']).optional(),
-    isActive: z.coerce.boolean().optional(),
-    limit: z.coerce.number().int().min(1).max(200).optional().default(50)
+    isActive: z
+      .preprocess(
+        (value) => (value === 'true' ? true : value === 'false' ? false : value),
+        z.boolean()
+      )
+      .optional(),
+    page: z.coerce.number().int().min(1).optional().default(1),
+    limit: z.coerce.number().int().min(1).max(100).optional().default(25)
+  })
+  .strict();
+
+export const bulkDeleteUsersSchema = z
+  .object({
+    ids: z
+      .array(z.string().refine((value) => isObjectId(value), 'Each user id must be valid'))
+      .min(1, 'Select at least one user')
+      .max(100, 'At most 100 users can be deleted at once')
+      .transform((ids) => [...new Set(ids)])
   })
   .strict();
 

@@ -25,24 +25,23 @@ const loadTokens = () => {
   try {
     const storage = getTokenStorage();
     if (!storage) {
-      return { accessToken: null, refreshToken: null };
+      return { accessToken: null };
     }
     const stored = storage.getItem(STORAGE_KEY);
     if (!stored) {
       if (typeof window === 'undefined') {
-        return { accessToken: null, refreshToken: null };
+        return { accessToken: null };
       }
       const legacy =
         storage === window.sessionStorage
           ? window.localStorage.getItem(STORAGE_KEY)
           : window.sessionStorage.getItem(STORAGE_KEY);
       if (!legacy) {
-        return { accessToken: null, refreshToken: null };
+        return { accessToken: null };
       }
       const parsedLegacy = JSON.parse(legacy);
       const migrated = {
-        accessToken: parsedLegacy.accessToken ?? null,
-        refreshToken: parsedLegacy.refreshToken ?? null
+        accessToken: parsedLegacy.accessToken ?? null
       };
       storage.setItem(STORAGE_KEY, JSON.stringify(migrated));
       if (storage === window.sessionStorage) {
@@ -54,12 +53,11 @@ const loadTokens = () => {
     }
     const parsed = JSON.parse(stored);
     return {
-      accessToken: parsed.accessToken ?? null,
-      refreshToken: parsed.refreshToken ?? null
+      accessToken: parsed.accessToken ?? null
     };
   } catch (error) {
     console.warn('Failed to parse stored tokens', error);
-    return { accessToken: null, refreshToken: null };
+    return { accessToken: null };
   }
 };
 
@@ -93,8 +91,7 @@ export function AuthProvider({ children }) {
 
   const saveTokens = (nextTokens) => {
     const normalized = {
-      accessToken: nextTokens?.accessToken ?? null,
-      refreshToken: nextTokens?.refreshToken ?? null
+      accessToken: nextTokens?.accessToken ?? null
     };
     setTokens(normalized);
     const storage = getTokenStorage();
@@ -104,7 +101,7 @@ export function AuthProvider({ children }) {
   };
 
   const clearTokens = () => {
-    setTokens({ accessToken: null, refreshToken: null });
+    setTokens({ accessToken: null });
     const storage = getTokenStorage();
     if (storage) {
       storage.removeItem(STORAGE_KEY);
@@ -121,19 +118,15 @@ export function AuthProvider({ children }) {
   };
 
   const refreshTokens = async () => {
-    if (!tokens.refreshToken) {
-      return null;
-    }
-
     if (!refreshPromiseRef.current) {
       refreshPromiseRef.current = (async () => {
         try {
           const response = await fetch(buildUrl('/api/auth/refresh'), {
             method: 'POST',
+            credentials: 'include',
             headers: {
               'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ refreshToken: tokens.refreshToken })
+            }
           });
 
           if (!response.ok) {
@@ -177,13 +170,14 @@ export function AuthProvider({ children }) {
     const execute = async (currentBody) =>
       fetch(target, {
         ...init,
+        credentials: init.credentials ?? 'include',
         headers,
         body: currentBody
       });
 
     let response = await execute(body);
 
-    if (response.status === 401 && !skipAuth && tokens.refreshToken && retry) {
+    if (response.status === 401 && !skipAuth && retry) {
       const refreshedToken = await refreshTokens();
       if (refreshedToken) {
         headers.set('Authorization', `Bearer ${refreshedToken}`);
@@ -222,12 +216,12 @@ export function AuthProvider({ children }) {
     gcTime: 0
   });
 
-  const login = async ({ email, password }) => {
+  const login = async ({ email, password, turnstileToken }) => {
     const data = await authFetch(
       '/api/auth/login',
       {
         method: 'POST',
-        body: { email, password }
+        body: { email, password, ...(turnstileToken ? { turnstileToken } : {}) }
       },
       { skipAuth: true }
     );
@@ -237,12 +231,12 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
-  const register = async ({ username, email, password, confirmPassword }) => {
+  const register = async ({ username, email, password, confirmPassword, turnstileToken }) => {
     const data = await authFetch(
       '/api/auth/register',
       {
         method: 'POST',
-        body: { username, email, password, confirmPassword }
+        body: { username, email, password, confirmPassword, turnstileToken }
       },
       { skipAuth: true }
     );
@@ -261,22 +255,22 @@ export function AuthProvider({ children }) {
       { skipAuth: true }
     );
 
-  const resendVerification = async ({ email }) =>
+  const resendVerification = async ({ email, turnstileToken }) =>
     authFetch(
       '/api/auth/verify/resend',
       {
         method: 'POST',
-        body: { email }
+        body: { email, turnstileToken }
       },
       { skipAuth: true }
     );
 
-  const requestPasswordReset = async ({ email }) =>
+  const requestPasswordReset = async ({ email, turnstileToken }) =>
     authFetch(
       '/api/auth/password/reset/request',
       {
         method: 'POST',
-        body: { email }
+        body: { email, turnstileToken }
       },
       { skipAuth: true }
     );
@@ -292,19 +286,14 @@ export function AuthProvider({ children }) {
     );
 
   const logout = async () => {
-    if (tokens.refreshToken) {
-      try {
-        await authFetch(
-          '/api/auth/logout',
-          {
-            method: 'POST',
-            body: { refreshToken: tokens.refreshToken }
-          },
-          { skipAuth: true, retry: false }
-        );
-      } catch (error) {
-        // ignore
-      }
+    try {
+      await authFetch(
+        '/api/auth/logout',
+        { method: 'POST', body: {} },
+        { skipAuth: true, retry: false }
+      );
+    } catch (error) {
+      // Local logout still succeeds when the server is unavailable.
     }
 
     clearTokens();

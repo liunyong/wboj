@@ -20,6 +20,23 @@ import {
   verifyPasswordResetToken
 } from '../services/passwordResetService.js';
 import { getPasswordStrengthIssues } from '../validation/passwordRules.js';
+import { env } from '../config/env.js';
+import { verifyTurnstileToken } from '../services/turnstileService.js';
+
+const refreshCookieOptions = {
+  httpOnly: true,
+  secure: env.isProduction,
+  sameSite: 'strict',
+  path: '/api/auth',
+  maxAge: 7 * 24 * 60 * 60 * 1000
+};
+
+const setRefreshCookie = (res, refreshToken) =>
+  res.cookie(env.refreshCookieName, refreshToken, refreshCookieOptions);
+const clearRefreshCookie = (res) =>
+  res.clearCookie(env.refreshCookieName, refreshCookieOptions);
+const responseTokens = (tokens) =>
+  env.exposeRefreshToken ? tokens : { accessToken: tokens.accessToken };
 
 const sanitizeUser = (user) => ({
   id: user._id.toString(),
@@ -138,7 +155,10 @@ export const resendVerification = async (req, res, next) => {
 
     const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
-      return res.status(404).json({ code: 'USER_NOT_FOUND', message: 'User not found' });
+      return res.status(200).json({
+        code: 'VERIFICATION_EMAIL_SENT',
+        message: 'If the email is registered, a verification email has been sent'
+      });
     }
 
     if (user.emailVerified) {
@@ -312,6 +332,20 @@ export const login = async (req, res, next) => {
       return res.status(401).json({ code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' });
     }
 
+    if ((user.loginFailedAttempts ?? 0) >= env.loginCaptchaThreshold) {
+      const turnstile = await verifyTurnstileToken({
+        token: req.validated?.body?.turnstileToken,
+        remoteIp: req.ip,
+        expectedAction: 'login'
+      });
+      if (!turnstile.success) {
+        return res.status(403).json({
+          code: 'CAPTCHA_REQUIRED',
+          message: 'Complete the security check to continue'
+        });
+      }
+    }
+
     if (!user.isActive) {
       logAuth('warn', 'login blocked: inactive user', { userId: user._id.toString() });
       return res.status(403).json({ code: 'ACCOUNT_INACTIVE', message: 'Account is inactive' });
@@ -326,8 +360,21 @@ export const login = async (req, res, next) => {
 
     const isValid = await verifyPassword(password, user.passwordHash);
     if (!isValid) {
+      user.loginFailedAttempts = (user.loginFailedAttempts ?? 0) + 1;
+      await user.save();
       logAuth('warn', 'login failed: wrong password', { userId: user._id.toString() });
-      return res.status(401).json({ code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' });
+      const captchaRequired = user.loginFailedAttempts >= env.loginCaptchaThreshold;
+      return res.status(401).json({
+        code: captchaRequired ? 'CAPTCHA_REQUIRED' : 'INVALID_CREDENTIALS',
+        message: captchaRequired
+          ? 'Too many failed attempts. Complete the security check to continue.'
+          : 'Invalid credentials'
+      });
+    }
+
+    if (user.loginFailedAttempts) {
+      user.loginFailedAttempts = 0;
+      await user.save();
     }
 
     const userAgent = req.get('user-agent') ?? null;
@@ -336,9 +383,10 @@ export const login = async (req, res, next) => {
 
     logAuth('info', 'user logged in', { userId: user._id.toString() });
 
+    setRefreshCookie(res, tokens.refreshToken);
     res.json({
       user: sanitizeUser(user),
-      tokens
+      tokens: responseTokens(tokens)
     });
   } catch (error) {
     next(error);
@@ -347,10 +395,12 @@ export const login = async (req, res, next) => {
 
 export const logout = async (req, res, next) => {
   try {
-    const { refreshToken } = req.validated?.body || req.body;
+    const { refreshToken: bodyToken } = req.validated?.body || req.body;
+    const refreshToken = req.cookies?.[env.refreshCookieName] || bodyToken;
     if (refreshToken) {
       await revokeRefreshToken(refreshToken);
     }
+    clearRefreshCookie(res);
     res.status(204).send();
   } catch (error) {
     next(error);
@@ -370,7 +420,7 @@ export const updateProfile = async (req, res, next) => {
       return res.status(404).json({ code: 'USER_NOT_FOUND', message: 'User not found' });
     }
 
-    const nextProfile = { ...(user.profile ?? {}) };
+    const nextProfile = user.profile?.toObject?.() ?? { ...(user.profile ?? {}) };
     if (Object.prototype.hasOwnProperty.call(updates, 'displayName')) {
       nextProfile.displayName = updates.displayName;
     }
@@ -431,7 +481,8 @@ export const updatePassword = async (req, res, next) => {
 
 export const refresh = async (req, res, next) => {
   try {
-    const { refreshToken } = req.validated?.body || req.body;
+    const { refreshToken: bodyToken } = req.validated?.body || req.body;
+    const refreshToken = req.cookies?.[env.refreshCookieName] || bodyToken;
     if (!refreshToken) {
       return res
         .status(400)
@@ -458,9 +509,10 @@ export const refresh = async (req, res, next) => {
     const ip = result.session?.ip ?? req.ip ?? null;
     const tokens = await createAuthTokens(result.user, { userAgent, ip });
 
+    setRefreshCookie(res, tokens.refreshToken);
     res.json({
       user: sanitizeUser(result.user),
-      tokens
+      tokens: responseTokens(tokens)
     });
   } catch (error) {
     next(error);

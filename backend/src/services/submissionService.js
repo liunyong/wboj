@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Problem from '../models/Problem.js';
 import Submission from '../models/Submission.js';
 import { executeTestCases, buildCaseSummary } from './testCaseRunnerService.js';
+import { env } from '../config/env.js';
 
 const buildHttpError = (status, code, message, details) => {
   const error = new Error(message);
@@ -239,7 +240,7 @@ export const resubmitAndUpdate = async ({ submissionId, actingUser }) => {
     const previousVerdict = currentSubmission.verdict;
 
     const updateOps = {
-      $push: { runs: runEntry },
+      $push: { runs: { $each: [runEntry], $slice: -env.maxRunHistory } },
       $set: {
         lastRunAt: finishedAt
       }
@@ -259,7 +260,8 @@ export const resubmitAndUpdate = async ({ submissionId, actingUser }) => {
         judge0: evaluation.judge0,
         queuedAt: startedAt,
         startedAt,
-        finishedAt
+        finishedAt,
+        accountingPending: true
       });
     }
 
@@ -330,7 +332,7 @@ export const deleteSubmission = async ({ submissionId, actingUser }) => {
   await runWithOptionalTransaction(async (session) => {
     const updateResult = await Submission.updateOne(
       { _id: submissionId, deletedAt: null },
-      { $set: { deletedAt } },
+      { $set: { deletedAt, accountingPending: true } },
       sessionOptions(session)
     );
 

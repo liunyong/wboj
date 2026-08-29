@@ -1,24 +1,28 @@
 import { z } from 'zod';
 
 import { getPasswordStrengthIssues } from './passwordRules.js';
+import { USERNAME_POLICY_MESSAGE, usernameMeetsPolicy } from './usernamePolicy.js';
 
 const usernameSchema = z
   .string()
   .min(3, 'Username must be at least 3 characters')
   .max(32, 'Username must be 32 characters or fewer')
-  .regex(/^[a-zA-Z0-9_]+$/, 'Username may only contain letters, numbers, and underscores');
+  .regex(/^[a-zA-Z0-9_]+$/, 'Username may only contain letters, numbers, and underscores')
+  .refine(usernameMeetsPolicy, USERNAME_POLICY_MESSAGE);
 
 const passwordFieldSchema = z.string({ required_error: 'Password is required' });
 const confirmPasswordFieldSchema = z.string({
   required_error: 'Confirm password is required'
 });
+const turnstileTokenSchema = z.string().min(1, 'Security check is required').max(4096);
 
 export const registerSchema = z
   .object({
     username: usernameSchema,
     email: z.string().email('Provide a valid email address'),
     password: passwordFieldSchema,
-    confirmPassword: confirmPasswordFieldSchema
+    confirmPassword: confirmPasswordFieldSchema,
+    turnstileToken: turnstileTokenSchema.optional()
   })
   .strict()
   .superRefine((data, ctx) => {
@@ -47,19 +51,20 @@ export const registerSchema = z
 export const loginSchema = z
   .object({
     email: z.string().email('Provide a valid email address'),
-    password: z.string().min(1, 'Password is required')
+    password: z.string().min(1, 'Password is required'),
+    turnstileToken: turnstileTokenSchema.optional()
   })
   .strict();
 
 export const logoutSchema = z
   .object({
-    refreshToken: z.string().min(1, 'Refresh token is required')
+    refreshToken: z.string().min(1, 'Refresh token is required').optional()
   })
   .strict();
 
 export const refreshTokenSchema = z
   .object({
-    refreshToken: z.string().min(1, 'Refresh token is required')
+    refreshToken: z.string().min(1, 'Refresh token is required').optional()
   })
   .strict();
 
@@ -122,13 +127,15 @@ export const emailVerificationSchema = z
 
 export const resendVerificationSchema = z
   .object({
-    email: z.string().email('Provide a valid email address')
+    email: z.string().email('Provide a valid email address'),
+    turnstileToken: turnstileTokenSchema.optional()
   })
   .strict();
 
 export const passwordResetRequestSchema = z
   .object({
-    email: z.string().email('Provide a valid email address')
+    email: z.string().email('Provide a valid email address'),
+    turnstileToken: turnstileTokenSchema.optional()
   })
   .strict();
 

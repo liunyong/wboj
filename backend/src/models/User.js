@@ -29,6 +29,7 @@ const userSchema = new mongoose.Schema(
     passwordResetTokenHash: { type: String, default: null },
     passwordResetExpires: { type: Date, default: null },
     passwordResetSentAt: { type: Date, default: null },
+    loginFailedAttempts: { type: Number, default: 0, min: 0 },
     profile: {
       type: profileSchema,
       default: () => ({})

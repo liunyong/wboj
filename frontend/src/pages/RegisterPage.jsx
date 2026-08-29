@@ -2,6 +2,24 @@ import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
+import TurnstileWidget from '../components/TurnstileWidget.jsx';
+
+const countCharacterClasses = (value) =>
+  [/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z0-9]/].filter((pattern) => pattern.test(value)).length;
+
+const containsIdentityPart = (password, ...identities) => {
+  const normalizedPassword = password.toLowerCase();
+  return identities.some((identity) => {
+    const normalized = String(identity || '').toLowerCase().split('@')[0];
+    if (normalized.length < 4) return false;
+    for (let length = 4; length <= normalized.length; length += 1) {
+      for (let start = 0; start <= normalized.length - length; start += 1) {
+        if (normalizedPassword.includes(normalized.slice(start, start + length))) return true;
+      }
+    }
+    return false;
+  });
+};
 
 function RegisterPage() {
   const { register, resendVerification } = useAuth();
@@ -17,6 +35,8 @@ function RegisterPage() {
   const [resendStatus, setResendStatus] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileReset, setTurnstileReset] = useState(0);
   const usernameRef = useRef(null);
   const emailRef = useRef(null);
   const passwordRef = useRef(null);
@@ -59,7 +79,11 @@ function RegisterPage() {
     }
     setIsSubmitting(true);
     try {
-      const data = await register(form);
+      if (!turnstileToken) {
+        setError('Complete the security check before registering.');
+        return;
+      }
+      const data = await register({ ...form, turnstileToken });
       setVerificationInfo({
         email: data?.user?.email ?? form.email,
         message:
@@ -88,6 +112,7 @@ function RegisterPage() {
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     } finally {
+      setTurnstileReset((value) => value + 1);
       setIsSubmitting(false);
     }
   };
@@ -101,7 +126,14 @@ function RegisterPage() {
     setResendStatus(null);
 
     try {
-      const response = await resendVerification({ email: verificationInfo.email });
+      if (!turnstileToken) {
+        setResendStatus({ status: 'warning', message: 'Complete the security check first.' });
+        return;
+      }
+      const response = await resendVerification({
+        email: verificationInfo.email,
+        turnstileToken
+      });
       setResendStatus({
         status: 'success',
         message: response?.message || 'Verification email sent.'
@@ -112,12 +144,31 @@ function RegisterPage() {
         message: err.message || 'Unable to resend verification email.'
       });
     } finally {
+      setTurnstileReset((value) => value + 1);
       setIsResending(false);
     }
   };
 
   const fieldErrors = (field) => validationErrors.filter((detail) => detail.path === field);
   const generalValidationErrors = validationErrors.filter((detail) => !fieldRefs[detail.path]);
+  const passwordRules = [
+    { label: '10–128 characters', met: form.password.length >= 10 && form.password.length <= 128 },
+    {
+      label: 'At least 3 of: lowercase, uppercase, number, symbol',
+      met: countCharacterClasses(form.password) >= 3
+    },
+    { label: 'No spaces or other whitespace', met: form.password.length > 0 && !/\s/.test(form.password) },
+    {
+      label: 'Do not repeat the same character 3 times in a row',
+      met: form.password.length > 0 && !/(.)\1\1/.test(form.password)
+    },
+    {
+      label: 'Must not contain your username or email handle',
+      met:
+        form.password.length > 0 &&
+        !containsIdentityPart(form.password, form.username, form.email)
+    }
+  ];
 
   return (
     <section className="auth-page">
@@ -135,6 +186,12 @@ function RegisterPage() {
             <button type="button" onClick={handleResend} disabled={isResending}>
               {isResending ? 'Sending…' : 'Resend verification email'}
             </button>
+            <TurnstileWidget
+              action="resend_verification"
+              onVerify={setTurnstileToken}
+              onError={setError}
+              resetSignal={turnstileReset}
+            />
             {resendStatus && (
               <div
                 className={`form-message ${
@@ -197,8 +254,24 @@ function RegisterPage() {
                 ref={passwordRef}
                 onChange={handleChange}
                 required
+                minLength={10}
+                maxLength={128}
                 autoComplete="new-password"
               />
+              <div className="password-requirements" aria-live="polite">
+                <span>Password requirements</span>
+                <ul>
+                  {passwordRules.map((rule) => (
+                    <li
+                      key={rule.label}
+                      className={form.password ? (rule.met ? 'is-met' : 'is-unmet') : ''}
+                    >
+                      <span aria-hidden="true">{form.password ? (rule.met ? '✓' : '○') : '○'}</span>{' '}
+                      {rule.label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
               {fieldErrors('password').map((detail, index) => (
                 <div key={`password-error-${index}`} className="form-message error">
                   {detail.message}
@@ -222,6 +295,12 @@ function RegisterPage() {
                 </div>
               ))}
             </label>
+            <TurnstileWidget
+              action="register"
+              onVerify={setTurnstileToken}
+              onError={setError}
+              resetSignal={turnstileReset}
+            />
             <button type="submit" disabled={isSubmitting}>
               {isSubmitting ? 'Creating…' : 'Register'}
             </button>

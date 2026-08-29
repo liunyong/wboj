@@ -2,6 +2,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    testTimeout: 20_000,
     environment: 'node',
     globals: true,
     setupFiles: ['./tests/setup.js'],

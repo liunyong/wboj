@@ -20,6 +20,9 @@ const getTransporter = () => {
 };
 
 export const sendEmail = async ({ to, subject, text, html }) => {
+  if (process.env.NODE_ENV === 'test') {
+    return { accepted: [], rejected: [], skipped: true };
+  }
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
     console.warn('[email] transport not configured; skipping send', { to, subject });
     return { accepted: [], rejected: [to], skipped: true };

@@ -1,6 +1,11 @@
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import Submission from '../models/Submission.js';
+import Problem from '../models/Problem.js';
+import Announcement from '../models/Announcement.js';
+import UserStatsDaily from '../models/UserStatsDaily.js';
+
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const sanitizeUser = (user) => ({
   id: user._id.toString(),
@@ -18,12 +23,12 @@ const sanitizeUser = (user) => ({
 
 export const listUsers = async (req, res, next) => {
   try {
-    const { search, role, isActive, limit = 50 } = req.validated?.query || {};
+    const { search, role, isActive, page = 1, limit = 25 } = req.validated?.query || {};
 
     const filters = { deletedAt: null };
 
     if (search) {
-      const searchRegex = new RegExp(search, 'i');
+      const searchRegex = new RegExp(escapeRegExp(search.trim()), 'i');
       filters.$or = [
         { username: searchRegex },
         { email: searchRegex },
@@ -39,14 +44,24 @@ export const listUsers = async (req, res, next) => {
       filters.isActive = isActive;
     }
 
-    const users = await User.find(filters)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .select(
-        'username email emailVerified role isActive deletedAt profile profilePublic createdAt updatedAt'
-      );
+    const [users, total] = await Promise.all([
+      User.find(filters)
+        .sort({ createdAt: -1, _id: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .select(
+          'username email emailVerified role isActive deletedAt profile profilePublic createdAt updatedAt'
+        ),
+      User.countDocuments(filters)
+    ]);
 
-    res.json({ items: users.map(sanitizeUser) });
+    res.json({
+      items: users.map(sanitizeUser),
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit))
+    });
   } catch (error) {
     next(error);
   }
@@ -103,39 +118,59 @@ export const updateUserStatus = async (req, res, next) => {
   }
 };
 
-export const deleteUserKeepSubmissions = async (req, res, next) => {
+export const deleteUsersPermanently = async (req, res, next) => {
   try {
-    const { id } = req.validated?.params || req.params;
-
-    const user = await User.findById(id);
-    if (!user) {
-      return res.status(404).json({ code: 'USER_NOT_FOUND', message: 'User not found' });
+    const ids = req.validated?.body?.ids ?? [req.validated?.params?.id || req.params.id];
+    if (ids.includes(req.user.id)) {
+      return res.status(400).json({
+        code: 'CANNOT_DELETE_SELF',
+        message: 'You cannot delete your own account while signed in'
+      });
     }
 
-    if (user.deletedAt) {
+    const objectIds = ids.map((id) => new mongoose.Types.ObjectId(id));
+    const users = await User.find({ _id: { $in: objectIds } }).select('_id');
+    if (!users.length) {
+      return res.status(404).json({ code: 'USER_NOT_FOUND', message: 'No users found' });
+    }
+    const existingIds = users.map((user) => user._id);
+    const affectedProblemIds = await Submission.distinct('problem', {
+      user: { $in: existingIds }
+    });
+
+    await Promise.all([
+      Submission.deleteMany({ user: { $in: existingIds } }),
+      UserStatsDaily.deleteMany({ user: { $in: existingIds } }),
+      Problem.updateMany({ author: { $in: existingIds } }, { $unset: { author: 1 } }),
+      Announcement.updateMany({ author: { $in: existingIds } }, { $unset: { author: 1 } })
+    ]);
+    await User.deleteMany({ _id: { $in: existingIds } });
+
+    await Promise.all(
+      affectedProblemIds.filter(Boolean).map(async (problemId) => {
+        const filter = { problem: problemId, deletedAt: null, finishedAt: { $ne: null } };
+        const [submissionCount, acceptedSubmissionCount] = await Promise.all([
+          Submission.countDocuments(filter),
+          Submission.countDocuments({ ...filter, verdict: 'AC' })
+        ]);
+        await Problem.updateOne(
+          { _id: problemId },
+          { $set: { submissionCount, acceptedSubmissionCount } },
+          { timestamps: false }
+        );
+      })
+    );
+
+    const deletedIds = existingIds.map(String);
+    const payload = {
+      deletedCount: deletedIds.length,
+      deletedIds,
+      notFoundIds: ids.filter((id) => !deletedIds.includes(id))
+    };
+    if (req.params.id) {
       return res.status(204).send();
     }
-
-    const userId = user._id;
-
-    try {
-      await Submission.updateMany(
-        {
-          user: userId,
-          $or: [{ userName: { $exists: false } }, { userName: null }, { userName: '' }]
-        },
-        { $set: { userName: user.username } }
-      );
-    } catch (submissionError) {
-      console.error('Failed to backfill submission usernames before user deletion', submissionError);
-    }
-
-    user.deletedAt = new Date();
-    user.isActive = false;
-    user.sessions = [];
-    await user.save();
-
-    res.status(204).send();
+    return res.json(payload);
   } catch (error) {
     next(error);
   }

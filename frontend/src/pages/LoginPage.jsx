@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
+import TurnstileWidget from '../components/TurnstileWidget.jsx';
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -13,6 +14,9 @@ function LoginPage() {
   const [notice, setNotice] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  const [captchaRequired, setCaptchaRequired] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileReset, setTurnstileReset] = useState(0);
 
   const buildRedirectTarget = () => {
     const redirectParam = new URLSearchParams(location.search).get('redirect');
@@ -35,9 +39,18 @@ function LoginPage() {
     setNotice(null);
     setIsSubmitting(true);
     try {
-      await login({ email, password });
+      if (captchaRequired && !turnstileToken) {
+        setError('Complete the security check before logging in.');
+        return;
+      }
+      await login({ email, password, turnstileToken });
       navigate(buildRedirectTarget(), { replace: true });
     } catch (err) {
+      if (err.code === 'CAPTCHA_REQUIRED') {
+        setCaptchaRequired(true);
+        setError(err.message || 'Complete the security check to continue.');
+        return;
+      }
       if (err.code === 'EMAIL_NOT_VERIFIED') {
         setNotice({
           status: 'warning',
@@ -48,6 +61,7 @@ function LoginPage() {
         setError(err.message || 'Login failed');
       }
     } finally {
+      if (captchaRequired || turnstileToken) setTurnstileReset((value) => value + 1);
       setIsSubmitting(false);
     }
   };
@@ -61,7 +75,12 @@ function LoginPage() {
     setError('');
 
     try {
-      const response = await resendVerification({ email: notice.email });
+      if (!turnstileToken) {
+        setNotice({ ...notice, status: 'warning', message: 'Complete the security check first.' });
+        setCaptchaRequired(true);
+        return;
+      }
+      const response = await resendVerification({ email: notice.email, turnstileToken });
       setNotice({
         status: 'success',
         message: response?.message || 'Verification email sent.',
@@ -74,6 +93,7 @@ function LoginPage() {
         email: notice.email
       });
     } finally {
+      setTurnstileReset((value) => value + 1);
       setIsResending(false);
     }
   };
@@ -104,6 +124,14 @@ function LoginPage() {
               autoComplete="current-password"
             />
           </label>
+          {(captchaRequired || notice?.email) && (
+            <TurnstileWidget
+              action={notice?.email ? 'resend_verification' : 'login'}
+              onVerify={setTurnstileToken}
+              onError={setError}
+              resetSignal={turnstileReset}
+            />
+          )}
           <button type="submit" disabled={isSubmitting}>
             {isSubmitting ? 'Signing in…' : 'Login'}
           </button>

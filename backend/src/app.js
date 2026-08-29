@@ -3,6 +3,9 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import path from 'path';
+import { randomUUID } from 'node:crypto';
+import cookieParser from 'cookie-parser';
+import mongoose from 'mongoose';
 
 import authRoutes from './routes/authRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
@@ -19,6 +22,7 @@ import uploadRoutes from './routes/uploadRoutes.js';
 import seoHeaders from './middlewares/seoHeaders.js';
 import searchBotLogger from './middlewares/searchBotLogger.js';
 import { serveSitemap } from './controllers/sitemapController.js';
+import { env, parseTrustProxy } from './config/env.js';
 
 const app = express();
 const debugAuth = () => process.env.DEBUG_AUTH === '1';
@@ -34,8 +38,7 @@ const parseOrigin = (value) => {
   }
 };
 
-const frontendOrigin =
-  parseOrigin(process.env.FRONTEND_ORIGIN || process.env.VITE_SITE_URL) || 'http://localhost:5173';
+const frontendOrigin = parseOrigin(env.frontendOrigins[0]) || 'http://localhost:5173';
 const judgeOrigin = parseOrigin(process.env.JUDGE0_URL);
 const connectSources = ["'self'", frontendOrigin].filter(Boolean);
 if (judgeOrigin) {
@@ -48,7 +51,7 @@ if (frontendOrigin) {
 }
 const scriptSources = ["'self'"];
 
-app.set('trust proxy', 1);
+app.set('trust proxy', parseTrustProxy());
 if (debugAuth()) {
   console.log('[auth] trust proxy enabled');
 }
@@ -70,9 +73,32 @@ app.use(
     crossOriginEmbedderPolicy: false
   })
 );
-app.use(cors());
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || env.frontendOrigins.map(parseOrigin).includes(parseOrigin(origin))) {
+        return callback(null, true);
+      }
+      const error = new Error('Origin is not allowed');
+      error.status = 403;
+      error.code = 'CORS_ORIGIN_DENIED';
+      return callback(error);
+    },
+    credentials: true
+  })
+);
+app.use((req, res, next) => {
+  const incoming = req.get('x-request-id');
+  req.id = incoming && /^[A-Za-z0-9._-]{1,128}$/.test(incoming) ? incoming : randomUUID();
+  res.setHeader('X-Request-Id', req.id);
+  next();
+});
 app.use(express.json({ limit: '1mb' }));
-app.use(morgan('dev'));
+app.use(cookieParser());
+if (env.nodeEnv !== 'test') {
+  morgan.token('request-id', (req) => req.id);
+  app.use(morgan(':method :url :status :response-time ms request_id=:request-id'));
+}
 app.use(searchBotLogger);
 app.use(seoHeaders);
 
@@ -89,8 +115,13 @@ app.use('/uploads', express.static(path.resolve('uploads'), uploadStaticOptions)
 app.use('/api/uploads', express.static(path.resolve('uploads'), uploadStaticOptions));
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok' });
+  const databaseReady = mongoose.connection.readyState === 1;
+  res.status(databaseReady ? 200 : 503).json({
+    status: databaseReady ? 'ok' : 'degraded',
+    checks: { database: databaseReady ? 'up' : 'down' }
+  });
 });
+app.get('/api/live', (_req, res) => res.json({ status: 'ok' }));
 
 app.get('/api/sitemap.xml', serveSitemap);
 
@@ -108,11 +139,23 @@ app.use('/api/session', sessionRoutes);
 app.use('/api/uploads', uploadRoutes);
 
 app.use((err, req, res, next) => {
-  console.error(err);
   const status = err.status && Number.isInteger(err.status) ? err.status : 500;
+  if (status >= 500) {
+    console.error('Request failed', {
+      requestId: req.id,
+      method: req.method,
+      path: req.originalUrl,
+      status,
+      code: err.code,
+      message: err.message
+    });
+  }
   const body = {
     code: err.code || (status >= 500 ? 'INTERNAL_SERVER_ERROR' : 'ERROR'),
-    message: err.message || 'Internal Server Error'
+    message:
+      status >= 500 && env.isProduction
+        ? 'Internal Server Error'
+        : err.message || 'Internal Server Error'
   };
   if (err.details) {
     body.details = err.details;

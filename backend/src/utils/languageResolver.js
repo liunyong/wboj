@@ -1,9 +1,16 @@
 import { fetchJudge0Languages } from '../services/judge0Service.js';
 
 const LOCAL_TTL_MS = 5 * 60 * 1000;
+const FALLBACK_LANGUAGES = [
+  { id: 54, name: 'C++ (GCC)' },
+  { id: 62, name: 'Java' },
+  { id: 63, name: 'JavaScript (Node.js)' },
+  { id: 71, name: 'Python (3.10)' }
+];
 
 let cachedResolver = null;
 let cachedAt = 0;
+let refreshPromise = null;
 
 const normalizeId = (value) => {
   if (value === undefined || value === null) {
@@ -26,7 +33,7 @@ const normalizeId = (value) => {
 const buildResolver = (languages) => {
   const map = new Map();
 
-  for (const entry of languages) {
+  for (const entry of [...FALLBACK_LANGUAGES, ...languages]) {
     if (!entry) {
       continue;
     }
@@ -96,17 +103,33 @@ const buildResolver = (languages) => {
   return resolveLanguageLabel;
 };
 
-export const getLanguageResolver = async () => {
+const refreshResolver = async () => {
+  if (!refreshPromise) {
+    refreshPromise = fetchJudge0Languages()
+      .then((languages) => {
+        cachedResolver = buildResolver(Array.isArray(languages) ? languages : []);
+        cachedAt = Date.now();
+        return cachedResolver;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+};
+
+export const getLanguageResolver = async ({ allowStale = false } = {}) => {
   const now = Date.now();
   if (cachedResolver && now - cachedAt < LOCAL_TTL_MS) {
     return cachedResolver;
   }
 
-  const languages = await fetchJudge0Languages();
-  cachedResolver = buildResolver(Array.isArray(languages) ? languages : []);
-  cachedAt = now;
+  if (allowStale) {
+    void refreshResolver().catch(() => {});
+    return cachedResolver ?? buildResolver([]);
+  }
 
-  return cachedResolver;
+  return refreshResolver();
 };
 
 export const clearLanguageResolverCache = () => {

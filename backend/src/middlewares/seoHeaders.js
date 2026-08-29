@@ -15,7 +15,10 @@ const isSeoFriendlyBot = (userAgent = '') => prerenderAgents.some((pattern) => p
 
 const shouldSkipCacheControl = (req) => req.originalUrl.startsWith('/uploads');
 
-const buildCacheHeader = (method) => {
+const buildCacheHeader = (method, isApiRoute) => {
+  if (isApiRoute) {
+    return 'private, no-store, no-cache, must-revalidate';
+  }
   if (!['GET', 'HEAD'].includes(method)) {
     return 'no-store, no-cache, must-revalidate';
   }
@@ -33,7 +36,7 @@ const seoHeaders = (req, res, next) => {
   res.setHeader('X-Robots-Tag', robotsValue);
 
   if (!shouldSkipCacheControl(req) && !res.getHeader('Cache-Control')) {
-    res.setHeader('Cache-Control', buildCacheHeader(req.method));
+    res.setHeader('Cache-Control', buildCacheHeader(req.method, isApiRoute));
   }
 
   next();

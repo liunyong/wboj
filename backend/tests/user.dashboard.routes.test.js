@@ -17,7 +17,12 @@ import app from '../src/app.js';
 import Problem from '../src/models/Problem.js';
 import Submission from '../src/models/Submission.js';
 import User from '../src/models/User.js';
-import { authenticateAsAdmin, authenticateAsUser, authHeader } from './utils.js';
+import {
+  authenticateAsAdmin,
+  authenticateAsSuperAdmin,
+  authenticateAsUser,
+  authHeader
+} from './utils.js';
 
 let mongoServer;
 
@@ -162,8 +167,8 @@ describe('User privacy and dashboard', () => {
     expect(publicResponse.body.solved).toHaveLength(1);
   });
 
-  it('allows admins to delete a user while keeping submissions', async () => {
-    const adminSession = await authenticateAsAdmin();
+  it('allows super admins to permanently delete a user and submissions', async () => {
+    const adminSession = await authenticateAsSuperAdmin();
     const userSession = await authenticateAsUser();
 
     const problem = await Problem.create(buildProblem());
@@ -193,7 +198,7 @@ describe('User privacy and dashboard', () => {
     expect(deleteResponse.status).toBe(204);
 
     const remaining = await Submission.find({ problemId: problem.problemId });
-    expect(remaining).toHaveLength(1);
-    expect(remaining[0].userName).toBe(userSession.user.username);
+    expect(remaining).toHaveLength(0);
+    expect(await User.findById(userSession.user.id)).toBeNull();
   });
 });

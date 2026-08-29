@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   mongo:
     image: mongo:6.0
@@ -9,42 +7,60 @@ services:
       - "127.0.0.1:27017:27017"
     volumes:
       - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   mongo-express:
     image: mongo-express
-    restart: always
+    profiles: ["tools"]
+    restart: unless-stopped
     ports:
       - "127.0.0.1:8081:8081"
     environment:
       - ME_CONFIG_MONGODB_SERVER=mongo
-      - ME_CONFIG_BASICAUTH_USERNAME_FILE=/run/secrets/me_user
-      - ME_CONFIG_BASICAUTH_PASSWORD_FILE=/run/secrets/me_pass
-    secrets:
-      - me_user
-      - me_pass      
+      - ME_CONFIG_BASICAUTH_USERNAME=${MONGO_EXPRESS_USERNAME:-admin}
+      - ME_CONFIG_BASICAUTH_PASSWORD=${MONGO_EXPRESS_PASSWORD:-change-me}
 
   backend:
     build: ./backend
     restart: unless-stopped
+    env_file:
+      - ./backend/.env
     environment:
       - PORT=4000
       - MONGO_URI=mongodb://mongo:27017/judge0
-      - JUDGE0_URL=http://server:2358
+      - JUDGE0_URL=${JUDGE0_URL:-http://server:2358}
+      - TRUST_PROXY=1
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
     ports:
       - "127.0.0.1:4000:4000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - default
       - ojnet
     volumes:
       - uploads-imgs:/app/uploads/problems
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/api/live').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY}
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
   
   caddy:
     image: caddy:2-alpine
@@ -66,12 +82,6 @@ volumes:
   caddy_data:
   caddy_config:
   uploads-imgs:
-
-secrets:
-  me_user:
-    file: ./secrets/me_user.txt
-  me_pass:
-    file: ./secrets/me_pass.txt
 
 networks:
   ojnet:

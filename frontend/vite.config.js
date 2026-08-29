@@ -13,6 +13,18 @@ export default defineConfig(({ mode }) => {
       environment: 'jsdom',
       setupFiles: './vitest.setup.js'
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules/katex')) return 'vendor-katex';
+            if (id.includes('node_modules/react-markdown') || id.includes('node_modules/remark-') || id.includes('node_modules/rehype-')) return 'vendor-markdown';
+            if (id.includes('node_modules/@tanstack')) return 'vendor-query';
+            return undefined;
+          }
+        }
+      }
+    },
     server: {
       port: 5173,
       proxy: {

@@ -15,6 +15,7 @@ import {
 } from '../controllers/authController.js';
 import { requireAuth } from '../middlewares/auth.js';
 import validate from '../middlewares/validate.js';
+import { requireTurnstile } from '../middlewares/turnstile.js';
 import {
   loginSchema,
   logoutSchema,
@@ -35,7 +36,6 @@ import {
 const router = Router();
 
 const debugAuth = () => process.env.DEBUG_AUTH === '1';
-const sharedStore = getSharedRateLimitStore();
 
 const createRateLimitHandler =
   (keyGenerator) =>
@@ -78,7 +78,7 @@ const loginLimiter = rateLimit({
   keyGenerator: loginKeyGenerator,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  store: sharedStore ?? undefined,
+  store: getSharedRateLimitStore('rl:auth:login:') ?? undefined,
   message: {
     code: 'RATE_LIMITED',
     message: 'Too many login attempts, please try again later'
@@ -92,7 +92,7 @@ const registerLimiter = rateLimit({
   keyGenerator: registerKeyGenerator,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  store: sharedStore ?? undefined,
+  store: getSharedRateLimitStore('rl:auth:register:') ?? undefined,
   message: {
     code: 'RATE_LIMITED',
     message: 'Too many signups, please try again later'
@@ -113,7 +113,7 @@ const resendVerificationLimiter = rateLimit({
   keyGenerator: resendVerificationKeyGenerator,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  store: sharedStore ?? undefined,
+  store: getSharedRateLimitStore('rl:auth:verify:') ?? undefined,
   message: {
     code: 'RATE_LIMITED',
     message: 'Too many verification requests, please try again later'
@@ -134,7 +134,7 @@ const passwordResetRequestLimiter = rateLimit({
   keyGenerator: passwordResetRequestKeyGenerator,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  store: sharedStore ?? undefined,
+  store: getSharedRateLimitStore('rl:auth:password-reset:') ?? undefined,
   message: {
     code: 'RATE_LIMITED',
     message: 'Too many password reset requests, please try again later'
@@ -149,19 +149,21 @@ const maybeApplyLimiter = (limiter) => (req, res, next) => {
   return next();
 };
 
-router.post('/register', maybeApplyLimiter(registerLimiter), validate({ body: registerSchema }), register);
+router.post('/register', maybeApplyLimiter(registerLimiter), validate({ body: registerSchema }), requireTurnstile('register'), register);
 router.post('/login', maybeApplyLimiter(loginLimiter), validate({ body: loginSchema }), login);
 router.post('/verify', validate({ body: emailVerificationSchema }), verifyEmail);
 router.post(
   '/verify/resend',
   maybeApplyLimiter(resendVerificationLimiter),
   validate({ body: resendVerificationSchema }),
+  requireTurnstile('resend_verification'),
   resendVerification
 );
 router.post(
   '/password/reset/request',
   maybeApplyLimiter(passwordResetRequestLimiter),
   validate({ body: passwordResetRequestSchema }),
+  requireTurnstile('password_reset'),
   requestPasswordReset
 );
 router.post('/password/reset', validate({ body: passwordResetSchema }), resetPasswordWithToken);

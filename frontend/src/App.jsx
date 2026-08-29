@@ -1,31 +1,34 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import Layout from './components/Layout.jsx';
 import RequireAdmin from './components/RequireAdmin.jsx';
 import RequireAuth from './components/RequireAuth.jsx';
-import AdminCreatePage from './pages/AdminCreatePage.jsx';
-import AdminUsersPage from './pages/AdminUsersPage.jsx';
-import AdminUploadsPage from './pages/AdminUploadsPage.jsx';
-import DashboardPage from './pages/DashboardPage.jsx';
-import SubmissionsPage from './pages/SubmissionsPage.jsx';
-import HomePage from './pages/HomePage.jsx';
-import LoginPage from './pages/LoginPage.jsx';
-import ProblemDetailPage from './pages/ProblemDetailPage.jsx';
-import ProblemEditPage from './pages/ProblemEditPage.jsx';
-import ProblemsPage from './pages/ProblemsPage.jsx';
-import PrivacyPage from './pages/PrivacyPage.jsx';
-import RegisterPage from './pages/RegisterPage.jsx';
-import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
-import SettingsPage from './pages/SettingsPage.jsx';
-import TermsPage from './pages/TermsPage.jsx';
-import UserDashboardPage from './pages/UserDashboardPage.jsx';
-import VerifyEmailPage from './pages/VerifyEmailPage.jsx';
-import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
+const AdminCreatePage = lazy(() => import('./pages/AdminCreatePage.jsx'));
+const AdminUsersPage = lazy(() => import('./pages/AdminUsersPage.jsx'));
+const AdminUploadsPage = lazy(() => import('./pages/AdminUploadsPage.jsx'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'));
+const SubmissionsPage = lazy(() => import('./pages/SubmissionsPage.jsx'));
+const HomePage = lazy(() => import('./pages/HomePage.jsx'));
+const LoginPage = lazy(() => import('./pages/LoginPage.jsx'));
+const ProblemDetailPage = lazy(() => import('./pages/ProblemDetailPage.jsx'));
+const ProblemEditPage = lazy(() => import('./pages/ProblemEditPage.jsx'));
+const ProblemsPage = lazy(() => import('./pages/ProblemsPage.jsx'));
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage.jsx'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage.jsx'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage.jsx'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage.jsx'));
+const TermsPage = lazy(() => import('./pages/TermsPage.jsx'));
+const UserDashboardPage = lazy(() => import('./pages/UserDashboardPage.jsx'));
+const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage.jsx'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage.jsx'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage.jsx'));
 
 function App() {
   return (
-    <Routes>
-      <Route element={<Layout />}>
+    <Suspense fallback={<main className="page-shell" aria-busy="true">Loading…</main>}>
+      <Routes>
+        <Route element={<Layout />}>
         <Route index element={<HomePage />} />
         <Route path="login" element={<LoginPage />} />
         <Route path="register" element={<RegisterPage />} />
@@ -95,9 +98,10 @@ function App() {
             </RequireAdmin>
           }
         />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Route>
-    </Routes>
+        <Route path="*" element={<NotFoundPage />} />
+        </Route>
+      </Routes>
+    </Suspense>
   );
 }
 

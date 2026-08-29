@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { useAuth } from '../context/AuthContext.jsx';
+import TurnstileWidget from '../components/TurnstileWidget.jsx';
 
 function ForgotPasswordPage() {
   const { requestPasswordReset } = useAuth();
@@ -8,6 +9,8 @@ function ForgotPasswordPage() {
   const [status, setStatus] = useState(null);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileReset, setTurnstileReset] = useState(0);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -15,7 +18,11 @@ function ForgotPasswordPage() {
     setError('');
     setIsSubmitting(true);
     try {
-      const response = await requestPasswordReset({ email });
+      if (!turnstileToken) {
+        setError('Complete the security check first.');
+        return;
+      }
+      const response = await requestPasswordReset({ email, turnstileToken });
       setStatus({
         type: 'success',
         message:
@@ -25,6 +32,7 @@ function ForgotPasswordPage() {
     } catch (err) {
       setError(err.message || 'Unable to process password reset request.');
     } finally {
+      setTurnstileReset((value) => value + 1);
       setIsSubmitting(false);
     }
   };
@@ -45,6 +53,12 @@ function ForgotPasswordPage() {
               autoComplete="email"
             />
           </label>
+          <TurnstileWidget
+            action="password_reset"
+            onVerify={setTurnstileToken}
+            onError={setError}
+            resetSignal={turnstileReset}
+          />
           <button type="submit" disabled={isSubmitting}>
             {isSubmitting ? 'Sending…' : 'Send reset link'}
           </button>

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 
 import {
-  deleteUserKeepSubmissions,
+  deleteUsersPermanently,
   listUsers,
   updateUserRole,
   updateUserStatus
@@ -12,6 +12,7 @@ import { adminListRateLimiter } from '../middlewares/rateLimiters.js';
 import validate from '../middlewares/validate.js';
 import {
   listUsersQuerySchema,
+  bulkDeleteUsersSchema,
   updateUserRoleSchema,
   userActivationSchema,
   userIdParamSchema
@@ -36,6 +37,14 @@ router.patch(
   updateUserRole
 );
 
+router.delete(
+  '/bulk',
+  requireAuth,
+  requireRole('super_admin'),
+  validate({ body: bulkDeleteUsersSchema }),
+  deleteUsersPermanently
+);
+
 router.patch(
   '/:id/deactivate',
   requireAuth,
@@ -49,7 +58,7 @@ router.delete(
   requireAuth,
   requireRole('super_admin'),
   validate({ params: userIdParamSchema }),
-  deleteUserKeepSubmissions
+  deleteUsersPermanently
 );
 
 router.get(

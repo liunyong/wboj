@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
+import TurnstileWidget from '../components/TurnstileWidget.jsx';
 
 function VerifyEmailPage() {
   const { verifyEmail, resendVerification } = useAuth();
@@ -10,6 +11,8 @@ function VerifyEmailPage() {
   const [message, setMessage] = useState('Checking your verification link…');
   const [resendStatus, setResendStatus] = useState(null);
   const [isResending, setIsResending] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileReset, setTurnstileReset] = useState(0);
 
   const email = useMemo(() => searchParams.get('email')?.trim().toLowerCase() ?? '', [searchParams]);
   const token = useMemo(() => searchParams.get('token')?.trim() ?? '', [searchParams]);
@@ -69,7 +72,11 @@ function VerifyEmailPage() {
     setResendStatus(null);
 
     try {
-      const response = await resendVerification({ email });
+      if (!turnstileToken) {
+        setResendStatus({ status: 'warning', message: 'Complete the security check first.' });
+        return;
+      }
+      const response = await resendVerification({ email, turnstileToken });
       setResendStatus({
         status: 'success',
         message: response?.message || 'We sent you a new verification email.'
@@ -80,6 +87,7 @@ function VerifyEmailPage() {
         message: err.message || 'Unable to resend verification email.'
       });
     } finally {
+      setTurnstileReset((value) => value + 1);
       setIsResending(false);
     }
   };
@@ -102,9 +110,19 @@ function VerifyEmailPage() {
           )}
         </div>
         {canResend && (
-          <button type="button" onClick={handleResend} disabled={isResending}>
-            {isResending ? 'Sending…' : 'Resend verification email'}
-          </button>
+          <>
+            <TurnstileWidget
+              action="resend_verification"
+              onVerify={setTurnstileToken}
+              onError={(text) =>
+                setResendStatus(text ? { status: 'error', message: text } : null)
+              }
+              resetSignal={turnstileReset}
+            />
+            <button type="button" onClick={handleResend} disabled={isResending}>
+              {isResending ? 'Sending…' : 'Resend verification email'}
+            </button>
+          </>
         )}
         {resendStatus && (
           <div

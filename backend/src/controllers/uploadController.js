@@ -25,6 +25,7 @@ const buildPublicBaseUrl = (req) => {
 };
 
 const MAX_DIMENSION = 4096;
+const MAX_INPUT_PIXELS = 20_000_000;
 const UPLOAD_ROOT = path.resolve('uploads');
 const PROBLEM_UPLOAD_DIR = path.join(UPLOAD_ROOT, 'problems');
 
@@ -111,7 +112,11 @@ export const uploadProblemImage = async (req, res, next) => {
       return res.status(415).json({ message: 'Unsupported image format' });
     }
 
-    const sharpInstance = sharp(buffer, { failOnError: true }).rotate();
+    const sharpInstance = sharp(buffer, {
+      failOnError: true,
+      limitInputPixels: MAX_INPUT_PIXELS,
+      sequentialRead: true
+    }).rotate();
     const metadata = await sharpInstance.metadata();
 
     let pipeline = sharpInstance;
@@ -196,7 +201,7 @@ export const deleteProblemImage = async (req, res, next) => {
     }
 
     const safePath = path.resolve(PROBLEM_UPLOAD_DIR, filename);
-    if (!safePath.startsWith(PROBLEM_UPLOAD_DIR)) {
+    if (path.dirname(safePath) !== PROBLEM_UPLOAD_DIR) {
       return res.status(400).json({ message: 'Invalid filename' });
     }
 

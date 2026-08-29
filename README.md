@@ -12,7 +12,7 @@ Full-stack online judge featuring a Node.js + MongoDB backend with Judge0 execut
 
 ## Prerequisites
 
-- Node.js 18+
+- Node.js 22+
 - npm 9+
 - MongoDB 6+ (local or remote)
 - Access to a Judge0 instance (API base URL, default `http://localhost:2358`)
@@ -23,7 +23,7 @@ Full-stack online judge featuring a Node.js + MongoDB backend with Judge0 execut
 cd backend
 npm install
 cp .env.example .env
-# Set MONGO_URI, JUDGE0_URL, ACCESS/REFRESH secrets, and optional admin seed credentials
+# Set MONGO_URI, JUDGE0_URL, strong ACCESS/REFRESH secrets, and optional admin seed credentials
 npm run seed              # creates admin account + sample problem
 npm run dev               # start the API on http://localhost:4000
 ```
@@ -43,7 +43,7 @@ npm run dev               # start the API on http://localhost:4000
 - `GET /api/dashboard/me/summary` + `/me/heatmap` — Yearly stats for dashboards.
 - `GET /api/users` — Admin search, plus role/status management via `PATCH` endpoints.
 
-The backend queues Judge0 runs per test case, stores per-case verdicts, updates per-problem counters, and maintains a daily submission cache (`user_stats_daily`) for dashboard heatmaps.
+The backend durably stores Judge0 work in MongoDB, atomically claims queued submissions, recovers stale work after restarts, stores per-case verdicts, updates per-problem counters, and maintains a daily submission cache (`user_stats_daily`) for dashboard heatmaps.
 
 ### Session Management
 
@@ -63,7 +63,7 @@ npm run dev      # Vite dev server on http://localhost:5173
 
 The UI wraps React Router with TanStack Query and an auth context to offer:
 
-- Login/register flow with token persistence and automatic refresh.
+- Login/register flow with access-token persistence and automatic refresh through a Secure, HttpOnly cookie.
 - Header that swaps between “Login” and a user dropdown (Dashboard, Settings, Logout).
 - Dashboard heatmap + summary cards powered by `/api/dashboard` endpoints.
 - Profile + password update flows under Settings.
@@ -75,6 +75,8 @@ The UI wraps React Router with TanStack Query and an auth context to offer:
 
 ```bash
 export JUDGE0_URL=http://host.docker.internal:2358   # adjust if Judge0 runs elsewhere
+export ACCESS_TOKEN_SECRET="$(openssl rand -hex 32)"
+export REFRESH_TOKEN_SECRET="$(openssl rand -hex 32)"
 docker compose up --build
 ```
 
@@ -105,8 +107,9 @@ The seed clears existing problems, inserts a sample addition challenge, and prov
 - **Monitoring & PageSpeed** → After `npm run build --prefix frontend && npm run preview --prefix frontend`, run `npx @lhci/cli collect --url=http://localhost:4173 --preset=desktop --preset=mobile` (or PageSpeed Insights) and record the four Lighthouse scores. Current work prioritises (1) deferring admin/problem editor bundles via dynamic `import()` (Vite code-splitting), (2) prefetching `/problems` data with `<link rel="prefetch">` for high-traffic slugs, and (3) keeping images lazy-loaded with descriptive `alt` text to preserve accessibility scores.
 - **Crawl control in production** → `robots.txt` disallows `/api/` while allowing the rest of the SPA, and Nginx now caches and serves `/robots.txt` + `/sitemap.xml` explicitly. When running under Docker + Caddy, the proxy inherits those assets because requests fall back to the frontend container; keep gzip/brotli enabled as defined in `Caddyfile`.
 
-## Next Steps
+## Operations
 
-- Harden refresh-token storage (e.g., persistent session store or Redis revocation).
-- Add end-to-end tests for login → submit → dashboard refresh.
-- Streamline Judge0 execution with async workers and webhooks.
+- `/api/live` is the process liveness endpoint; `/api/health` additionally reports MongoDB readiness.
+- Set `RATE_LIMIT_USE_REDIS=true` and `REDIS_URL` when running more than one backend replica.
+- Tune stale-job recovery and history retention with `SUBMISSION_STALE_MS`, `SUBMISSION_WORKER_POLL_MS`, and `SUBMISSION_MAX_RUN_HISTORY`.
+- `FRONTEND_ORIGINS` accepts a comma-separated allowlist. Set `TRUST_PROXY` to match the exact number of trusted reverse proxies.
