@@ -8,6 +8,7 @@ import authRoutes from './routes/authRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
 import languageRoutes from './routes/languageRoutes.js';
 import problemRoutes from './routes/problemRoutes.js';
+import rankingRoutes from './routes/rankingRoutes.js';
 import submissionRoutes from './routes/submissionRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import judgeRoutes from './routes/judgeRoutes.js';
@@ -82,6 +83,7 @@ const uploadStaticOptions = {
   setHeaders: (res) => {
     res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
     res.setHeader('X-Robots-Tag', 'noindex');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   }
 };
 
@@ -99,6 +101,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/problem-updates', problemUpdateRoutes);
 app.use('/api/problems', problemRoutes);
+app.use('/api/ranking', rankingRoutes);
 app.use('/api/submissions', submissionRoutes);
 app.use('/api/languages', languageRoutes);
 app.use('/api/users', userRoutes);

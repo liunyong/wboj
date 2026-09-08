@@ -21,7 +21,6 @@ export const testCaseSchema = z.object({
   output: z.string().min(1, 'Output is required'),
   points: z
     .coerce.number()
-    .int('Points must be an integer')
     .min(1, 'Points must be at least 1')
     .max(1000, 'Points must be at most 1000')
     .optional()

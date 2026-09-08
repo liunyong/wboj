@@ -76,8 +76,8 @@ export const profileUpdateSchema = z
       .optional()
       .transform((value) => value ?? undefined),
     avatarUrl: z
-      .string()
-      .url('Avatar URL must be a valid URL')
+      // 빈 문자열은 사진 제거용으로 허용
+      .union([z.string().url('Avatar URL must be a valid URL'), z.literal('')])
       .optional()
       .transform((value) => value ?? undefined)
   })

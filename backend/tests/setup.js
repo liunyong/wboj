@@ -13,8 +13,11 @@ net.Server.prototype.listen = function patchedListen(...args) {
   if (args.length > 0) {
     const [arg0, arg1, arg2] = args;
     if (typeof arg0 === 'number') {
-      // listen(port[, host][, backlog][, callback])
       const port = arg0;
+      if (port === 0) {
+        return originalListen.apply(this, args);
+      }
+      // listen(port[, host][, backlog][, callback])
       if (typeof arg1 === 'function' || arg1 === undefined) {
         const cb = typeof arg1 === 'function' ? arg1 : typeof arg2 === 'function' ? arg2 : undefined;
         return originalListen.call(this, port, '127.0.0.1', cb);
@@ -26,6 +29,9 @@ net.Server.prototype.listen = function patchedListen(...args) {
       }
     } else if (typeof arg0 === 'object' && arg0 !== null) {
       const options = { ...arg0 };
+      if (options.port === 0) {
+        return originalListen.call(this, arg0, arg1, arg2);
+      }
       if (!options.host) {
         options.host = '127.0.0.1';
       }

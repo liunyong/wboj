@@ -7,6 +7,7 @@ import {
   formatTooltip,
   getUserTZ
 } from '../utils/time.js';
+import DashboardPanel from '../components/DashboardPanel.jsx';
 import { siteMeta, summarizeText } from '../utils/seo.js';
 import { usePageSeo } from '../hooks/useSeo.js';
 
@@ -177,14 +178,17 @@ function HomePage() {
       <header className="page-header">
         <div>
           <h1>Welcome</h1>
-          <p>Catch up on the latest platform announcements and notices.</p>
+          <p>Catch up on the latest platform announcements and your recent activity.</p>
         </div>
+        <div className="page-header-actions" />
       </header>
 
       <div className="home-grid">
         <div className="home-announcements">
           <div className="section-header">
-            <h2>Announcements</h2>
+            <div>
+              <h2>Announcements</h2>
+            </div>
             {isAdmin && !isCreating && (
               <button type="button" className="primary" onClick={() => setIsCreating(true)}>
                 New Announcement
@@ -380,6 +384,11 @@ function HomePage() {
             })}
           </ul>
         </div>
+        {user && (
+          <div className="home-dashboard">
+            <DashboardPanel />
+          </div>
+        )}
       </div>
     </section>
   );

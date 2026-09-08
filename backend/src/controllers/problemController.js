@@ -13,8 +13,12 @@ const sanitizeTestCases = (testCases = []) => {
     .map((testCase) => {
       const input = typeof testCase.input === 'string' ? testCase.input : '';
       const output = typeof testCase.output === 'string' ? testCase.output : '';
-      const rawPoints = Number.parseInt(testCase.points ?? 1, 10);
-      const points = Number.isFinite(rawPoints) && rawPoints >= 1 ? Math.min(rawPoints, 1000) : 1;
+      const rawPoints = Number.parseFloat(testCase.points ?? 1);
+      // Allow fractional points (e.g. 총점을 테스트케이스 수로 나눈 값) and clamp to [0, 1000].
+      const points =
+        Number.isFinite(rawPoints) && rawPoints >= 0
+          ? Math.round(Math.min(rawPoints, 1000) * 100) / 100
+          : 1;
 
       if (!input || !output) {
         return null;

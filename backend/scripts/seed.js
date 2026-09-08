@@ -23,6 +23,9 @@ const seed = async () => {
   const adminUsername = process.env.ADMIN_USERNAME || 'admin';
   const adminEmail = (process.env.ADMIN_EMAIL || 'admin@example.com').toLowerCase();
   const adminPassword = process.env.ADMIN_PASSWORD || 'changeme123';
+  const normalUserEmail = 'user@example.com';
+  const normalUserUsername = 'user';
+  const normalUserPassword = 'user1234';
 
   let adminUser = await User.findOne({ email: adminEmail });
 
@@ -34,6 +37,7 @@ const seed = async () => {
       passwordHash,
       role: 'admin',
       isActive: true,
+      emailVerified: process.env.SKIP_EMAIL_VERIFICATION === '1' || process.env.SKIP_EMAIL_VERIFICATION === 'true',
       profile: {
         displayName: 'Administrator'
       }
@@ -42,6 +46,27 @@ const seed = async () => {
     console.log(`Created admin user ${adminUsername} (${adminEmail})`);
   } else {
     console.log(`Admin user ${adminEmail} already exists`);
+  }
+
+  let normalUser = await User.findOne({ email: normalUserEmail });
+
+  if (!normalUser) {
+    const passwordHash = await bcrypt.hash(normalUserPassword, 12);
+    normalUser = await User.create({
+      username: normalUserUsername,
+      email: normalUserEmail,
+      passwordHash,
+      role: 'user',
+      isActive: true,
+      emailVerified: process.env.SKIP_EMAIL_VERIFICATION === '1' || process.env.SKIP_EMAIL_VERIFICATION === 'true',
+      profile: {
+        displayName: 'Normal User'
+      }
+    });
+
+    console.log(`Created normal user ${normalUserUsername} (${normalUserEmail})`);
+  } else {
+    console.log(`Normal user ${normalUserEmail} already exists`);
   }
 
   await Promise.all([

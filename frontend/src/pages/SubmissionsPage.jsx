@@ -37,8 +37,9 @@ const matchesFilters = (event, filters) => {
   if (filters.user) {
     const needle = filters.user.toLowerCase();
     const name = event.userName?.toLowerCase?.() ?? '';
+    const displayName = event.displayName?.toLowerCase?.() ?? '';
     const userId = event.userId?.toLowerCase?.() ?? '';
-    if (!name.includes(needle) && userId !== needle) {
+    if (!name.includes(needle) && !displayName.includes(needle) && userId !== needle) {
       return false;
     }
   }
@@ -468,8 +469,8 @@ function SubmissionsPage() {
                     submission.languageId,
                     languageSlug ?? (submission.languageId != null ? String(submission.languageId) : null)
                   ) ?? '—';
-                const displayUser = submission.userName
-                  ? submission.userName
+                const displayUser = submission.displayName || submission.userName
+                  ? submission.displayName || submission.userName
                   : currentUserId && submission.userId === currentUserId
                   ? 'You'
                   : '(deleted user)';

@@ -5,7 +5,7 @@ const testCaseSchema = new mongoose.Schema(
   {
     input: { type: String, required: true },
     output: { type: String, required: true },
-    points: { type: Number, min: 1, max: 1000, default: 1 }
+    points: { type: Number, min: 0, max: 1000, default: 1 }
   },
   { _id: false }
 );

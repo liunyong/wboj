@@ -170,7 +170,7 @@ const isAdminLike = (user) => ['admin', 'super_admin'].includes(user?.role);
 export const resubmitAndUpdate = async ({ submissionId, actingUser }) => {
   const submission = await Submission.findById(submissionId)
     .populate('problem', 'problemId title testCases cpuTimeLimit memoryLimit')
-    .populate('user', 'username');
+    .populate('user', 'username profile.displayName');
 
   if (!submission || submission.deletedAt) {
     throw buildHttpError(404, 'SUBMISSION_NOT_FOUND', 'Submission not found');
@@ -291,7 +291,7 @@ export const resubmitAndUpdate = async ({ submissionId, actingUser }) => {
 
     const updatedQuery = Submission.findById(submissionId)
       .populate('problem', 'title problemId difficulty')
-      .populate('user', 'username');
+      .populate('user', 'username profile.displayName');
 
     return applySessionToQuery(updatedQuery, session);
   });

@@ -54,6 +54,21 @@ const deriveLanguageLabel = (languageId) => {
 
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// user: populated User doc (login username is immutable; profile.displayName is editable),
+// or null if the referenced user was deleted, or undefined if not populated at all.
+// userName: falls back to the submission's stored snapshot for submissions made by
+// since-deleted users. displayName prefers the user's current profile.displayName so
+// renaming a profile is reflected without needing to backfill old submissions.
+const resolveSubmissionNames = (submission) => {
+  const user = submission.user && typeof submission.user === 'object' ? submission.user : null;
+  const userName = user?.username || submission.userName || null;
+  const displayName =
+    user?.profile?.displayName?.trim() ||
+    userName ||
+    (submission.user === null ? '(deleted user)' : null);
+  return { userName, displayName };
+};
+
 const fetchSubmissionList = async ({
   page,
   limit,
@@ -105,6 +120,7 @@ const fetchSubmissionList = async ({
       .select(
         '_id user userName problemId problemTitle language languageId status score runtimeMs execTimeMs memoryKB memoryKb createdAt queuedAt startedAt finishedAt lastRunAt resultSummary'
       )
+      .populate('user', 'username profile.displayName')
       .lean(),
     Submission.countDocuments(filters)
   ]);
@@ -166,24 +182,12 @@ const sanitizeSubmission = (submission, { resolveLanguageLabel } = {}) => {
       )
     : submission.language ?? deriveLanguageLabel(submission.languageId);
 
-  const populatedUser =
-    submission.user &&
-    typeof submission.user === 'object' &&
-    submission.user !== null &&
-    submission.user.username;
+  const { userName, displayName } = resolveSubmissionNames(submission);
 
   return {
     id: submission._id.toString(),
-    user: populatedUser
-      ? {
-          id:
-            submission.user._id?.toString?.() ??
-            submission.user.id?.toString?.() ??
-            submission.user.toString(),
-          username: submission.user.username
-        }
-      : undefined,
-    userName: submission.userName,
+    userName,
+    displayName,
     problem: submission.problem?._id
       ? {
           id: submission.problem._id.toString(),
@@ -225,14 +229,14 @@ const sanitizedGlobalSubmission = (submission, extra = {}, { resolveLanguageLabe
       )
     : submission.language ?? deriveLanguageLabel(submission.languageId);
 
+  const { userName, displayName } = resolveSubmissionNames(submission);
+
   return {
     id: submission._id.toString(),
     _id: submission._id.toString(),
     userId: submission.user?._id?.toString() ?? submission.user?.toString() ?? null,
-    userName:
-      submission.userName ??
-      submission.user?.username ??
-      (submission.user ? null : '(deleted user)'),
+    userName,
+    displayName,
     problemId: submission.problemId,
     problemTitle: submission.problemTitle ?? submission.problem?.title ?? null,
     language: languageLabel,
@@ -268,13 +272,13 @@ const buildSubmissionDetail = (submission, { resolveLanguageLabel } = {}) => {
       )
     : submission.language ?? deriveLanguageLabel(submission.languageId);
 
+  const { userName, displayName } = resolveSubmissionNames(submission);
+
   return {
     _id: submission._id.toString(),
     userId: submission.user?._id?.toString() ?? submission.user?.toString() ?? null,
-    userName:
-      submission.userName ??
-      submission.user?.username ??
-      (submission.user ? null : '(deleted user)'),
+    userName,
+    displayName,
     problemId: submission.problemId,
     problemTitle: submission.problemTitle ?? submission.problem?.title ?? null,
     languageId: submission.languageId,
@@ -349,7 +353,7 @@ const markSubmissionFailed = async (submission, { verdict = 'IE', save = true, e
 const processSubmission = async (submissionId) => {
   const submission = await Submission.findById(submissionId)
     .populate('problem')
-    .populate('user', 'username');
+    .populate('user', 'username profile.displayName');
 
   if (!submission) {
     return;
@@ -563,6 +567,7 @@ export const listMySubmissions = async (req, res, next) => {
 
     const submissions = await Submission.find(filters)
       .populate('problem', 'title problemId difficulty')
+      .populate('user', 'username profile.displayName')
       .sort({ submittedAt: -1 })
       .limit(limit);
 
@@ -683,7 +688,7 @@ export const getSubmission = async (req, res, next) => {
     const { id } = req.validated?.params || req.params;
     const submission = await Submission.findById(id)
       .populate('problem', 'title problemId difficulty')
-      .populate('user', 'username');
+      .populate('user', 'username profile.displayName');
 
     if (!submission || submission.deletedAt) {
       return res.status(404).json({ code: 'SUBMISSION_NOT_FOUND', message: 'Submission not found' });

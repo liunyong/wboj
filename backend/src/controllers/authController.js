@@ -35,6 +35,7 @@ const sanitizeUser = (user) => ({
 });
 
 const debugAuth = () => process.env.DEBUG_AUTH === '1';
+const skipEmailVerification = () => process.env.SKIP_EMAIL_VERIFICATION === '1' || process.env.SKIP_EMAIL_VERIFICATION === 'true';
 const logAuth = (level, message, meta) => {
   if (!debugAuth()) {
     return;
@@ -92,10 +93,12 @@ export const register = async (req, res, next) => {
       passwordHash,
       role: 'user',
       passwordChangedAt: new Date(),
-      emailVerified: false
+      emailVerified: skipEmailVerification()
     });
 
-    await issueEmailVerification(user);
+    if (!skipEmailVerification()) {
+      await issueEmailVerification(user);
+    }
 
     logAuth('info', 'user registered', {
       userId: user._id.toString(),
@@ -105,8 +108,8 @@ export const register = async (req, res, next) => {
 
     res.status(201).json({
       user: sanitizeUser(user),
-      code: 'VERIFICATION_REQUIRED',
-      message: 'Verification email sent'
+      code: skipEmailVerification() ? 'REGISTERED' : 'VERIFICATION_REQUIRED',
+      message: skipEmailVerification() ? 'Account created successfully' : 'Verification email sent'
     });
   } catch (error) {
     if (error?.code === 11000) {
@@ -317,7 +320,7 @@ export const login = async (req, res, next) => {
       return res.status(403).json({ code: 'ACCOUNT_INACTIVE', message: 'Account is inactive' });
     }
 
-    if (!user.emailVerified) {
+    if (!user.emailVerified && !skipEmailVerification()) {
       logAuth('warn', 'login blocked: email not verified', { userId: user._id.toString() });
       return res
         .status(403)
@@ -370,7 +373,7 @@ export const updateProfile = async (req, res, next) => {
       return res.status(404).json({ code: 'USER_NOT_FOUND', message: 'User not found' });
     }
 
-    const nextProfile = { ...(user.profile ?? {}) };
+    const nextProfile = user.profile ? user.profile.toObject() : {};
     if (Object.prototype.hasOwnProperty.call(updates, 'displayName')) {
       nextProfile.displayName = updates.displayName;
     }

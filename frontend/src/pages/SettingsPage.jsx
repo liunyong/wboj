@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '../context/AuthContext.jsx';
@@ -22,6 +22,10 @@ function SettingsPage() {
   const [passwordMessage, setPasswordMessage] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [isProfileSaving, setIsProfileSaving] = useState(false);
+  const [isAvatarUploading, setIsAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
+  const [avatarPreviewFailed, setAvatarPreviewFailed] = useState(false);
+  const avatarInputRef = useRef(null);
   const [isPasswordSaving, setIsPasswordSaving] = useState(false);
   const [profilePublic, setProfilePublic] = useState(Boolean(user?.profilePublic));
   const [visibilityMessage, setVisibilityMessage] = useState('');
@@ -46,6 +50,10 @@ function SettingsPage() {
   useEffect(() => {
     setProfilePublic(Boolean(user?.profilePublic));
   }, [user?.profilePublic]);
+
+  useEffect(() => {
+    setAvatarPreviewFailed(false);
+  }, [profileForm.avatarUrl]);
 
   const handleProfileChange = (event) => {
     const { name, value } = event.target;
@@ -74,6 +82,45 @@ function SettingsPage() {
       setProfileMessage(error.message || 'Failed to update profile.');
     } finally {
       setIsProfileSaving(false);
+    }
+  };
+
+  // 파일 업로드 → 절대 URL로 변환 → avatarUrl 채움 (저장은 아래 Save 버튼)
+  const handleAvatarFile = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      setAvatarError('이미지 파일만 업로드할 수 있습니다.');
+      event.target.value = '';
+      return;
+    }
+    setAvatarError('');
+    setIsAvatarUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await authFetch('/api/uploads/images', { method: 'POST', body: formData });
+      const rawUrl = response?.apiPath ?? response?.url ?? response?.path;
+      if (!rawUrl) {
+        throw new Error('업로드 실패');
+      }
+      // apiPath는 상대경로 — API 베이스에 붙여 절대 URL로
+      const base = import.meta.env.VITE_API_URL || '';
+      const absolute = /^https?:\/\//.test(rawUrl)
+        ? rawUrl
+        : base
+          ? new URL(rawUrl, base).toString()
+          : rawUrl;
+      setProfileForm((prev) => ({ ...prev, avatarUrl: absolute }));
+    } catch (error) {
+      setAvatarError(error.message || '이미지 업로드에 실패했습니다.');
+    } finally {
+      setIsAvatarUploading(false);
+      if (event.target) {
+        event.target.value = '';
+      }
     }
   };
 
@@ -254,15 +301,64 @@ function SettingsPage() {
             />
           </label>
           <label>
+            Profile Photo
+            <div className="avatar-uploader">
+              {profileForm.avatarUrl && !avatarPreviewFailed ? (
+                <img
+                  className="avatar-uploader__preview"
+                  src={profileForm.avatarUrl}
+                  alt="Avatar preview"
+                  onError={() => setAvatarPreviewFailed(true)}
+                />
+              ) : (
+                <div className="avatar-uploader__preview avatar-uploader__preview--empty">
+                  {(profileForm.displayName || user?.username || '?').trim().charAt(0).toUpperCase()}
+                </div>
+              )}
+              {profileForm.avatarUrl && avatarPreviewFailed && (
+                <p className="form-message error">Could not load this image. Check the URL or upload a new photo.</p>
+              )}
+              <div className="avatar-uploader__actions">
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={handleAvatarFile}
+                />
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={isAvatarUploading}
+                >
+                  {isAvatarUploading ? 'Uploading…' : 'Upload photo'}
+                </button>
+                {profileForm.avatarUrl && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => setProfileForm((prev) => ({ ...prev, avatarUrl: '' }))}
+                    disabled={isAvatarUploading}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          </label>
+          <label>
             Avatar URL
             <input
               type="url"
               name="avatarUrl"
               value={profileForm.avatarUrl}
               onChange={handleProfileChange}
+              placeholder="Upload above, or paste an image URL"
             />
           </label>
-          <button type="submit" disabled={isProfileSaving}>
+          {avatarError && <div className="form-message error">{avatarError}</div>}
+          <button type="submit" disabled={isProfileSaving || isAvatarUploading}>
             {isProfileSaving ? 'Saving…' : 'Save changes'}
           </button>
           {profileMessage && <div className="form-message info">{profileMessage}</div>}

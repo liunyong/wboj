@@ -41,6 +41,7 @@ const mapSubmissionRow = (row, problem) => ({
   problemId: row.problemId ?? problem.problemId,
   problemTitle: row.problemTitle ?? problem.title ?? row.problemTitle,
   userName: row.userName ?? row.user?.username ?? row.userName,
+  displayName: row.displayName ?? row.userName ?? row.user?.username,
   status: row.status ?? row.verdict ?? 'queued'
 });
 
@@ -260,7 +261,8 @@ function ProblemSubmissionsPanel({
                 const nowMs = Date.now();
                 return items.map((submission) => {
                   const isOwner = submission.userId === currentUserId;
-                  const displayUser = submission.userName || (isOwner ? 'You' : '(unknown)');
+                  const displayUser =
+                    submission.displayName || submission.userName || (isOwner ? 'You' : '(unknown)');
                   const languageSlug =
                     submission.language ??
                     (submission.languageId != null ? `language-${submission.languageId}` : null);

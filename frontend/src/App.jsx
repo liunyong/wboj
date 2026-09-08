@@ -13,6 +13,7 @@ import LoginPage from './pages/LoginPage.jsx';
 import ProblemDetailPage from './pages/ProblemDetailPage.jsx';
 import ProblemEditPage from './pages/ProblemEditPage.jsx';
 import ProblemsPage from './pages/ProblemsPage.jsx';
+import RankingPage from './pages/RankingPage.jsx';
 import PrivacyPage from './pages/PrivacyPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
@@ -34,6 +35,7 @@ function App() {
         <Route path="auth/reset-password" element={<ResetPasswordPage />} />
         <Route path="problems" element={<ProblemsPage />} />
         <Route path="problems/:problemId" element={<ProblemDetailPage />} />
+        <Route path="ranking" element={<RankingPage />} />
         <Route path="terms" element={<TermsPage />} />
         <Route path="privacy" element={<PrivacyPage />} />
         <Route

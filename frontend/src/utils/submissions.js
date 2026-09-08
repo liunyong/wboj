@@ -43,6 +43,7 @@ export const transformEventToRow = (event, { problem = null } = {}) => {
       event.lastRunAt ?? event.finishedAt ?? event.startedAt ?? event.createdAt ?? createdAt,
     userId: event.userId ?? null,
     userName: event.userName ?? null,
+    displayName: event.displayName ?? null,
     resultSummary: event.resultSummary ?? { score: 0, cases: [] }
   };
 };
@@ -209,6 +210,7 @@ export const detailToEvent = (detail) => {
     id: detail._id,
     userId: detail.userId ?? null,
     userName: detail.userName ?? null,
+    displayName: detail.displayName ?? null,
     problemId: detail.problemId ?? null,
     problemTitle: detail.problemTitle ?? null,
     languageId: detail.languageId ?? null,

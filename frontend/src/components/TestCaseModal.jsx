@@ -21,11 +21,13 @@ function TestCaseModal({ open, initialValue, onCancel, onSave }) {
     event.preventDefault();
 
     const normalizedPoints = Number.isFinite(Number(points)) ? Number(points) : 1;
+    // Keep up to 2 decimals so fractional per-case points are preserved.
+    const roundedPoints = Math.round(Math.min(Math.max(normalizedPoints, 0), 1000) * 100) / 100;
 
     onSave({
       input,
       output,
-      points: Math.min(Math.max(Math.round(normalizedPoints), 1), 1000)
+      points: roundedPoints
     });
   };
 
@@ -56,8 +58,9 @@ function TestCaseModal({ open, initialValue, onCancel, onSave }) {
             Points
             <input
               type="number"
-              min="1"
+              min="0"
               max="1000"
+              step="0.01"
               value={points}
               onChange={(event) => setPoints(event.target.value)}
             />

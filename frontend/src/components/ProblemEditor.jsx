@@ -34,6 +34,23 @@ const buildDefaultForm = () => ({
 
 const generateUid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
+// 난이도별 문제 점수
+const DIFFICULTY_DEFAULT_POINTS = {
+  BASIC: 5,
+  EASY: 10,
+  MEDIUM: 20,
+  HARD: 30
+};
+
+// 총점을 테스트 케이스로 나눔
+const distributePoints = (total, count) => {
+  const numericTotal = Number(total);
+  if (!count || !Number.isFinite(numericTotal) || numericTotal <= 0) {
+    return 0;
+  }
+  return Math.round((numericTotal / count) * 100) / 100;
+};
+
 function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
   const isEdit = mode === 'edit';
   const { authFetch } = useAuth();
@@ -43,6 +60,8 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
   const statementTextareaRef = useRef(null);
 
   const [form, setForm] = useState(buildDefaultForm);
+  // 이 문제에 부여할 총 배점. 난이도 기본값(BASIC)으로 시작
+  const [targetPoints, setTargetPoints] = useState(DIFFICULTY_DEFAULT_POINTS.BASIC);
   const [testCases, setTestCases] = useState([]);
   const [samples, setSamples] = useState([]);
   const [selectedLanguages, setSelectedLanguages] = useState([71]);
@@ -80,7 +99,7 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
       const response = await authFetch('/api/problems/algorithms');
       return response?.items ?? [];
     },
-    enabled: false,
+    enabled: true,
     staleTime: 5 * 60 * 1000
   });
 
@@ -160,13 +179,25 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
     );
     setLanguageTemplates(nextLanguageTemplates);
 
+    const initialTestCases = initialProblem.testCases ?? [];
     setTestCases(
-      (initialProblem.testCases ?? []).map((testCase) => ({
+      initialTestCases.map((testCase) => ({
         uid: generateUid(),
         input: testCase.input,
         output: testCase.output,
         points: testCase.points ?? 1
       }))
+    );
+
+    // 기존 문제의 총 배점 = 테스트케이스 points 합 (없으면 난이도 기본값)
+    const existingTotal = initialTestCases.reduce(
+      (sum, testCase) => sum + (Number(testCase.points) || 0),
+      0
+    );
+    setTargetPoints(
+      existingTotal > 0
+        ? existingTotal
+        : DIFFICULTY_DEFAULT_POINTS[initialProblem.difficulty] ?? DIFFICULTY_DEFAULT_POINTS.BASIC
     );
 
     setSamples(
@@ -188,6 +219,7 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
 
   const resetForm = () => {
     setForm(buildDefaultForm());
+    setTargetPoints(DIFFICULTY_DEFAULT_POINTS.BASIC);
     setTestCases([]);
     setSamples([]);
     setSelectedLanguages([71]);
@@ -330,6 +362,25 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
   const handleCheckboxChange = (event) => {
     const { name, checked } = event.target;
     setForm((prev) => ({ ...prev, [name]: checked }));
+  };
+
+  const handleDifficultyChange = (event) => {
+    const { value } = event.target;
+    setForm((prev) => ({ ...prev, difficulty: value }));
+    if (Object.prototype.hasOwnProperty.call(DIFFICULTY_DEFAULT_POINTS, value)) {
+      setTargetPoints(DIFFICULTY_DEFAULT_POINTS[value]);
+    }
+  };
+
+  // "Distribute" 버튼 — 총 배점을 케이스 수로 나눠 각 케이스 points 채움
+  const handleDistributePoints = () => {
+    if (!testCases.length) {
+      setError('Add at least one test case before distributing points.');
+      return;
+    }
+    const perCase = distributePoints(targetPoints, testCases.length);
+    setTestCases((prev) => prev.map((testCase) => ({ ...testCase, points: perCase })));
+    setError('');
   };
 
   const canAddMoreAlgorithms = form.algorithms.length < 10;
@@ -798,50 +849,6 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
           />
         </label>
 
-        <label>
-          Difficulty
-          <select
-            name="difficulty"
-            value={form.difficulty}
-            onChange={handleInputChange}
-            disabled={!isReady}
-          >
-            <option value="BASIC">BASIC</option>
-            <option value="EASY">EASY</option>
-            <option value="MEDIUM">MEDIUM</option>
-            <option value="HARD">HARD</option>
-          </select>
-        </label>
-
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            name="isPublic"
-            checked={form.isPublic}
-            onChange={handleCheckboxChange}
-            disabled={!isReady}
-          />
-          Public
-        </label>
-
-        <label htmlFor="problem-source-input">
-          Source
-          <input
-            id="problem-source-input"
-            name="source"
-            list="problem-source-options"
-            value={form.source}
-            onChange={handleInputChange}
-            disabled={!isReady}
-            placeholder="e.g. BOJ"
-          />
-        </label>
-        <datalist id="problem-source-options">
-          {sourceOptions.map((source) => (
-            <option key={source} value={source} />
-          ))}
-        </datalist>
-
         <div className="markdown-editor">
           <div className="markdown-editor__header">
             <div className="markdown-editor__title">
@@ -907,27 +914,28 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
           </div>
         </div>
 
-        <label>
-          Input Format
-          <textarea
-            name="inputFormat"
-            value={form.inputFormat}
-            onChange={handleInputChange}
-            rows={3}
-            disabled={!isReady}
-          />
-        </label>
-
-        <label>
-          Output Format
-          <textarea
-            name="outputFormat"
-            value={form.outputFormat}
-            onChange={handleInputChange}
-            rows={3}
-            disabled={!isReady}
-          />
-        </label>
+        <div className="io-row">
+          <label>
+            Input Format
+            <input
+              name="inputFormat"
+              value={form.inputFormat}
+              onChange={handleInputChange}
+              disabled={!isReady}
+              placeholder="Single line description"
+            />
+          </label>
+          <label>
+            Output Format
+            <input
+              name="outputFormat"
+              value={form.outputFormat}
+              onChange={handleInputChange}
+              disabled={!isReady}
+              placeholder="Single line description"
+            />
+          </label>
+        </div>
 
         <label>
           Constraints
@@ -940,7 +948,22 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
           />
         </label>
 
-        <div className="grid-two-columns">
+        <div className="problem-meta-grid">
+          <label>
+            Difficulty
+            <select
+              name="difficulty"
+              value={form.difficulty}
+              onChange={handleDifficultyChange}
+              disabled={!isReady}
+            >
+              <option value="BASIC">BASIC</option>
+              <option value="EASY">EASY</option>
+              <option value="MEDIUM">MEDIUM</option>
+              <option value="HARD">HARD</option>
+            </select>
+          </label>
+
           <label>
             CPU Time Limit (seconds)
             <input
@@ -954,6 +977,7 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
               disabled={!isReady}
             />
           </label>
+
           <label>
             Memory Limit (MB)
             <input
@@ -966,100 +990,118 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
               disabled={!isReady}
             />
           </label>
-        </div>
 
-        <label>
-          Tags
-          <div className="algorithm-field">
-            <div className="algorithm-chips">
-              {form.tags.map((tag) => (
-                <span key={tag} className="algorithm-chip">
-                  {tag}
-                  <button
-                    type="button"
-                    aria-label={`Remove ${tag}`}
-                    onClick={() => handleTagRemove(tag)}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-              {canAddMoreTags && (
-                <input
-                  type="text"
-                  value={tagInput}
-                  onChange={(event) => setTagInput(event.target.value)}
-                  onKeyDown={handleTagKeyDown}
-                  placeholder="Add tag (press Enter)"
-                  disabled={!isReady}
-                />
-              )}
-            </div>
-            {!canAddMoreTags && (
-              <div className="algorithm-helper">Maximum of 20 tags reached.</div>
-            )}
-          </div>
-        </label>
-
-        <label>
-          Algorithms
-          <div className="algorithm-field">
-            <div className="algorithm-chips">
-              {form.algorithms.map((algorithm) => (
-                <span key={algorithm} className="algorithm-chip">
-                  {algorithm}
-                  <button
-                    type="button"
-                    aria-label={`Remove ${algorithm}`}
-                    onClick={() => handleAlgorithmRemove(algorithm)}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-              {canAddMoreAlgorithms && (
-                <input
-                  type="text"
-                  value={algorithmInput}
-                  onChange={(event) => setAlgorithmInput(event.target.value)}
-                  onFocus={() => {
-                    setShowSuggestions(true);
-                    if (!algorithmsQuery.isFetched && !algorithmsQuery.isFetching) {
-                      algorithmsQuery.refetch();
-                    }
-                  }}
-                  onBlur={() => {
-                    setTimeout(() => setShowSuggestions(false), 120);
-                  }}
-                  onKeyDown={handleAlgorithmKeyDown}
-                  placeholder={
-                    algorithmsQuery.isFetching
-                      ? 'Loading algorithms…'
-                      : 'Add algorithm (press Enter)'
-                  }
-                  disabled={!isReady}
-                />
-              )}
-            </div>
-            {showSuggestions && suggestedAlgorithms.length > 0 && (
-              <div className="algorithm-suggestions">
-                {suggestedAlgorithms.map((option) => (
-                  <button
-                    type="button"
-                    key={option}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => handleAlgorithmAdd(option)}
-                  >
-                    {option}
-                  </button>
+          <label>
+            Tags
+            <div className="algorithm-field">
+              <div className="algorithm-chips">
+                {form.tags.map((tag) => (
+                  <span key={tag} className="algorithm-chip">
+                    {tag}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${tag}`}
+                      onClick={() => handleTagRemove(tag)}
+                    >
+                      ×
+                    </button>
+                  </span>
                 ))}
+                {canAddMoreTags && (
+                  <input
+                    type="text"
+                    value={tagInput}
+                    onChange={(event) => setTagInput(event.target.value)}
+                    onKeyDown={handleTagKeyDown}
+                    placeholder="Add tag (press Enter)"
+                    disabled={!isReady}
+                  />
+                )}
               </div>
-            )}
-            {!canAddMoreAlgorithms && (
-              <div className="algorithm-helper">Maximum of 10 algorithms reached.</div>
-            )}
-          </div>
-        </label>
+              {!canAddMoreTags && (
+                <div className="algorithm-helper">Maximum of 20 tags reached.</div>
+              )}
+            </div>
+          </label>
+
+          <label>
+            Source
+            <input
+              id="problem-source-input"
+              name="source"
+              list="problem-source-options"
+              value={form.source}
+              onChange={handleInputChange}
+              disabled={!isReady}
+              placeholder="e.g. BOJ"
+            />
+            <datalist id="problem-source-options">
+              {sourceOptions.map((source) => (
+                <option key={source} value={source} />
+              ))}
+            </datalist>
+          </label>
+
+          <label>
+            Algorithms
+            <div className="algorithm-field">
+              <div className="algorithm-chips">
+                {form.algorithms.map((algorithm) => (
+                  <span key={algorithm} className="algorithm-chip">
+                    {algorithm}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${algorithm}`}
+                      onClick={() => handleAlgorithmRemove(algorithm)}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                {canAddMoreAlgorithms && (
+                  <input
+                    type="text"
+                    value={algorithmInput}
+                    onChange={(event) => setAlgorithmInput(event.target.value)}
+                    onFocus={() => {
+                      setShowSuggestions(true);
+                      if (!algorithmsQuery.isFetched && !algorithmsQuery.isFetching) {
+                        algorithmsQuery.refetch();
+                      }
+                    }}
+                    onBlur={() => {
+                      setTimeout(() => setShowSuggestions(false), 120);
+                    }}
+                    onKeyDown={handleAlgorithmKeyDown}
+                    placeholder={
+                      algorithmsQuery.isFetching
+                        ? 'Loading algorithms…'
+                        : 'Add algorithm (press Enter)'
+                    }
+                    disabled={!isReady}
+                  />
+                )}
+              </div>
+              {showSuggestions && suggestedAlgorithms.length > 0 && (
+                <div className="algorithm-suggestions">
+                  {suggestedAlgorithms.map((option) => (
+                    <button
+                      type="button"
+                      key={option}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => handleAlgorithmAdd(option)}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!canAddMoreAlgorithms && (
+                <div className="algorithm-helper">Maximum of 10 algorithms reached.</div>
+              )}
+            </div>
+          </label>
+        </div>
 
         <div className="language-picker">
           <h3>Judge0 Languages</h3>
@@ -1202,6 +1244,34 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
               {totalPoints === 1 ? '' : 's'}
             </span>
           </header>
+
+          <div className="points-panel">
+            <label className="points-panel__field">
+              Total Points
+              <input
+                type="number"
+                min="0"
+                max="1000"
+                step="0.1"
+                value={targetPoints}
+                onChange={(event) => setTargetPoints(event.target.value)}
+                disabled={!isReady}
+              />
+            </label>
+            <button
+              type="button"
+              className="secondary"
+              onClick={handleDistributePoints}
+              disabled={!isReady || !testCases.length}
+            >
+              Distribute Evenly
+            </button>
+            <span className="helper-text">
+              {testCases.length
+                ? `${distributePoints(targetPoints, testCases.length)} pts each × ${testCases.length} case${testCases.length === 1 ? '' : 's'}`
+                : 'Add test cases to distribute points.'}
+            </span>
+          </div>
 
           <div className="testcase-toolbar">
             <button
