@@ -28,7 +28,7 @@ services:
     restart: unless-stopped
     environment:
       - PORT=4000
-      - MONGO_URI=mongodb://mongo:27017/judge0
+      - MONGO_URI=mongodb://127.0.0.1:27017/judge0
       - JUDGE0_URL=http://server:2358
     depends_on:
       - mongo
