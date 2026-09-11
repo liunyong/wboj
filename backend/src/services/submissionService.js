@@ -332,7 +332,10 @@ export const deleteSubmission = async ({ submissionId, actingUser }) => {
   await runWithOptionalTransaction(async (session) => {
     const updateResult = await Submission.updateOne(
       { _id: submissionId, deletedAt: null },
-      { $set: { deletedAt, accountingPending: true } },
+      {
+        $set: { deletedAt, accountingPending: true },
+        $unset: { activeKey: 1 }
+      },
       sessionOptions(session)
     );
 

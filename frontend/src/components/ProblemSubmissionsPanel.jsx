@@ -144,6 +144,7 @@ function ProblemSubmissionsPanel({
 
         const allowInsert = pageValue === 1;
         const existed = items.some((item) => (item.id ?? item._id) === event._id);
+        const isDeletion = event.type === 'submission:deleted' || Boolean(event.deletedAt);
 
         const nextItems = applyEventToSubmissionList(items, event, {
           maxItems: allowInsert ? limit : null,
@@ -157,7 +158,10 @@ function ProblemSubmissionsPanel({
 
         let nextTotal = existing.total ?? items.length;
         let nextTotalPages = existing.totalPages ?? Math.max(1, Math.ceil(nextTotal / limit));
-        if (!existed && allowInsert) {
+        if (isDeletion && existed) {
+          nextTotal = Math.max(0, nextTotal - 1);
+          nextTotalPages = Math.max(1, Math.ceil(nextTotal / limit));
+        } else if (!existed && allowInsert) {
           nextTotal += 1;
           nextTotalPages = Math.max(1, Math.ceil(nextTotal / limit));
         }

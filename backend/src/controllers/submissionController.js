@@ -461,6 +461,17 @@ export const createSubmission = async (req, res, next) => {
       return res.status(403).json({ code: 'FORBIDDEN', message: 'Problem is not accessible' });
     }
 
+    const activeKey = `${userId}:${problem._id}`;
+    // Heal locks left by older soft deletes or interrupted finalization before
+    // checking/creating the next submission.
+    await Submission.updateMany(
+      {
+        activeKey,
+        $or: [{ deletedAt: { $ne: null } }, { status: { $nin: ['queued', 'running'] } }]
+      },
+      { $unset: { activeKey: 1 } }
+    );
+
     const pendingSubmission = await Submission.findOne({
       user: userId,
       problem: problem._id,
@@ -524,7 +535,7 @@ export const createSubmission = async (req, res, next) => {
       sourceLen: normalizedSourceCode.length,
       verdict: 'PENDING',
       status: 'queued',
-      activeKey: `${userId}:${problem._id}`,
+      activeKey,
       score: 0,
       submittedAt: now,
       queuedAt: now

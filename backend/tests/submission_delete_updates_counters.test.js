@@ -102,6 +102,39 @@ beforeEach(async () => {
 });
 
 describe('DELETE /api/submissions/:id', () => {
+  it('clears a deleted submission lock so the user can submit again', async () => {
+    const userSession = await authenticateAsUser();
+    const problem = await Problem.create(buildProblem());
+    const activeKey = `${userSession.user.id}:${problem._id}`;
+
+    const deletedSubmission = await Submission.create({
+      user: userSession.user.id,
+      userName: userSession.user.username,
+      problem: problem._id,
+      problemId: problem.problemId,
+      problemTitle: problem.title,
+      languageId: 71,
+      language: 'Python (3.10)',
+      sourceCode: 'old code',
+      status: 'running',
+      verdict: 'PENDING',
+      activeKey,
+      deletedAt: new Date()
+    });
+
+    const response = await request(app)
+      .post('/api/submissions')
+      .set(authHeader(userSession.tokens.accessToken))
+      .send({ problemId: problem._id.toString(), languageId: 71, sourceCode: 'new code' });
+
+    expect(response.status).toBe(202);
+    expect(response.body.submissionId).not.toBe(deletedSubmission._id.toString());
+    await waitForSubmissionCompletion(response.body.submissionId);
+
+    const healed = await Submission.findById(deletedSubmission._id).select('+activeKey').lean();
+    expect(healed.activeKey).toBeUndefined();
+  });
+
   it('soft deletes AC submissions and updates counters', async () => {
     const userSession = await authenticateAsUser();
     const superSession = await authenticateAsSuperAdmin();
@@ -143,6 +176,12 @@ describe('DELETE /api/submissions/:id', () => {
       .set(authHeader(userSession.tokens.accessToken));
     expect(listResponse.status).toBe(200);
     expect(listResponse.body.items).toHaveLength(0);
+
+    const problemListResponse = await request(app)
+      .get(`/api/problems/${problem.problemId}/submissions?scope=mine`)
+      .set(authHeader(userSession.tokens.accessToken));
+    expect(problemListResponse.status).toBe(200);
+    expect(problemListResponse.body.items).toHaveLength(0);
   });
 
   it('soft deletes non-AC submissions without touching accepted counters', async () => {

@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import SubmissionViewerModal from './SubmissionViewerModal.jsx';
@@ -43,5 +43,6 @@ describe('SubmissionViewerModal', () => {
       expect(codeElement.textContent).toBe(highlightSample);
       expect(codeElement.querySelector('span')).toBeNull();
     });
+    expect(screen.getByRole('button', { name: 'Copy submitted code' })).toBeInTheDocument();
   });
 });

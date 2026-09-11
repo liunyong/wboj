@@ -18,6 +18,21 @@ export function useDeleteSubmission({ onSuccess, onError } = {}) {
       const submissionId = data?.submissionId;
       if (submissionId) {
         queryClient.removeQueries({ queryKey: ['submission', submissionId], exact: true });
+        queryClient.setQueriesData({ queryKey: ['problemSubmissions'] }, (existing) => {
+          if (!existing || !Array.isArray(existing.items)) return existing;
+          const existed = existing.items.some(
+            (item) => (item.id ?? item._id) === submissionId
+          );
+          if (!existed) return existing;
+          const total = Math.max(0, (existing.total ?? existing.items.length) - 1);
+          const limit = existing.limit ?? 20;
+          return {
+            ...existing,
+            items: existing.items.filter((item) => (item.id ?? item._id) !== submissionId),
+            total,
+            totalPages: Math.max(1, Math.ceil(total / limit))
+          };
+        });
       }
       queryClient.invalidateQueries({ queryKey: ['submissions'] });
       queryClient.invalidateQueries({

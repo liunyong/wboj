@@ -2577,18 +2577,29 @@ textarea {
 }
 
 .submission-modal__code {
-  flex: 1 1 auto;
-  min-height: 200px;
-  overflow: auto;
+  position: relative;
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: visible;
   border: 1px solid rgba(15, 23, 42, 0.12);
   border-radius: 0.75rem;
   background: #0f172a;
 }
 
+.submission-modal__code .code-copy {
+  opacity: 1;
+}
+
 .submission-modal__code pre {
   margin: 0;
   padding: 1rem;
-  overflow: auto;
+  overflow: visible;
+}
+
+.submission-modal__code .code-block {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .code-block {

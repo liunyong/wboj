@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
@@ -40,6 +41,7 @@ function SubmissionViewerModal({
   isDeleting = false
 }) {
   const { authFetch } = useAuth();
+  const [codeCopied, setCodeCopied] = useState(false);
 
   const submissionQuery = useQuery({
     queryKey: ['submission', submissionId],
@@ -101,6 +103,25 @@ function SubmissionViewerModal({
       return;
     }
     onResubmit(submissionId);
+  };
+
+  const handleCopyCode = async () => {
+    if (!codeText) return;
+    try {
+      await navigator.clipboard.writeText(codeText);
+    } catch (_error) {
+      const textarea = document.createElement('textarea');
+      textarea.value = codeText;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+    }
+    setCodeCopied(true);
+    window.setTimeout(() => setCodeCopied(false), 1800);
   };
 
   return (
@@ -226,10 +247,25 @@ function SubmissionViewerModal({
 
             <div className="submission-modal__code">
               {canViewSource ? (
-                <CodeBlock
-                  code={codeText || '/* No source available */'}
-                  language={languageSlug}
-                />
+                <>
+                  <button
+                    type="button"
+                    className="code-copy"
+                    onClick={handleCopyCode}
+                    disabled={!codeText}
+                    aria-label="Copy submitted code"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M16 1H6a2 2 0 0 0-2 2v10h2V3h10V1z" />
+                      <path d="M20 5H10a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H10V7h10v14z" />
+                    </svg>
+                    <span className="code-copy-text">{codeCopied ? 'Copied' : 'Copy'}</span>
+                  </button>
+                  <CodeBlock
+                    code={codeText || '/* No source available */'}
+                    language={languageSlug}
+                  />
+                </>
               ) : (
                 <div className="submission-modal__private">
                   Source is private to the owner and administrators.

@@ -108,6 +108,10 @@ export const applyEventToSubmissionList = (
   let updated = list.slice();
   const index = updated.findIndex((item) => (item.id ?? item._id) === identifier);
 
+  if (event.type === 'submission:deleted' || event.deletedAt) {
+    return index >= 0 ? updated.filter((_, itemIndex) => itemIndex !== index) : list;
+  }
+
   if (index >= 0) {
     const existing = updated[index];
     updated[index] = {
