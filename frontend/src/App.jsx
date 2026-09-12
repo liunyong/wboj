@@ -9,7 +9,7 @@ const AdminUsersPage = lazy(() => import('./pages/AdminUsersPage.jsx'));
 const AdminUploadsPage = lazy(() => import('./pages/AdminUploadsPage.jsx'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'));
 const SubmissionsPage = lazy(() => import('./pages/SubmissionsPage.jsx'));
-const HomePage = lazy(() => import('./pages/HomePage.jsx'));
+const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage.jsx'));
 const LoginPage = lazy(() => import('./pages/LoginPage.jsx'));
 const ProblemDetailPage = lazy(() => import('./pages/ProblemDetailPage.jsx'));
 const ProblemEditPage = lazy(() => import('./pages/ProblemEditPage.jsx'));
@@ -29,7 +29,8 @@ function App() {
     <Suspense fallback={<main className="page-shell" aria-busy="true">Loading…</main>}>
       <Routes>
         <Route element={<Layout />}>
-        <Route index element={<HomePage />} />
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="leaderboard" element={<LeaderboardPage />} />
         <Route path="login" element={<LoginPage />} />
         <Route path="register" element={<RegisterPage />} />
         <Route path="forgot-password" element={<ForgotPasswordPage />} />
@@ -50,11 +51,7 @@ function App() {
 
         <Route
           path="dashboard"
-          element={
-            <RequireAuth>
-              <DashboardPage />
-            </RequireAuth>
-          }
+          element={<DashboardPage />}
         />
         <Route path="u/:username" element={<UserDashboardPage />} />
 

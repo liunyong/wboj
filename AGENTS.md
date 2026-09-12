@@ -25,6 +25,10 @@
 - Use short, imperative commit subjects (e.g., `add submission throttle`) under 72 characters, splitting unrelated backend and frontend work.
 - PRs should outline behavioural changes, list executed commands (`npm test`, `npm run build --prefix frontend`), mention new env vars, and attach UI screenshots or GIFs when relevant.
 
+## Deployment Guidelines
+- After completing requested changes, run the relevant checks and deploy the affected services as part of the task unless the user explicitly asks otherwise. Deployment is authorized without an additional confirmation.
+- Use the existing Docker Compose deployment, rebuild only affected services, and verify the running service and public endpoint after deployment.
+
 ## Environment & Configuration Tips
 - Copy each `.env.example` and set `MONGO_URI`, `JUDGE0_URL`, and `VITE_API_URL` prior to running services or tests.
 - Adjust Judge0 concurrency knobs via backend env vars (`JUDGE0_MAX_CONCURRENCY`, `JUDGE0_MAX_RETRIES`, `JUDGE0_TIMEOUT_MS`).

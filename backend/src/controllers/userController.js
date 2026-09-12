@@ -4,6 +4,10 @@ import Submission from '../models/Submission.js';
 import Problem from '../models/Problem.js';
 import Announcement from '../models/Announcement.js';
 import UserStatsDaily from '../models/UserStatsDaily.js';
+import { getRatingProfile } from '../services/ratingService.js';
+import FirstSolve from '../models/FirstSolve.js';
+import RatingProfile from '../models/RatingProfile.js';
+import Season from '../models/Season.js';
 
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -141,6 +145,11 @@ export const deleteUsersPermanently = async (req, res, next) => {
     await Promise.all([
       Submission.deleteMany({ user: { $in: existingIds } }),
       UserStatsDaily.deleteMany({ user: { $in: existingIds } }),
+      FirstSolve.deleteMany({ user: { $in: existingIds } }),
+      RatingProfile.deleteMany({ user: { $in: existingIds } }),
+      Season.updateMany({ 'results.user': { $in: existingIds } }, {
+        $set: { 'results.$[result].user': null, 'results.$[result].username': 'Deleted user' }
+      }, { arrayFilters: [{ 'result.user': { $in: existingIds } }] }),
       Problem.updateMany({ author: { $in: existingIds } }, { $unset: { author: 1 } }),
       Announcement.updateMany({ author: { $in: existingIds } }, { $unset: { author: 1 } })
     ]);
@@ -318,7 +327,8 @@ export const getUserDashboard = async (req, res, next) => {
         profilePublic: user.profilePublic ?? false
       },
       solved: normalizedSolved,
-      attempted: normalizedAttempted
+      attempted: normalizedAttempted,
+      ratings: await getRatingProfile(userId)
     });
   } catch (error) {
     next(error);

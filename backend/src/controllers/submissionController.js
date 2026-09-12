@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Problem from '../models/Problem.js';
+import { reconcileRatingSubmissions } from '../services/ratingService.js';
 import Submission from '../models/Submission.js';
 import { reconcilePendingSubmissionAccounting } from '../services/submissionAccountingService.js';
 import {
@@ -392,6 +393,10 @@ export const processSubmission = async (submissionId) => {
     submission.resultSummary = evaluation.resultSummary;
     submission.judge0 = evaluation.judge0;
     submission.finishedAt = finishedAt;
+    if (evaluation.verdict === 'AC' && !submission.firstAcceptedAt) {
+      submission.firstAcceptedAt = finishedAt;
+      submission.ratingPending = true;
+    }
     submission.lastRunAt = finishedAt;
     submission.accountingPending = true;
     submission.runs = Array.isArray(submission.runs) ? submission.runs : [];
@@ -415,6 +420,11 @@ export const processSubmission = async (submissionId) => {
     submission.accountingPending = false;
     await submission.save();
     finalized = true;
+    try {
+      await reconcileRatingSubmissions();
+    } catch (error) {
+      console.error('Rating update deferred to worker', { submissionId, message: error.message });
+    }
     emitSubmissionEvent(submission);
   } catch (error) {
     console.error(`Failed to process submission ${submissionId}`, error);
@@ -650,7 +660,8 @@ export const listProblemSubmissions = async (req, res, next) => {
     }
 
     const targetProblemId = access.problem.problemId;
-    const userFilter = scope === 'mine' ? req.user.id : undefined;
+    const effectiveScope = req.user ? scope : 'all';
+    const userFilter = effectiveScope === 'mine' ? req.user.id : undefined;
 
     const resolveLanguageLabel = await loadLanguageResolver();
 
@@ -681,7 +692,7 @@ export const listProblemSubmissions = async (req, res, next) => {
       limit,
       total,
       totalPages: Math.max(1, Math.ceil(total / limit)),
-      scope,
+      scope: effectiveScope,
       problem: {
         problemId: targetProblemId,
         title: access.problem.title ?? null

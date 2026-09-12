@@ -194,7 +194,7 @@ export const getProgress = async (req, res, next) => {
                         }
                       }
                     },
-                    { $project: { slug: 1, title: 1, problemId: 1 } }
+                    { $project: { slug: 1, title: 1, problemId: 1, difficultyRating: 1 } }
                   ],
                   as: 'problemDoc'
                 }
@@ -213,6 +213,7 @@ export const getProgress = async (req, res, next) => {
                   title: {
                     $ifNull: ['$problemDoc.title', '$problemTitle']
                   },
+                  difficultyRating: '$problemDoc.difficultyRating',
                   slug: '$problemDoc.slug'
                 }
               },
@@ -270,7 +271,7 @@ export const getProgress = async (req, res, next) => {
                         }
                       }
                     },
-                    { $project: { slug: 1, title: 1, problemId: 1 } }
+                    { $project: { slug: 1, title: 1, problemId: 1, difficultyRating: 1 } }
                   ],
                   as: 'problemDoc'
                 }
@@ -289,6 +290,7 @@ export const getProgress = async (req, res, next) => {
                   title: {
                     $ifNull: ['$problemDoc.title', '$problemTitle']
                   },
+                  difficultyRating: '$problemDoc.difficultyRating',
                   slug: '$problemDoc.slug',
                   latestVerdict: '$latestVerdict',
                   latestStatus: '$latestStatus'
@@ -374,6 +376,7 @@ export const getProgress = async (req, res, next) => {
       ? progress.solved.map((entry) => ({
           problemId: normalizeProblemId(entry.problemId),
           title: entry.title,
+          difficultyRating: entry.difficultyRating ?? null,
           slug: entry.slug ?? null
         }))
       : [];
@@ -382,6 +385,7 @@ export const getProgress = async (req, res, next) => {
       ? progress.attempted.map((entry) => ({
           problemId: normalizeProblemId(entry.problemId),
           title: entry.title,
+          difficultyRating: entry.difficultyRating ?? null,
           slug: entry.slug ?? null,
           latestVerdict: entry.latestVerdict ?? null,
           latestStatus: entry.latestStatus ?? null

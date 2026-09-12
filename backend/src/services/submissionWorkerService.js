@@ -2,6 +2,7 @@ import Submission from '../models/Submission.js';
 import { env } from '../config/env.js';
 import { processSubmission } from '../controllers/submissionController.js';
 import { reconcilePendingSubmissionAccounting } from './submissionAccountingService.js';
+import { reconcileRatingSubmissions, finalizeEndedSeasons } from './ratingService.js';
 
 let timer = null;
 let polling = false;
@@ -32,6 +33,8 @@ const poll = async () => {
       .select('_id')
       .lean();
     await Promise.all(queued.map(({ _id }) => processSubmission(_id)));
+    await reconcileRatingSubmissions();
+    await finalizeEndedSeasons();
   } catch (error) {
     console.error('Submission worker poll failed', error);
   } finally {

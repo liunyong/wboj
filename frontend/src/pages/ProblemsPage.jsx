@@ -3,96 +3,135 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
+import DifficultyBadge from '../components/DifficultyBadge.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useUserProgress, userProgressQueryKey } from '../hooks/useUserProgress.js';
 import { useSubmissionStream } from '../hooks/useSubmissionStream.js';
 
-const difficulties = ['BASIC', 'EASY', 'MEDIUM', 'HARD'];
 const SCROLL_STORAGE_KEY = 'problemsPageScrollY';
-const PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 50;
+const PAGE_SIZE_OPTIONS = [20, 50, 100];
+const SORT_COLUMNS = [
+  { field: 'id', label: 'ID', defaultDirection: 'asc' },
+  { field: 'title', label: 'Title', defaultDirection: 'asc' },
+  { field: 'author', label: 'Author', defaultDirection: 'asc' },
+  { field: 'difficulty', label: 'Difficulty Rating', defaultDirection: 'asc' },
+  { field: 'submissions', label: 'Submissions', defaultDirection: 'desc' },
+  { field: 'acceptance', label: 'AC Rate', defaultDirection: 'desc' }
+];
+
+function getAuthorLabel(problem) {
+  return problem.author?.profile?.displayName ?? problem.author?.displayName ??
+    problem.author?.username ?? problem.author?.userName ?? '';
+}
+
+function SortableProblemHeader({ column, sort, onSort }) {
+  const { field, label, defaultDirection } = column;
+  const [sortField, direction] = sort.split('-');
+  const active = sortField === field;
+  const nextDirection = active ? (direction === 'asc' ? 'desc' : 'asc') : defaultDirection;
+
+  return (
+    <th
+      scope="col"
+      className="problem-table__sortable-header"
+      aria-sort={active ? (direction === 'asc' ? 'ascending' : 'descending') : undefined}
+    >
+      <button
+        type="button"
+        className="problem-table__sort-button"
+        aria-label={`Sort by ${label}`}
+        title={`Sort by ${label}: ${nextDirection === 'asc' ? 'ascending' : 'descending'}`}
+        onClick={() => onSort(`${field}-${nextDirection}`)}
+      >
+        <span>{label}</span>
+        <span className="problem-table__sort-icon" aria-hidden="true">
+          {active ? (direction === 'asc' ? '↑' : '↓') : '↕'}
+        </span>
+      </button>
+    </th>
+  );
+}
+
+function compareProblems(a, b, sort) {
+  const [field, direction] = sort.split('-');
+  const compareId = () => Number(a.problemId) - Number(b.problemId);
+  let result = 0;
+
+  if (field === 'title') {
+    result = (a.title ?? '').localeCompare(b.title ?? '', undefined, { numeric: true });
+  } else if (field === 'author') {
+    const left = getAuthorLabel(a);
+    const right = getAuthorLabel(b);
+    if (!left || !right) {
+      if (left) return -1;
+      if (right) return 1;
+      return compareId();
+    }
+    result = left.localeCompare(right, undefined, { numeric: true });
+  } else if (field === 'difficulty' || field === 'acceptance') {
+    const value = (problem) => field === 'difficulty'
+      ? problem.difficultyRating
+      : problem.submissionCount > 0
+        ? (problem.acceptedSubmissionCount ?? 0) / problem.submissionCount
+        : null;
+    const left = value(a);
+    const right = value(b);
+    // Keep unrated problems and problems without submissions last in either direction.
+    if (!Number.isFinite(left) || !Number.isFinite(right)) {
+      if (Number.isFinite(left)) return -1;
+      if (Number.isFinite(right)) return 1;
+      return compareId();
+    }
+    result = left - right;
+  } else if (field === 'submissions') {
+    result = (a.submissionCount ?? 0) - (b.submissionCount ?? 0);
+  } else {
+    result = compareId();
+  }
+
+  return (direction === 'desc' ? -result : result) || compareId();
+}
 
 function ProblemsPage() {
   const { authFetch, user } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const isAdminLike = ['admin', 'super_admin'].includes(user?.role);
-  const [search, setSearch] = useState(searchParams.get('q') ?? '');
-  const [visibility, setVisibility] = useState(
-    isAdminLike ? searchParams.get('visibility') || 'all' : 'public'
-  );
-  const [difficulty, setDifficulty] = useState(searchParams.get('difficulty') ?? '');
-  const [tagFilter, setTagFilter] = useState(searchParams.get('tag') ?? '');
-  const [page, setPage] = useState(() => {
-    const parsed = Number(searchParams.get('page') ?? '1');
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
-  });
+  const search = searchParams.get('q') ?? '';
+  const requestedVisibility = searchParams.get('visibility');
+  const visibility = isAdminLike
+    ? (['public', 'private'].includes(requestedVisibility) ? requestedVisibility : 'all')
+    : 'public';
+  const tagFilter = searchParams.get('tag') ?? '';
+  const requestedPage = Number(searchParams.get('page') ?? '1');
+  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const requestedPageSize = Number(searchParams.get('limit'));
+  const pageSize = PAGE_SIZE_OPTIONS.includes(requestedPageSize) ? requestedPageSize : DEFAULT_PAGE_SIZE;
+  const requestedSort = searchParams.get('sort');
+  const sort = SORT_COLUMNS.some(({ field }) =>
+    requestedSort === `${field}-asc` || requestedSort === `${field}-desc`
+  ) ? requestedSort : 'id-asc';
   const [pendingDeletion, setPendingDeletion] = useState(null);
   const [visibilityTarget, setVisibilityTarget] = useState(null);
   const [hasRestoredScroll, setHasRestoredScroll] = useState(false);
 
-  useEffect(() => {
-    if (!isAdminLike && visibility !== 'public') {
-      setVisibility('public');
-      return;
-    }
-    if (isAdminLike && visibility === 'public') {
-      setVisibility(searchParams.get('visibility') || 'all');
-    }
-  }, [isAdminLike, searchParams, visibility]);
-
-  useEffect(() => {
-    const paramsSearch = searchParams.get('q') ?? '';
-    const paramsDifficulty = searchParams.get('difficulty') ?? '';
-    const paramsTag = searchParams.get('tag') ?? '';
-    const paramsVisibility = searchParams.get('visibility') || 'all';
-    const paramsPage = Number(searchParams.get('page') ?? '1');
-
-    setSearch(paramsSearch);
-    setDifficulty(paramsDifficulty);
-    setTagFilter(paramsTag);
-    if (Number.isFinite(paramsPage) && paramsPage > 0) {
-      setPage(paramsPage);
-    } else {
-      setPage(1);
-    }
-    if (isAdminLike) {
-      setVisibility(paramsVisibility);
-    }
-  }, [isAdminLike, searchParams]);
-
-  useEffect(() => {
-    const next = new URLSearchParams();
-    const trimmedSearch = search.trim();
-    if (trimmedSearch) {
-      next.set('q', trimmedSearch);
-    }
-    if (difficulty) {
-      next.set('difficulty', difficulty);
-    }
-    if (tagFilter) {
-      next.set('tag', tagFilter);
-    }
-    if (isAdminLike && visibility !== 'all') {
-      next.set('visibility', visibility);
-    }
-    if (page > 1) {
-      next.set('page', String(page));
-    }
-
-    const currentString = searchParams.toString();
-    const nextString = next.toString();
-    if (currentString !== nextString) {
-      setSearchParams(next, { replace: true });
-    }
-  }, [difficulty, isAdminLike, page, search, searchParams, setSearchParams, tagFilter, visibility]);
+  const updateFilters = (updates) => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.delete('page');
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value === '') next.delete(key);
+        else next.set(key, String(value));
+      });
+      return next;
+    }, { replace: true });
+  };
 
   const problemsQuery = useQuery({
-    queryKey: ['problems', visibility, difficulty],
+    queryKey: ['problems', visibility],
     queryFn: async () => {
       const params = new URLSearchParams({ limit: '100', visibility, page: '1' });
-      if (difficulty) {
-        params.set('difficulty', difficulty);
-      }
       const firstResponse = await authFetch(`/api/problems?${params.toString()}`);
       const allItems = Array.isArray(firstResponse?.items) ? [...firstResponse.items] : [];
       const totalPages = Number.isFinite(firstResponse?.totalPages)
@@ -195,12 +234,6 @@ function ProblemsPage() {
     return Array.from(tags).sort((a, b) => a.localeCompare(b));
   }, [problemsQuery.data]);
 
-  useEffect(() => {
-    if (tagFilter && !tagOptions.includes(tagFilter)) {
-      setTagFilter('');
-    }
-  }, [tagFilter, tagOptions]);
-
   const filtered = useMemo(() => {
     const items = problemsQuery.data ?? [];
     const trimmed = search.trim().toLowerCase();
@@ -225,11 +258,11 @@ function ProblemsPage() {
       results = results.filter((problem) => (problem.tags ?? []).includes(tagFilter));
     }
 
-    return results;
-  }, [problemsQuery.data, search, tagFilter]);
+    return [...results].sort((a, b) => compareProblems(a, b, sort));
+  }, [problemsQuery.data, search, sort, tagFilter]);
 
   const totalProblems = filtered.length;
-  const totalPages = Math.max(1, Math.ceil(totalProblems / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(totalProblems / pageSize));
   const currentPage = Math.min(page, totalPages);
   const paginationItems = useMemo(() => {
     if (totalPages <= 10) {
@@ -264,15 +297,20 @@ function ProblemsPage() {
   }, [currentPage, totalPages]);
 
   useEffect(() => {
-    if (page !== currentPage) {
-      setPage(currentPage);
+    if (problemsQuery.isSuccess && !problemsQuery.isFetching && page !== currentPage) {
+      setSearchParams((previous) => {
+        const next = new URLSearchParams(previous);
+        if (currentPage === 1) next.delete('page');
+        else next.set('page', String(currentPage));
+        return next;
+      }, { replace: true });
     }
-  }, [currentPage, page]);
+  }, [currentPage, page, problemsQuery.isSuccess, problemsQuery.isFetching, setSearchParams]);
 
   const pageItems = useMemo(() => {
-    const startIndex = (currentPage - 1) * PAGE_SIZE;
-    return filtered.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [currentPage, filtered]);
+    const startIndex = (currentPage - 1) * pageSize;
+    return filtered.slice(startIndex, startIndex + pageSize);
+  }, [currentPage, filtered, pageSize]);
 
   const canPrev = currentPage > 1;
   const canNext = currentPage < totalPages;
@@ -281,7 +319,7 @@ function ProblemsPage() {
     if (nextPage === currentPage) {
       return;
     }
-    setPage(nextPage);
+    updateFilters({ page: nextPage === 1 ? '' : nextPage });
     window.scrollTo({ top: 0, behavior: 'auto' });
   };
 
@@ -305,33 +343,15 @@ function ProblemsPage() {
           <input
             type="search"
             placeholder="Search problems"
+            aria-label="Search problems"
             value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setPage(1);
-            }}
+            onChange={(event) => updateFilters({ q: event.target.value })}
           />
-          <select
-            value={difficulty}
-            onChange={(event) => {
-              setDifficulty(event.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="">All difficulties</option>
-            {difficulties.map((level) => (
-              <option key={level} value={level}>
-                {level}
-              </option>
-            ))}
-          </select>
           {isAdmin && (
             <select
+              aria-label="Filter by visibility"
               value={visibility}
-              onChange={(event) => {
-                setVisibility(event.target.value);
-                setPage(1);
-              }}
+              onChange={(event) => updateFilters({ visibility: event.target.value })}
             >
               <option value="all">All</option>
               <option value="public">Public</option>
@@ -355,10 +375,8 @@ function ProblemsPage() {
                 className={`secondary problem-tag-filter__button${
                   !tagFilter ? ' problem-tag-filter__button--active' : ''
                 }`}
-                onClick={() => {
-                  setTagFilter('');
-                  setPage(1);
-                }}
+                aria-pressed={!tagFilter}
+                onClick={() => updateFilters({ tag: '' })}
               >
                 All
               </button>
@@ -369,29 +387,44 @@ function ProblemsPage() {
                   className={`secondary problem-tag-filter__button${
                     tagFilter === tag ? ' problem-tag-filter__button--active' : ''
                   }`}
-                  onClick={() => {
-                    setTagFilter(tag);
-                    setPage(1);
-                  }}
+                  aria-pressed={tagFilter === tag}
+                  onClick={() => updateFilters({ tag })}
                 >
                   {tag}
                 </button>
               ))}
             </div>
           )}
-          <div className="problem-table-wrapper">
+          <div className="problem-list-toolbar">
+            <span className="problem-list-toolbar__summary" role="status">
+              {totalProblems} {totalProblems === 1 ? 'problem' : 'problems'}
+            </span>
+            <div className="problem-list-toolbar__controls">
+              <label>
+                <span>Per page</span>
+                <select value={pageSize} onChange={(event) => updateFilters({ limit: event.target.value })}>
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>{size}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+          <div className="problem-table-wrapper" role="region" aria-label="Problem list" tabIndex={0}>
             <table className="problem-table">
               <thead>
                 <tr>
                   <th className="problem-table__status-header" aria-label="Solved">
                     <span>✓</span>
                   </th>
-                  <th>ID</th>
-                  <th>Title</th>
-                  <th>Author</th>
-                  <th>Difficulty</th>
-                  <th>Submissions</th>
-                  <th>AC Rate</th>
+                  {SORT_COLUMNS.map((column) => (
+                    <SortableProblemHeader
+                      key={column.field}
+                      column={column}
+                      sort={sort}
+                      onSort={(value) => updateFilters({ sort: value })}
+                    />
+                  ))}
                   {isAdmin && <th>Actions</th>}
                 </tr>
               </thead>
@@ -404,11 +437,7 @@ function ProblemsPage() {
                 const isSolved = solvedProblemIds.has(problem.problemId);
                 const authorUsername =
                   problem.author?.username ?? problem.author?.userName ?? null;
-                const authorLabel =
-                  problem.author?.profile?.displayName ??
-                  problem.author?.displayName ??
-                  authorUsername ??
-                  '—';
+                const authorLabel = getAuthorLabel(problem) || '—';
 
                 return (
                   <tr key={problem._id}>
@@ -451,11 +480,7 @@ function ProblemsPage() {
                       )}
                     </td>
                     <td>
-                      <span
-                        className={`difficulty-tag difficulty-${problem.difficulty?.toLowerCase()}`}
-                      >
-                        {problem.difficulty || 'BASIC'}
-                      </span>
+                      <DifficultyBadge rating={problem.difficultyRating} />
                     </td>
                     <td>{total}</td>
                     <td>{acceptanceRate}</td>
@@ -541,7 +566,7 @@ function ProblemsPage() {
             </button>
           </div>
           <div className="table-footer__summary">
-            Showing {pageItems.length} of {totalProblems} problems
+            Showing {totalProblems ? (currentPage - 1) * pageSize + 1 : 0}–{Math.min(currentPage * pageSize, totalProblems)} of {totalProblems} problems
           </div>
         </footer>
         </>

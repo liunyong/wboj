@@ -106,6 +106,8 @@ const submissionSchema = new mongoose.Schema(
     queuedAt: { type: Date, default: Date.now },
     startedAt: { type: Date },
     finishedAt: { type: Date },
+    firstAcceptedAt: { type: Date, default: null },
+    ratingPending: { type: Boolean, default: false, index: true },
     runs: { type: [runHistorySchema], default: [] },
     lastRunAt: { type: Date, default: null },
     deletedAt: { type: Date, default: null },

@@ -4,9 +4,11 @@ import app from './app.js';
 import connectDatabase from './config/database.js';
 import { env } from './config/env.js';
 import { startSubmissionWorker, stopSubmissionWorker } from './services/submissionWorkerService.js';
+import { backfillRatings } from './services/ratingService.js';
 
 const startServer = async () => {
   await connectDatabase(env.mongoUri);
+  await backfillRatings();
 
   const server = app.listen(env.port, () => {
     console.log(`Server listening on port ${env.port}`);

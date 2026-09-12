@@ -115,6 +115,10 @@ export function AuthProvider({ children }) {
       }
     }
     queryClient.removeQueries({ queryKey: ['me'] });
+    // The unified dashboard includes private progress, submission and rating data.
+    for (const key of [['ratings'], ['dashboard'], ['user', 'progress'], ['user-dashboard'], ['submissions', 'mine']]) {
+      queryClient.removeQueries({ queryKey: key });
+    }
   };
 
   const refreshTokens = async () => {

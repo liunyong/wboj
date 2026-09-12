@@ -119,8 +119,9 @@ function Layout() {
   return (
     <div className="app-shell">
       <div ref={contentRef} className="app-shell__content">
+        <a className="skip-link" href="#main-content">Skip to content</a>
         <Header />
-        <main className="app-main">
+        <main id="main-content" className="app-main" tabIndex={-1}>
           <Outlet />
         </main>
         <Footer />

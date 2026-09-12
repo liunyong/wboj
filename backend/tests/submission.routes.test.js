@@ -335,6 +335,14 @@ describe('Submission routes with auth', () => {
       expect(item.problemId).toBe(problem.problemId);
       expect(item.language).toBe('Python (3.10)');
     });
+
+    const anonymousResponse = await request(app).get(
+      `/api/problems/${problem.problemId}/submissions`
+    );
+    expect(anonymousResponse.status).toBe(200);
+    expect(anonymousResponse.body.scope).toBe('all');
+    expect(anonymousResponse.body.items).toHaveLength(2);
+    anonymousResponse.body.items.forEach((item) => expect(item).not.toHaveProperty('source'));
   });
 
   it('prevents unauthorized access to private problem submissions', async () => {
@@ -358,6 +366,11 @@ describe('Submission routes with auth', () => {
       .set(authHeader(otherSession.tokens.accessToken));
     expect(forbiddenResponse.status).toBe(403);
     expect(forbiddenResponse.body.code).toBe('FORBIDDEN');
+
+    const anonymousResponse = await request(app).get(
+      `/api/problems/${privateProblem.problemId}/submissions`
+    );
+    expect(anonymousResponse.status).toBe(403);
   });
 
   it('allows owners to resubmit their submission', async () => {

@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
+import DifficultyBadge from '../components/DifficultyBadge.jsx';
+import DifficultyEvaluation from '../components/DifficultyEvaluation.jsx';
 import CodeEditor from '../components/CodeEditor.jsx';
 import ProblemStatement from '../components/ProblemStatement.jsx';
 import ProblemSubmissionsPanel from '../components/ProblemSubmissionsPanel.jsx';
@@ -358,7 +360,7 @@ const resubmitMutation = useResubmitSubmission({
       inLanguage: ['en', 'ko'],
       identifier: problem.problemId,
       programmingLanguage: languageNames,
-      audience: { '@type': 'Audience', audienceType: problem.difficulty || 'All levels' },
+      audience: { '@type': 'Audience', audienceType: 'Competitive programming students' },
       offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
       mainEntityOfPage: baseUrl
     };
@@ -567,9 +569,7 @@ const resubmitMutation = useResubmitSubmission({
                 <span className="problem-detail__id">#{problem.problemId}</span>
               </h1>
               <div className="problem-labels">
-                <span className={`difficulty-tag difficulty-${problem.difficulty?.toLowerCase()}`}>
-                  {problem.difficulty}
-                </span>
+                <DifficultyBadge rating={problem.difficultyRating} />
                 {!problem.isPublic && <span className="problem-card__badge">Private</span>}
               </div>
               {authorName && <div className="problem-author">Author: {authorName}</div>}
@@ -623,6 +623,7 @@ const resubmitMutation = useResubmitSubmission({
             </div>
           </header>
 
+          {isAdmin && <DifficultyEvaluation key={problem.problemId} problem={problem} />}
           <article className="problem-section">
             <h2>Statement</h2>
             <ProblemStatement
@@ -867,26 +868,24 @@ const resubmitMutation = useResubmitSubmission({
             </article>
           ) : (
             <article className="problem-section callout">
-              <p>Please log in to submit solutions and view submissions for this problem.</p>
+              <p>Please log in to submit solutions.</p>
             </article>
           )}
 
-          {user ? (
-            <ProblemSubmissionsPanel
-              problem={problem}
-              currentUserId={currentUserId}
-              isAdmin={isAdmin}
-              canDelete={isSuperAdmin}
-              onVerdictClick={handleVerdictClick}
-              onResubmit={handleResubmit}
-              onDelete={handleDeleteSubmission}
-              resubmittingId={resubmittingId}
-              isResubmitPending={resubmitMutation.isPending}
-              deletingId={deletingId}
-              isDeletePending={deleteSubmissionMutation.isPending}
-              isResubmitBlocked={isSubmissionBlocked}
-            />
-          ) : null}
+          <ProblemSubmissionsPanel
+            problem={problem}
+            currentUserId={currentUserId}
+            isAdmin={isAdmin}
+            canDelete={isSuperAdmin}
+            onVerdictClick={handleVerdictClick}
+            onResubmit={handleResubmit}
+            onDelete={handleDeleteSubmission}
+            resubmittingId={resubmittingId}
+            isResubmitPending={resubmitMutation.isPending}
+            deletingId={deletingId}
+            isDeletePending={deleteSubmissionMutation.isPending}
+            isResubmitBlocked={isSubmissionBlocked}
+          />
         </div>
       )}
       <ConfirmDialog

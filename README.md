@@ -4,6 +4,9 @@
 
 Full-stack online judge featuring a Node.js + MongoDB backend with Judge0 execution, JWT authentication with role-based access control, and a React dashboard for contestants and administrators.
 
+See [Portfolio ratings and seasons](docs/ratings.md) for the unified Dashboard,
+rating policies, first-AC migration, season management and AI difficulty setup.
+
 ## Project Structure
 
 - `backend/` — Express API. Stores problems and submissions in MongoDB and forwards execution requests to Judge0.

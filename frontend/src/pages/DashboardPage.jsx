@@ -3,6 +3,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import Heatmap from '../components/Heatmap.jsx';
+import Announcements from '../components/Announcements.jsx';
+import MyRatingOverview from '../components/RatingOverview.jsx';
+import DifficultyBadge from '../components/DifficultyBadge.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import {
   formatRelativeOrDate,
@@ -32,7 +35,7 @@ const selectableYears = [currentYear, currentYear - 1, currentYear - 2];
 const RESUBMIT_BLOCKED_TITLE =
   'Grading in progress. Re-submit is disabled until it finishes.';
 
-function DashboardPage() {
+function CodingDashboard() {
   const queryClient = useQueryClient();
   const { authFetch, user } = useAuth();
   const { resolveLanguageLabel } = useLanguages();
@@ -43,12 +46,12 @@ function DashboardPage() {
   const [resubmittingId, setResubmittingId] = useState(null);
 
   const summaryQuery = useQuery({
-    queryKey: ['dashboard', 'summary', year],
+    queryKey: ['dashboard', 'summary', user?.id, year],
     queryFn: async () => authFetch(`/api/dashboard/me/summary?year=${year}`)
   });
 
   const heatmapQuery = useQuery({
-    queryKey: ['dashboard', 'heatmap', year],
+    queryKey: ['dashboard', 'heatmap', user?.id, year],
     queryFn: async () => authFetch(`/api/dashboard/me/heatmap?year=${year}`)
   });
 
@@ -64,10 +67,10 @@ function DashboardPage() {
 
   const seoConfig = useMemo(
     () => ({
-      title: 'WBOJ Dashboard | Progress Overview',
+      title: 'WBOJ Dashboard | Coding Profile & Rating',
       titleKo: 'WBOJ 대시보드 | 진행 현황',
-      description: `You’ve solved ${solvedCount} challenges this year. Track your coding progress and keep your ${year} streak going strong.`,
-      descriptionKo: `올해 ${solvedCount}문제를 해결했습니다. 제출 히트맵으로 학습 진행률을 확인하고 ${year} streak을 이어가세요.`,
+      description: `You’ve solved ${solvedCount} challenges. Track your coding progress and keep your ${year} streak going strong.`,
+      descriptionKo: `총 ${solvedCount}문제를 해결했습니다. 제출 히트맵으로 학습 진행률을 확인하고 ${year} streak을 이어가세요.`,
 
       path: '/dashboard',
       ogType: 'profile',
@@ -116,6 +119,9 @@ function DashboardPage() {
         );
         if (submission.verdict && submission.verdict !== 'PENDING') {
           queryClient.invalidateQueries({ queryKey: userProgressQueryKey });
+          queryClient.invalidateQueries({ queryKey: ['ratings'] });
+          queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+          queryClient.invalidateQueries({ queryKey: ['dashboard'] });
         }
 
         const previousVerdict = variables?.baseSubmission?.verdict ?? null;
@@ -153,6 +159,9 @@ function DashboardPage() {
           : null;
       if (finalVerdict) {
         queryClient.invalidateQueries({ queryKey: userProgressQueryKey });
+        queryClient.invalidateQueries({ queryKey: ['ratings'] });
+        queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       }
     },
     [queryClient, user?.id]
@@ -249,11 +258,12 @@ function DashboardPage() {
     <section className="page">
       <header className="page-header">
         <div>
-          <h1>Dashboard</h1>
-          <p>Track your yearly progress and submission history.</p>
+          <span className="eyebrow">CODING PROFILE</span>
+          <h1>{user.username}’s Dashboard</h1>
+          <p>Your portfolio, your progress. One accepted solution at a time.</p>
         </div>
         <div className="page-controls">
-          <select value={year} onChange={(event) => setYear(Number(event.target.value))}>
+          <select aria-label="Statistics year" value={year} onChange={(event) => setYear(Number(event.target.value))}>
             {selectableYears.map((value) => (
               <option key={value} value={value}>
                 {value}
@@ -263,23 +273,31 @@ function DashboardPage() {
         </div>
       </header>
 
-      {summaryQuery.isLoading ? (
-        <div className="page-message">Loading summary…</div>
-      ) : (
-        <div className="summary-grid">
-          <SummaryCard label="Total Submissions" value={summary.totalSubmissions ?? 0} />
-          <SummaryCard label="Accepted" value={summary.totalAC ?? 0} accent="success" />
-          <SummaryCard label="Wrong Answer" value={summary.totalWA ?? 0} />
-          <SummaryCard label="Time Limit" value={summary.totalTLE ?? 0} />
-          <SummaryCard label="Runtime Error" value={summary.totalRTE ?? 0} />
-          <SummaryCard label="Compile Error" value={summary.totalCE ?? 0} />
-        </div>
-      )}
+      <MyRatingOverview />
 
+      <article className="dashboard-section">
+        <h2>Submission Statistics <span className="muted">· {year}</span></h2>
+        {summaryQuery.isLoading ? (
+          <div className="page-message">Loading summary…</div>
+        ) : summaryQuery.isError ? (
+          <div className="page-message error">Failed to load submission statistics.</div>
+        ) : (
+          <div className="summary-grid">
+            <SummaryCard label="Total Submissions" value={summary.totalSubmissions ?? 0} />
+            <SummaryCard label="Accepted" value={summary.totalAC ?? 0} accent="success" />
+            <SummaryCard label="Wrong Answer" value={summary.totalWA ?? 0} />
+            <SummaryCard label="Time Limit" value={summary.totalTLE ?? 0} />
+            <SummaryCard label="Runtime Error" value={summary.totalRTE ?? 0} />
+            <SummaryCard label="Compile Error" value={summary.totalCE ?? 0} />
+          </div>
+        )}
+      </article>
       <article className="dashboard-section">
         <h2>Yearly Activity</h2>
         {heatmapQuery.isLoading ? (
           <div className="page-message">Loading activity…</div>
+        ) : heatmapQuery.isError ? (
+          <div className="page-message error">Failed to load yearly activity.</div>
         ) : (
           <Heatmap year={year} items={heatmapData} />
         )}
@@ -310,6 +328,7 @@ function DashboardPage() {
                           #{problem.problemId}
                         </span>
                         <span className="dashboard-progress__chip-title">{problem.title}</span>
+                        <DifficultyBadge rating={problem.difficultyRating} />
                       </Link>
                     </li>
                   ))}
@@ -443,6 +462,7 @@ function DashboardPage() {
           </table>
         ) : null}
       </article>
+      <Announcements />
       {activeSubmissionId ? (
         <SubmissionViewerModal
           submissionId={activeSubmissionId}
@@ -474,6 +494,26 @@ function SummaryCard({ label, value, accent }) {
       <div className="summary-card__label">{label}</div>
     </div>
   );
+}
+
+function DashboardPage() {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return <div className="page-message">Loading dashboard…</div>;
+  if (user) return <CodingDashboard key={user.id} />;
+  return <GuestDashboard />;
+}
+
+function GuestDashboard() {
+  usePageSeo({ title: 'WBOJ Dashboard | Coding Profile & Rating', description: 'Build your coding portfolio, follow your rating and read the latest announcements.', path: '/dashboard' });
+  return <section className="page">
+    <header className="page-header dashboard-welcome">
+      <div><span className="eyebrow">YOUR CODING PROFILE</span><h1>Dashboard</h1>
+        <p>Build your problem-solving portfolio. Follow your rating, activity, and seasonal progress.</p>
+        <div className="page-controls"><Link className="primary-link" to="/login">Sign in to your dashboard ↗</Link><Link to="/problems">Explore problems</Link><Link to="/leaderboard">Leaderboard</Link></div>
+      </div>
+    </header>
+    <Announcements />
+  </section>;
 }
 
 export default DashboardPage;

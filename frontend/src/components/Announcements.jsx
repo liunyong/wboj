@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '../context/AuthContext.jsx';
@@ -7,10 +7,8 @@ import {
   formatTooltip,
   getUserTZ
 } from '../utils/time.js';
-import { siteMeta, summarizeText } from '../utils/seo.js';
-import { usePageSeo } from '../hooks/useSeo.js';
 
-function HomePage() {
+function Announcements() {
   const { authFetch, user } = useAuth();
   const isAdmin = ['admin', 'super_admin'].includes(user?.role);
   const queryClient = useQueryClient();
@@ -88,56 +86,6 @@ function HomePage() {
 
   const announcements = announcementsQuery.data ?? [];
 
-  const seoConfig = useMemo(() => {
-    const latestAnnouncements = announcements.slice(0, 5);
-
-    return {
-      title: 'WBOJ | WB Online Judge for Coding, Algorithms, and Competitive Programming',
-      description: 'Practice coding, solve algorithm problems, and read the latest platform announcements.',
-      titleKo: 'WBOJ | WB 온라인 저지 플랫폼',
-      descriptionKo: '코딩 연습, 알고리즘 문제 풀이, 플랫폼 공지를 한곳에서 확인하세요.',
-
-      path: '/',
-      jsonLd: [
-        {
-          id: 'home-announcements',
-          data: {
-            '@context': 'https://schema.org',
-            '@type': 'CollectionPage',
-            name: 'WB Online Judge Announcements',
-            url: `${siteMeta.siteUrl}/`,
-            inLanguage: ['en', 'ko'],
-            isPartOf: { '@type': 'WebSite', '@id': `${siteMeta.siteUrl}#website` },
-            itemListElement: latestAnnouncements.map((announcement, index) => ({
-              '@type': 'ListItem',
-              position: index + 1,
-              url: `${siteMeta.siteUrl}/?announcement=${announcement._id ?? announcement.id ?? index}`,
-              name: announcement.title,
-              description: summarizeText(announcement.body ?? '')
-            }))
-          }
-        },
-        {
-          id: 'site-search',
-          data: {
-            '@context': 'https://schema.org',
-            '@type': 'WebSite',
-            '@id': `${siteMeta.siteUrl}#website`,
-            name: 'WB Online Judge',
-            url: siteMeta.siteUrl,
-            potentialAction: {
-              '@type': 'SearchAction',
-              target: `${siteMeta.siteUrl}/problems?query={search_term_string}`,
-              'query-input': 'required name=search_term_string'
-            }
-          }
-        }
-      ]
-    };
-  }, [announcements]);
-
-  usePageSeo(seoConfig);
-
   const isEditing = (id) => editingId === id;
 
   const handleCreateSubmit = (event) => {
@@ -173,16 +121,7 @@ function HomePage() {
   };
 
   return (
-    <section className="page home-page">
-      <header className="page-header">
-        <div>
-          <h1>Welcome</h1>
-          <p>Catch up on the latest platform announcements and notices.</p>
-        </div>
-      </header>
-
-      <div className="home-grid">
-        <div className="home-announcements">
+    <article className="dashboard-section dashboard-announcements">
           <div className="section-header">
             <h2>Announcements</h2>
             {isAdmin && !isCreating && (
@@ -228,8 +167,8 @@ function HomePage() {
               </label>
               {formError && <div className="form-message error">{formError}</div>}
               <div className="form-actions">
-                <button type="submit" className="primary" disabled={createAnnouncementMutation.isLoading}>
-                  {createAnnouncementMutation.isLoading ? 'Creating…' : 'Publish'}
+                <button type="submit" className="primary" disabled={createAnnouncementMutation.isPending}>
+                  {createAnnouncementMutation.isPending ? 'Creating…' : 'Publish'}
                 </button>
                 <button
                   type="button"
@@ -298,9 +237,9 @@ function HomePage() {
                         <button
                           type="submit"
                           className="primary"
-                          disabled={updateAnnouncementMutation.isLoading}
+                          disabled={updateAnnouncementMutation.isPending}
                         >
-                          {updateAnnouncementMutation.isLoading ? 'Saving…' : 'Save'}
+                          {updateAnnouncementMutation.isPending ? 'Saving…' : 'Save'}
                         </button>
                         <button
                           type="button"
@@ -365,7 +304,7 @@ function HomePage() {
                               type="button"
                               className="danger"
                               onClick={() => deleteAnnouncementMutation.mutate(announcement.id)}
-                              disabled={deleteAnnouncementMutation.isLoading}
+                              disabled={deleteAnnouncementMutation.isPending}
                             >
                               Delete
                             </button>
@@ -379,10 +318,8 @@ function HomePage() {
               );
             })}
           </ul>
-        </div>
-      </div>
-    </section>
+    </article>
   );
 }
 
-export default HomePage;
+export default Announcements;

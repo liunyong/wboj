@@ -9,6 +9,7 @@ import mongoose from 'mongoose';
 
 import authRoutes from './routes/authRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
+import ratingRoutes from './routes/ratingRoutes.js';
 import languageRoutes from './routes/languageRoutes.js';
 import problemRoutes from './routes/problemRoutes.js';
 import submissionRoutes from './routes/submissionRoutes.js';
@@ -127,6 +128,7 @@ app.get('/api/sitemap.xml', serveSitemap);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/ratings', ratingRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/problem-updates', problemUpdateRoutes);
 app.use('/api/problems', problemRoutes);

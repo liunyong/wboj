@@ -21,7 +21,6 @@ const buildDefaultForm = () => ({
   title: '',
   statementMd: '',
   source: '',
-  difficulty: 'BASIC',
   isPublic: true,
   inputFormat: '',
   outputFormat: '',
@@ -124,7 +123,6 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
       title: initialProblem.title ?? '',
       statementMd: selectStatementSource(initialProblem.statementMd, initialProblem.statement),
       source: initialProblem.source ?? '',
-      difficulty: initialProblem.difficulty ?? 'BASIC',
       isPublic: initialProblem.isPublic ?? true,
       inputFormat: initialProblem.inputFormat ?? '',
       outputFormat: initialProblem.outputFormat ?? '',
@@ -260,7 +258,6 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
           title: response.title ?? form.title,
           statementMd: selectStatementSource(response.statementMd, response.statement),
           source: response.source ?? form.source ?? '',
-          difficulty: response.difficulty ?? form.difficulty,
           isPublic: response.isPublic ?? form.isPublic,
           inputFormat: response.inputFormat ?? '',
           outputFormat: response.outputFormat ?? '',
@@ -708,7 +705,6 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
       title: form.title.trim(),
       statementMd: statementMarkdown,
       statement: statementMarkdown,
-      difficulty: form.difficulty,
       isPublic: form.isPublic,
       inputFormat: form.inputFormat || undefined,
       outputFormat: form.outputFormat || undefined,
@@ -796,21 +792,6 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
             required
             disabled={!isReady}
           />
-        </label>
-
-        <label>
-          Difficulty
-          <select
-            name="difficulty"
-            value={form.difficulty}
-            onChange={handleInputChange}
-            disabled={!isReady}
-          >
-            <option value="BASIC">BASIC</option>
-            <option value="EASY">EASY</option>
-            <option value="MEDIUM">MEDIUM</option>
-            <option value="HARD">HARD</option>
-          </select>
         </label>
 
         <label className="checkbox">

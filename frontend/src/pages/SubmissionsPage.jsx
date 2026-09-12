@@ -24,6 +24,14 @@ import SubmissionViewerModal from '../components/SubmissionViewerModal.jsx';
 const PAGE_SIZE = 20;
 const RESUBMIT_BLOCKED_TITLE =
   'Grading in progress. Re-submit is disabled until it finishes.';
+const EMPTY_FILTERS = {
+  statuses: [],
+  user: '',
+  problemId: '',
+  dateFrom: '',
+  dateTo: '',
+  page: 1
+};
 
 const matchesFilters = (event, filters) => {
   if (!filters) {
@@ -74,14 +82,7 @@ function SubmissionsPage() {
   const queryClient = useQueryClient();
   const { resolveLanguageLabel } = useLanguages();
   const userTimeZone = useMemo(() => getUserTZ(), []);
-  const [filters, setFilters] = useState({
-    statuses: [],
-    user: '',
-    problemId: '',
-    dateFrom: '',
-    dateTo: '',
-    page: 1
-  });
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [message, setMessage] = useState(null);
   const [activeSubmissionId, setActiveSubmissionId] = useState(null);
   const [resubmittingId, setResubmittingId] = useState(null);
@@ -363,7 +364,7 @@ function SubmissionsPage() {
   };
 
   return (
-    <section className="page">
+    <section className="page submissions-page">
       <header className="page-header">
         <div>
           <h1>Submissions</h1>
@@ -371,12 +372,38 @@ function SubmissionsPage() {
         </div>
       </header>
 
-      <div className="filters-panel">
-        <div className="filter-group">
-          <span className="filter-label">Status</span>
+      <div className="filters-panel submissions-filters">
+        <div className="submissions-filters__header">
+          <div>
+            <h2>Filters</h2>
+            <p>Narrow results by verdict, user, problem, or date.</p>
+          </div>
+          <button
+            type="button"
+            className="secondary submissions-filters__clear"
+            onClick={() => setFilters(EMPTY_FILTERS)}
+            disabled={
+              !filters.statuses.length &&
+              !filters.user &&
+              !filters.problemId &&
+              !filters.dateFrom &&
+              !filters.dateTo
+            }
+          >
+            Clear filters
+          </button>
+        </div>
+
+        <fieldset className="filter-group submissions-status-filter">
+          <legend className="filter-label">Status</legend>
           <div className="status-filters">
             {STATUS_OPTIONS.map((option) => (
-              <label key={option.value} className="checkbox inline">
+              <label
+                key={option.value}
+                className={`status-filter-option${
+                  filters.statuses.includes(option.value) ? ' is-selected' : ''
+                }`}
+              >
                 <input
                   type="checkbox"
                   checked={filters.statuses.includes(option.value)}
@@ -386,10 +413,11 @@ function SubmissionsPage() {
               </label>
             ))}
           </div>
-        </div>
-        <div className="filter-group">
-          <label>
-            User
+        </fieldset>
+
+        <div className="submissions-filters__fields">
+          <label className="filter-group">
+            <span className="filter-label">User</span>
             <input
               type="search"
               placeholder="Username or id"
@@ -397,29 +425,26 @@ function SubmissionsPage() {
               onChange={(event) => updateFilter('user', event.target.value)}
             />
           </label>
-        </div>
-        <div className="filter-group">
-          <label>
-            Problem ID
+          <label className="filter-group">
+            <span className="filter-label">Problem ID</span>
             <input
               type="number"
               min="1"
+              placeholder="e.g. 100008"
               value={filters.problemId}
               onChange={(event) => updateFilter('problemId', event.target.value)}
             />
           </label>
-        </div>
-        <div className="filter-group date-range">
-          <label>
-            From
+          <label className="filter-group">
+            <span className="filter-label">From</span>
             <input
               type="date"
               value={filters.dateFrom}
               onChange={(event) => updateFilter('dateFrom', event.target.value)}
             />
           </label>
-          <label>
-            To
+          <label className="filter-group">
+            <span className="filter-label">To</span>
             <input
               type="date"
               value={filters.dateTo}

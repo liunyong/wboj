@@ -3,6 +3,12 @@ import { getSharedRateLimitStore } from '../utils/rateLimitStoreFactory.js';
 
 const sharedOptions = (prefix) => ({ store: getSharedRateLimitStore(prefix) ?? undefined });
 
+export const difficultyEvaluationRateLimiter = rateLimit({
+  ...sharedOptions('rl:difficulty:'), windowMs: 60 * 1000, limit: 5,
+  standardHeaders: 'draft-7', legacyHeaders: false, keyGenerator: (req) => req.user.id,
+  message: { code: 'DIFFICULTY_RATE_LIMIT', message: 'Please wait a minute before evaluating more problems.' }
+});
+
 const defaultKeyGenerator = (req) =>
   req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
 

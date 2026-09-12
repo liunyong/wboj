@@ -3,6 +3,7 @@ import Problem from '../models/Problem.js';
 import Submission from '../models/Submission.js';
 import { executeTestCases, buildCaseSummary } from './testCaseRunnerService.js';
 import { env } from '../config/env.js';
+import { reconcileRatingSubmissions } from './ratingService.js';
 
 const buildHttpError = (status, code, message, details) => {
   const error = new Error(message);
@@ -278,6 +279,13 @@ export const resubmitAndUpdate = async ({ submissionId, actingUser }) => {
     if (evaluation) {
       const prevWasAC = previousVerdict === 'AC';
       const newIsAC = evaluation.verdict === 'AC';
+      if (newIsAC) {
+        // Atomic minimum also handles two concurrent synchronous re-runs.
+        await Submission.updateOne({ _id: submissionId }, [{ $set: {
+          firstAcceptedAt: { $min: [{ $ifNull: ['$firstAcceptedAt', finishedAt] }, finishedAt] },
+          ratingPending: true
+        } }], sessionOptions(session));
+      }
       const delta = Number(newIsAC) - Number(prevWasAC);
 
       if (delta !== 0 && currentSubmission.problem) {
@@ -304,6 +312,12 @@ export const resubmitAndUpdate = async ({ submissionId, actingUser }) => {
 
   if (evaluationError) {
     throw evaluationError;
+  }
+
+  try {
+    await reconcileRatingSubmissions();
+  } catch (error) {
+    console.error('Re-submit rating update deferred to worker', { submissionId, message: error.message });
   }
 
   return {

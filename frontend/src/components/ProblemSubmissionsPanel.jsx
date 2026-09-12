@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
@@ -63,10 +63,14 @@ function ProblemSubmissionsPanel({
   const { authFetch } = useAuth();
   const { resolveLanguageLabel } = useLanguages();
   const userTimeZone = useMemo(() => getUserTZ(), []);
-  const [activeScope, setActiveScope] = useState('mine');
+  const [activeScope, setActiveScope] = useState(currentUserId ? 'mine' : 'all');
   const [pageByScope, setPageByScope] = useState({ mine: 1, all: 1 });
 
-  const isReady = Boolean(problemId && currentUserId);
+  const isReady = Boolean(problemId);
+
+  useEffect(() => {
+    if (!currentUserId) setActiveScope('all');
+  }, [currentUserId]);
 
   const fetchSubmissions = useCallback(
     async ({ scope, page }) => {
@@ -187,6 +191,7 @@ function ProblemSubmissionsPanel({
 
   useSubmissionStream({
     enabled: isReady,
+    allowAnonymous: !currentUserId,
     onEvent: applyEventToQueries,
     streamPath: problemId ? `/api/problems/${problemId}/submissions/stream` : undefined
   });
@@ -220,13 +225,15 @@ function ProblemSubmissionsPanel({
       <header className="submissions-panel__header">
         <h3>Submissions</h3>
         <div className="submissions-panel__tabs">
-          <button
-            type="button"
-            className={activeScope === 'mine' ? 'active' : ''}
-            onClick={() => handleScopeChange('mine')}
-          >
-            My Submissions
-          </button>
+          {currentUserId ? (
+            <button
+              type="button"
+              className={activeScope === 'mine' ? 'active' : ''}
+              onClick={() => handleScopeChange('mine')}
+            >
+              My Submissions
+            </button>
+          ) : null}
           <button
             type="button"
             className={activeScope === 'all' ? 'active' : ''}

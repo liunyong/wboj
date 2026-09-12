@@ -32,6 +32,7 @@ import app from '../src/app.js';
 import Problem from '../src/models/Problem.js';
 import Submission from '../src/models/Submission.js';
 import UserStatsDaily from '../src/models/UserStatsDaily.js';
+import { getRatingProfile } from '../src/services/ratingService.js';
 import { authenticateAsUser, authHeader } from './utils.js';
 
 let mongoServer;
@@ -102,7 +103,7 @@ beforeEach(async () => {
 describe('resubmitAndUpdate', () => {
   it('updates existing submission, run history, and problem counters when verdict changes', async () => {
     const userSession = await authenticateAsUser();
-    const problem = await Problem.create(buildProblem());
+    const problem = await Problem.create(buildProblem({ difficultyRating: 1600 }));
 
     // Force the first submission to fail (WA)
     const wrongAnswerResponse = {
@@ -127,6 +128,7 @@ describe('resubmitAndUpdate', () => {
     const initial = await waitForSubmissionCompletion(submissionId);
 
     expect(initial.verdict).toBe('WA');
+    expect(initial.firstAcceptedAt).toBeNull();
     expect(initial.runs).toHaveLength(1);
 
     let reloadedProblem = await Problem.findById(problem._id).lean();
@@ -155,6 +157,10 @@ describe('resubmitAndUpdate', () => {
     expect(updatedSubmission.runs[0].status.status).toBe('wrong_answer');
     expect(updatedSubmission.runs[1].status.status).toBe('accepted');
     expect(updatedSubmission.lastRunAt).toBeInstanceOf(Date);
+    expect(updatedSubmission.firstAcceptedAt).toEqual(updatedSubmission.finishedAt);
+    const ratings = await getRatingProfile(userSession.user.id);
+    expect(ratings.overall).toMatchObject({ rating: 112, solvedCount: 1, ratedSolvedCount: 1 });
+    expect(ratings.overall.history).toHaveLength(1);
 
     reloadedProblem = await Problem.findById(problem._id).lean();
     expect(reloadedProblem.submissionCount).toBe(1);
@@ -163,5 +169,14 @@ describe('resubmitAndUpdate', () => {
     const refreshedStats = await UserStatsDaily.findOne({ user: userSession.user.id });
     expect(refreshedStats.submitCount).toBe(1);
     expect(refreshedStats.acCount).toBe(0);
+
+    runJudge0Submission.mockImplementationOnce(async () => wrongAnswerResponse);
+    runJudge0Submission.mockImplementationOnce(async () => wrongAnswerResponse);
+    await request(app).patch(`/api/submissions/${submissionId}/resubmit`)
+      .set(authHeader(userSession.tokens.accessToken)).expect(200);
+    const rerun = await Submission.findById(submissionId).lean();
+    expect(rerun.verdict).toBe('WA');
+    expect(rerun.firstAcceptedAt).toEqual(updatedSubmission.firstAcceptedAt);
+    expect((await getRatingProfile(userSession.user.id)).overall.history).toEqual(ratings.overall.history);
   });
 });

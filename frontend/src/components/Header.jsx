@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import ThemePicker from './ThemePicker.jsx';
 import logo from '../assets/logo.svg';
 
 function Header() {
@@ -57,12 +58,14 @@ function Header() {
   return (
     <header className="app-header">
       <div className="app-header__brand">
-        <Link to="/"> <img src={logo} alt="WB Online Judge" className="app-logo" /> </Link>
-        <Link to="/">WB Online Judge</Link>
+        <Link to="/" className="brand-link">
+          <img src={logo} alt="" className="app-logo" />
+          <span>WB Online Judge</span>
+        </Link>
       </div>
-      <nav className="app-header__nav">
-        <NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : '')}>
-          Home
+      <nav className="app-header__nav" aria-label="Main navigation">
+        <NavLink to="/dashboard" className={({ isActive }) => (isActive ? 'active' : '')}>
+          Dashboard
         </NavLink>
         <NavLink to="/problems" className={({ isActive }) => (isActive ? 'active' : '')}>
           Problems
@@ -70,11 +73,9 @@ function Header() {
         <NavLink to="/submissions" className={({ isActive }) => (isActive ? 'active' : '')}>
           Submissions
         </NavLink>
-        {user ? (
-          <NavLink to="/dashboard" className={({ isActive }) => (isActive ? 'active' : '')}>
-            Dashboard
-          </NavLink>
-        ) : null}
+        <NavLink to="/leaderboard" className={({ isActive }) => (isActive ? 'active' : '')}>
+          Leaderboard
+        </NavLink>
         {isAdminLike && (
           <NavLink to="/admin/create" className={({ isActive }) => (isActive ? 'active' : '')}>
             Create Problem
@@ -87,6 +88,7 @@ function Header() {
         )}
       </nav>
       <div className="app-header__actions">
+        <ThemePicker />
         {!user && !isLoading && (
           <div className="auth-links">
             <Link to="/login" state={loginRedirectState}>

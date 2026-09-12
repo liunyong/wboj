@@ -163,6 +163,7 @@ export const getProblems = async (req, res, next) => {
       title: 1,
       problemNumber: 1,
       difficulty: 1,
+      difficultyRating: 1,
       tags: 1,
       algorithms: 1,
       isPublic: 1,

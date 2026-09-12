@@ -9,6 +9,7 @@
     "dev": "nodemon src/server.js",
     "seed": "node scripts/seed.js",
     "backfill:problem-ids": "node scripts/backfill-problem-ids.js",
+    "backfill:ratings": "node scripts/backfill-ratings.js",
     "migrate:submissions": "node scripts/migrate-submissions.js",
     "migrate:roles": "node scripts/migrations/2025-10-roles-backfill.js",
     "clean:highlighted-submissions": "node scripts/clean_highlighted_submissions.js",

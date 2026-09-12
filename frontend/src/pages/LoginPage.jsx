@@ -30,7 +30,7 @@ function LoginPage() {
     if (fromState?.pathname) {
       return `${fromState.pathname}${fromState.search || ''}${fromState.hash || ''}`;
     }
-    return '/';
+    return '/dashboard';
   };
 
   const handleSubmit = async (event) => {

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
+import { RatingOverview } from '../components/RatingOverview.jsx';
 import {
   formatRelativeOrDate,
   formatTooltip,
@@ -51,6 +52,8 @@ function UserDashboardPage() {
       )}
 
       {!dashboardQuery.isLoading && !dashboardQuery.isError && (
+        <>
+        {dashboardQuery.data.ratings && <RatingOverview data={dashboardQuery.data.ratings} />}
         <div className="user-dashboard-grid">
           <article className="dashboard-card">
             <header>
@@ -110,6 +113,7 @@ function UserDashboardPage() {
             )}
           </article>
         </div>
+        </>
       )}
     </section>
   );

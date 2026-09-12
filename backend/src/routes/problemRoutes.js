@@ -20,6 +20,9 @@ import {
 import { authenticateOptional, requireAuth, requireRole } from '../middlewares/auth.js';
 import { listRateLimiter } from '../middlewares/rateLimiters.js';
 import validate from '../middlewares/validate.js';
+import { previewDifficulty, confirmDifficulty } from '../controllers/difficultyController.js';
+import { difficultyUpdateSchema } from '../validation/ratingSchemas.js';
+import { difficultyEvaluationRateLimiter } from '../middlewares/rateLimiters.js';
 import {
   createProblemSchema,
   getProblemQuerySchema,
@@ -36,6 +39,11 @@ import {
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+
+router.post('/:problemId/evaluate-difficulty', requireAuth, requireRole('admin'),
+  difficultyEvaluationRateLimiter, validate({ params: problemIdParamSchema }), previewDifficulty);
+router.put('/:problemId/difficulty-rating', requireAuth, requireRole('admin'),
+  validate({ params: problemIdParamSchema, body: difficultyUpdateSchema }), confirmDifficulty);
 
 router.get('/', authenticateOptional, validate({ query: listProblemsQuerySchema }), getProblems);
 router.get(
@@ -58,14 +66,14 @@ router.get(
 );
 router.get(
   '/:problemId/submissions',
-  requireAuth,
+  authenticateOptional,
   listRateLimiter,
   validate({ params: problemIdParamSchema, query: problemSubmissionsQuerySchema }),
   listProblemSubmissions
 );
 router.get(
   '/:problemId/submissions/stream',
-  requireAuth,
+  authenticateOptional,
   validate({ params: problemIdParamSchema, query: submissionUpdatesQuerySchema }),
   streamProblemSubmissions
 );

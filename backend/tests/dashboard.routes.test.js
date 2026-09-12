@@ -208,11 +208,13 @@ describe('Dashboard routes', () => {
       {
         problemId: 100000,
         title: 'A + B',
+        difficultyRating: null,
         slug: 'a-plus-b'
       },
       {
         problemId: 100002,
         title: 'Sorting',
+        difficultyRating: null,
         slug: 'sorting'
       }
     ]);
@@ -221,6 +223,7 @@ describe('Dashboard routes', () => {
       {
         problemId: 100001,
         title: 'Fibonacci',
+        difficultyRating: null,
         slug: 'fibonacci',
         latestVerdict: 'WA',
         latestStatus: 'wrong_answer'

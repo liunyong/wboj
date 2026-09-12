@@ -18,7 +18,8 @@ export function useSubmissionStream({
   onEvent,
   pollInterval = 8000,
   streamPath = '/api/submissions/stream',
-  updatesPath = '/api/submissions/updates'
+  updatesPath = '/api/submissions/updates',
+  allowAnonymous = false
 } = {}) {
   const { tokens, refreshTokens, authFetch } = useAuth();
   const onEventRef = useRef(onEvent);
@@ -77,7 +78,7 @@ export function useSubmissionStream({
       while (!cancelled) {
         try {
           let accessToken = tokens.accessToken;
-          if (!accessToken) {
+          if (!accessToken && !allowAnonymous) {
             accessToken = await refreshTokens();
             if (!accessToken) {
               break;
@@ -85,13 +86,11 @@ export function useSubmissionStream({
           }
 
           const response = await fetch(streamUrl, {
-            headers: {
-              Authorization: `Bearer ${accessToken}`
-            },
+            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
             signal: controller.signal
           });
 
-          if (response.status === 401) {
+          if (response.status === 401 && !allowAnonymous) {
             accessToken = await refreshTokens();
             if (!accessToken) {
               break;
@@ -169,7 +168,7 @@ export function useSubmissionStream({
       cancelled = true;
       controller.abort();
     };
-  }, [enabled, refreshTokens, streamPath, tokens.accessToken]);
+  }, [allowAnonymous, enabled, refreshTokens, streamPath, tokens.accessToken]);
 
   useEffect(() => {
     if (!enabled) {
@@ -183,6 +182,9 @@ export function useSubmissionStream({
         return;
       }
       try {
+        if (allowAnonymous && !tokens.accessToken) {
+          return;
+        }
         const params = new URLSearchParams();
         if (lastSinceRef.current) {
           params.set('since', lastSinceRef.current);
@@ -200,5 +202,5 @@ export function useSubmissionStream({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [enabled, authFetch, pollInterval, updatesPath]);
+  }, [allowAnonymous, enabled, authFetch, pollInterval, tokens.accessToken, updatesPath]);
 }

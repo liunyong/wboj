@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Submission from './Submission.js';
+import FirstSolve from './FirstSolve.js';
 
 const testCaseSchema = new mongoose.Schema(
   {
@@ -45,6 +46,14 @@ const problemSchema = new mongoose.Schema(
       enum: ['BASIC', 'EASY', 'MEDIUM', 'HARD'],
       default: 'BASIC'
     },
+    difficultyRating: { type: Number, default: null, min: 800, max: 4000, validate: { validator: (value) => value == null || Number.isInteger(value) } },
+    difficultyVersion: { type: Number, default: 0 },
+    difficultyRatingPending: { type: Boolean, default: false, select: false },
+    difficultyHistory: { type: [new mongoose.Schema({
+      at: { type: Date, required: true },
+      rating: { type: Number, default: null },
+      changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+    }, { _id: false })], default: [], select: false },
     tags: {
       type: [String],
       default: [],
@@ -95,6 +104,13 @@ problemSchema.set('toObject', { virtuals: true });
 const deleteRelatedSubmissions = async (problemId) => {
   if (!problemId) {
     return;
+  }
+  // Retain earned difficulty/history if an administrator removes the problem.
+  const problem = await Problem.findById(problemId).select('difficultyRating +difficultyHistory').lean();
+  if (problem) {
+    await FirstSolve.updateMany({ problem: problemId }, { $set: {
+      difficultySnapshot: { difficultyRating: problem.difficultyRating, difficultyHistory: problem.difficultyHistory }
+    } });
   }
   await Submission.deleteMany({ problem: problemId });
 };
