@@ -1,5 +1,5 @@
-import { render, waitFor } from '@testing-library/react';
-import { useEffect, useRef } from 'react';
+import { cleanup, fireEvent, render } from '@testing-library/react';
+import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockAuthFetch = vi.fn();
@@ -37,7 +37,121 @@ describe('useSessionKeepAlive', () => {
   });
 
   afterEach(() => {
+    cleanup();
     vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps an active session alive across polling intervals without showing a warning', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    let expiry = Date.now() + 180_000;
+    mockAuthFetch.mockImplementation(async (path) => {
+      if (path === '/api/session/extend') expiry = Date.now() + 180_000;
+      return { serverNow: Date.now(), inactivityExpiresAt: expiry };
+    });
+    const onShowWarning = vi.fn();
+    const onExpire = vi.fn();
+    render(<HookHarness onShowWarning={onShowWarning} onExpire={onExpire} options={{ warningLeadMs: 30_000 }} />);
+    for (let tick = 0; tick < 24; tick += 1) {
+      await vi.advanceTimersByTimeAsync(10_000);
+      fireEvent.keyDown(window, { key: 'a' });
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    const extensions = mockAuthFetch.mock.calls.filter(([path]) => path === '/api/session/extend');
+    expect(extensions.length).toBeGreaterThanOrEqual(3);
+    expect(extensions.length).toBeLessThanOrEqual(4);
+    expect(onShowWarning).not.toHaveBeenCalled();
+    expect(onExpire).not.toHaveBeenCalled();
+  });
+
+  it('recognizes scrolling inside an editor or table even when the event does not bubble', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    mockAuthFetch.mockImplementation(async () => ({ serverNow: Date.now(), inactivityExpiresAt: Date.now() + 180_000 }));
+    const { container } = render(<div><HookHarness options={{ warningLeadMs: 30_000 }} /><div data-testid="scroll-panel" /></div>);
+    await vi.advanceTimersByTimeAsync(61_000);
+    fireEvent.scroll(container.querySelector('[data-testid="scroll-panel"]'), { bubbles: false });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mockAuthFetch).toHaveBeenCalledWith('/api/session/extend', { method: 'POST' });
+  });
+
+  it('still warns and expires exactly once when only background polling continues', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    const expiry = Date.now() + 180_000;
+    mockAuthFetch.mockImplementation(async () => ({ serverNow: Date.now(), inactivityExpiresAt: expiry }));
+    const onShowWarning = vi.fn();
+    const onHideWarning = vi.fn();
+    const onExpire = vi.fn();
+    render(<HookHarness onShowWarning={onShowWarning} onHideWarning={onHideWarning} onExpire={onExpire} options={{ warningLeadMs: 30_000 }} />);
+    await vi.advanceTimersByTimeAsync(151_000);
+    expect(onShowWarning).toHaveBeenCalled();
+    fireEvent.mouseMove(window);
+    expect(mockAuthFetch).not.toHaveBeenCalledWith('/api/session/extend', { method: 'POST' });
+    await vi.advanceTimersByTimeAsync(90_000);
+    expect(onHideWarning).toHaveBeenCalledTimes(1);
+    expect(onExpire).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let unconfirmed activity from another tab suppress local renewal', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('BroadcastChannel', undefined);
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    let expiry = Date.now() + 180_000;
+    mockAuthFetch.mockImplementation(async (path) => {
+      if (path === '/api/session/extend') expiry = Date.now() + 180_000;
+      return { serverNow: Date.now(), inactivityExpiresAt: expiry };
+    });
+    render(<HookHarness options={{ warningLeadMs: 30_000 }} />);
+    await vi.advanceTimersByTimeAsync(61_000);
+    fireEvent(window, new StorageEvent('storage', { key: 'session-life-sync', newValue: JSON.stringify({ clientId: 'another-tab', type: 'USER_ACTIVITY' }) }));
+    fireEvent.click(window);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mockAuthFetch).toHaveBeenCalledWith('/api/session/extend', { method: 'POST' });
+  });
+
+  it('uses a confirmed renewal from another tab and avoids a duplicate touch', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('BroadcastChannel', undefined);
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    const expiry = Date.now() + 90_000;
+    mockAuthFetch.mockImplementation(async () => ({ serverNow: Date.now(), inactivityExpiresAt: expiry }));
+    const onShowWarning = vi.fn();
+    const onHideWarning = vi.fn();
+    render(<HookHarness onShowWarning={onShowWarning} onHideWarning={onHideWarning} options={{ warningLeadMs: 30_000 }} />);
+    await vi.advanceTimersByTimeAsync(61_000);
+    expect(onShowWarning).toHaveBeenCalled();
+    fireEvent(window, new StorageEvent('storage', { key: 'session-life-sync', newValue: JSON.stringify({ clientId: 'another-tab', type: 'SESSION_EXTENDED', inactivityExpiresAt: Date.now() + 180_000 }) }));
+    expect(onHideWarning).toHaveBeenCalledTimes(1);
+    onShowWarning.mockClear();
+    fireEvent.keyDown(window, { key: 'a' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mockAuthFetch).not.toHaveBeenCalledWith('/api/session/extend', { method: 'POST' });
+    expect(onShowWarning).not.toHaveBeenCalled();
+  });
+
+  it('ignores an old state response arriving after a successful renewal', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    const originalExpiry = Date.now() + 100_000;
+    let resolveState;
+    let stateCount = 0;
+    mockAuthFetch.mockImplementation(async (path) => {
+      if (path === '/api/session/extend') return { inactivityExpiresAt: Date.now() + 180_000 };
+      if (++stateCount === 1) return { serverNow: Date.now(), inactivityExpiresAt: originalExpiry };
+      return new Promise(resolve => { resolveState = resolve; });
+    });
+    const onShowWarning = vi.fn();
+    const onExpire = vi.fn();
+    render(<HookHarness onShowWarning={onShowWarning} onExpire={onExpire} options={{ warningLeadMs: 30_000 }} />);
+    await vi.advanceTimersByTimeAsync(61_000);
+    fireEvent.click(window);
+    await vi.advanceTimersByTimeAsync(0);
+    resolveState({ serverNow: Date.now(), inactivityExpiresAt: originalExpiry });
+    await vi.advanceTimersByTimeAsync(45_000);
+    expect(onShowWarning).not.toHaveBeenCalled();
+    expect(onExpire).not.toHaveBeenCalled();
   });
 
   it('fires warning callbacks when remaining time enters warning window', async () => {

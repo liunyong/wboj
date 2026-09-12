@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
 import TurnstileWidget from '../components/TurnstileWidget.jsx';
@@ -22,7 +22,7 @@ const containsIdentityPart = (password, ...identities) => {
 };
 
 function RegisterPage() {
-  const { register, resendVerification } = useAuth();
+  const { register, resendVerification, user, isLoading } = useAuth();
   const [form, setForm] = useState({
     username: '',
     email: '',
@@ -169,6 +169,9 @@ function RegisterPage() {
         !containsIdentityPart(form.password, form.username, form.email)
     }
   ];
+
+  if (user) return <Navigate to="/dashboard" replace />;
+  if (isLoading) return <div className="page-message" role="status">Loading session…</div>;
 
   return (
     <section className="auth-page">

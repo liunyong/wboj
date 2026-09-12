@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup } from '@testing-library/react';
+import { act, cleanup } from '@testing-library/react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -171,6 +171,27 @@ describe('ProblemDetailPage submission form', () => {
     expect(submissionCalls[0].sourceCode).toBe(codeSample);
     expect(submissionCalls[0].sourceCode).not.toContain('class="token');
 
+    queryClient.clear();
+  });
+
+  it('only celebrates this submission and unblocks the form when its result arrives', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    const acceptedResult = { _id: 'submission-xyz', problemId: 345, userId: 'user-1', status: 'accepted', verdict: 'AC' };
+    mySubmissionsResponse = { items: [{ ...acceptedResult, _id: 'old-accepted' }] };
+    render(<QueryClientProvider client={queryClient}><MemoryRouter initialEntries={['/problems/345']}><Routes>
+      <Route path="/problems/:problemId" element={<ProblemDetailPage />} />
+    </Routes></MemoryRouter></QueryClientProvider>);
+    const editor = await screen.findByLabelText('Source Code');
+    expect(screen.queryByRole('complementary', { name: 'Submission accepted' })).not.toBeInTheDocument();
+    fireEvent.change(editor, { target: { value: 'print(3)' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Submit', exact: true }));
+    await waitFor(() => expect(submissionCalls).toHaveLength(1));
+    await act(async () => {
+      queryClient.setQueryData(['submissions', 'mine', 'dashboard'], [acceptedResult]);
+    });
+    expect(await screen.findByRole('complementary', { name: 'Submission accepted' })).toBeInTheDocument();
+    expect(screen.queryByText('Submitted. Grading…')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Submit', exact: true })).toBeEnabled();
     queryClient.clear();
   });
 

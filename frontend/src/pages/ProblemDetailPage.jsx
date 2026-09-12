@@ -7,8 +7,10 @@ import DifficultyBadge from '../components/DifficultyBadge.jsx';
 import DifficultyEvaluation from '../components/DifficultyEvaluation.jsx';
 import CodeEditor from '../components/CodeEditor.jsx';
 import ProblemStatement from '../components/ProblemStatement.jsx';
+import ProblemNavigation from '../components/ProblemNavigation.jsx';
 import ProblemSubmissionsPanel from '../components/ProblemSubmissionsPanel.jsx';
 import SubmissionViewerModal from '../components/SubmissionViewerModal.jsx';
+import SubmissionFeedback, { hasFinalResult } from '../components/SubmissionFeedback.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useDeleteSubmission } from '../hooks/useDeleteSubmission.js';
 import { useLanguages } from '../hooks/useLanguages.js';
@@ -33,6 +35,7 @@ function ProblemDetailPage() {
   const [sourceCode, setSourceCode] = useState('');
   const [sourceDrafts, setSourceDrafts] = useState({});
   const [message, setMessage] = useState(null);
+  const [latestSubmission, setLatestSubmission] = useState(null);
   const [pendingDeletion, setPendingDeletion] = useState(false);
   const [activeSubmissionId, setActiveSubmissionId] = useState(null);
   const [resubmittingId, setResubmittingId] = useState(null);
@@ -98,8 +101,9 @@ function ProblemDetailPage() {
           sourceLen: sourceCode.length
         });
         updatePersonalHistory((entries) => {
+          const existing = entries.find((item) => (item.id ?? item._id) === submissionId);
           const filtered = entries.filter((item) => (item.id ?? item._id) !== submissionId);
-          return [optimistic, ...filtered];
+          return [hasFinalResult(existing) ? existing : optimistic, ...filtered];
         });
       }
 
@@ -107,7 +111,7 @@ function ProblemDetailPage() {
         queryClient.invalidateQueries({ queryKey: ['problemSubmissions', problem.problemId] });
       }
 
-      setMessage({ type: 'info', text: 'Submitted. Grading…' });
+      setLatestSubmission(submissionId ? { id: submissionId, userId: currentUserId } : null);
       setSourceCode('');
     },
     onError: (error) => {
@@ -193,6 +197,13 @@ const resubmitMutation = useResubmitSubmission({
   });
 
   const problem = problemQuery.data;
+  const handleSubmissionResolved = useCallback((submission) => {
+    updatePersonalHistory((entries) => applyEventToSubmissionList(entries, detailToEvent(submission), { problem }));
+    queryClient.invalidateQueries({ queryKey: ['problemSubmissions', problem?.problemId] });
+    queryClient.invalidateQueries({ queryKey: ['problem', problemId] });
+    queryClient.invalidateQueries({ queryKey: ['problems'] });
+    queryClient.invalidateQueries({ queryKey: ['user', 'progress'] });
+  }, [problem, problemId, queryClient, updatePersonalHistory]);
   const languages = languagesQuery.languages ?? [];
   const pendingProblemIds = useMemo(
     () => getPendingProblemIdSet(userSubmissionsQuery.data, currentUserId),
@@ -562,6 +573,7 @@ const resubmitMutation = useResubmitSubmission({
 
       {problem && (
         <div className="problem-detail">
+          <ProblemNavigation problemId={problem.problemId} isAdmin={isAdmin} />
           <header className="problem-detail__header">
             <div>
               <h1>
@@ -803,10 +815,11 @@ const resubmitMutation = useResubmitSubmission({
                 className="submission-form"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  if (isSubmissionBlocked) {
+                  if (isSubmissionBlocked || submissionMutation.isPending) {
                     return;
                   }
                   setMessage(null);
+                  setLatestSubmission(null);
                   submissionMutation.mutate();
                 }}
               >
@@ -849,10 +862,10 @@ const resubmitMutation = useResubmitSubmission({
                 </div>
                 <button
                   type="submit"
-                  disabled={submissionMutation.isLoading || isSubmissionBlocked}
+                  disabled={submissionMutation.isPending || isSubmissionBlocked}
                   title={isSubmissionBlocked ? submitBlockedMessage : undefined}
                 >
-                  {submissionMutation.isLoading
+                  {submissionMutation.isPending
                     ? 'Submitting…'
                     : isSubmissionBlocked
                     ? 'Grading…'
@@ -863,6 +876,15 @@ const resubmitMutation = useResubmitSubmission({
                 )}
                 {message && (
                   <div className={`form-message ${message.type}`}>{message.text}</div>
+                )}
+                {latestSubmission?.userId === currentUserId && latestSubmission && (
+                  <SubmissionFeedback
+                    key={latestSubmission.id}
+                    submissionId={latestSubmission.id}
+                    cachedSubmission={userSubmissionsQuery.data?.find((item) => (item.id ?? item._id) === latestSubmission.id)}
+                    onResolved={handleSubmissionResolved}
+                    onViewResult={handleVerdictClick}
+                  />
                 )}
               </form>
             </article>
@@ -941,4 +963,7 @@ const resubmitMutation = useResubmitSubmission({
   );
 }
 
-export default ProblemDetailPage;
+export default function ProblemDetailRoute() {
+  const { problemId } = useParams();
+  return <ProblemDetailPage key={problemId} />;
+}

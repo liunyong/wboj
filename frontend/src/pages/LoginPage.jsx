@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
 import TurnstileWidget from '../components/TurnstileWidget.jsx';
+import { getLoginRedirect } from '../utils/loginRedirect.js';
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -18,21 +19,6 @@ function LoginPage() {
   const [turnstileToken, setTurnstileToken] = useState('');
   const [turnstileReset, setTurnstileReset] = useState(0);
 
-  const buildRedirectTarget = () => {
-    const redirectParam = new URLSearchParams(location.search).get('redirect');
-    if (redirectParam && redirectParam.startsWith('/')) {
-      return redirectParam;
-    }
-    const fromState = location.state?.from;
-    if (typeof fromState === 'string' && fromState.trim()) {
-      return fromState;
-    }
-    if (fromState?.pathname) {
-      return `${fromState.pathname}${fromState.search || ''}${fromState.hash || ''}`;
-    }
-    return '/dashboard';
-  };
-
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
@@ -44,7 +30,7 @@ function LoginPage() {
         return;
       }
       await login({ email, password, turnstileToken });
-      navigate(buildRedirectTarget(), { replace: true });
+      navigate(getLoginRedirect(location.search, location.state), { replace: true });
     } catch (err) {
       if (err.code === 'CAPTCHA_REQUIRED') {
         setCaptchaRequired(true);

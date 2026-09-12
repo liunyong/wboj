@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSessionKeepAlive } from '../hooks/useSessionKeepAlive.js';
 import { useSessionPolicy } from '../hooks/useSessionPolicy.js';
-import Header from './Header.jsx';
+import Sidebar from './Sidebar.jsx';
 import Footer from './Footer.jsx';
 import SessionExpiryModal from './SessionExpiryModal.jsx';
 
@@ -18,6 +18,13 @@ function Layout() {
   const [modalOpen, setModalOpen] = useState(false);
   const [msRemaining, setMsRemaining] = useState(null);
   const contentRef = useRef(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem('wboj-sidebar-collapsed') === 'true'; } catch { return false; }
+  });
+  const toggleSidebar = () => setSidebarCollapsed((previous) => {
+    try { localStorage.setItem('wboj-sidebar-collapsed', String(!previous)); } catch { /* Session-only preference. */ }
+    return !previous;
+  });
 
   useEffect(() => {
     const node = contentRef.current;
@@ -117,14 +124,18 @@ function Layout() {
   }, [handleExpire]);
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
       <div ref={contentRef} className="app-shell__content">
         <a className="skip-link" href="#main-content">Skip to content</a>
-        <Header />
+        <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+        <div className="app-workspace">
         <main id="main-content" className="app-main" tabIndex={-1}>
-          <Outlet />
+          <Suspense fallback={<div className="page-message" role="status">Loading…</div>}>
+            <Outlet />
+          </Suspense>
         </main>
         <Footer />
+        </div>
       </div>
       <SessionExpiryModal
         open={modalOpen && Boolean(tokens.accessToken)}

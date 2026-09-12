@@ -66,9 +66,10 @@ export function useSessionKeepAlive({
     if (expiredRef.current) {
       return;
     }
-    expiredRef.current = true;
+    const wasWarningVisible = warningVisibleRef.current;
     resetState();
-    if (warningVisibleRef.current && onHideWarning) {
+    expiredRef.current = true;
+    if (wasWarningVisible && onHideWarning) {
       onHideWarning();
     }
     broadcastMessage({ type: 'SESSION_EXPIRED' });
@@ -108,18 +109,16 @@ export function useSessionKeepAlive({
 
   const applyNewExpiry = useCallback(
     (inactivityExpiresAt, { broadcast = false } = {}) => {
-      if (!inactivityExpiresAt || typeof inactivityExpiresAt !== 'number') {
+      if (!Number.isFinite(inactivityExpiresAt) || expiredRef.current) {
         return;
       }
       const localExpiry = inactivityExpiresAt + skewRef.current;
-      expiresAtRef.current = localExpiry;
-      expiredRef.current = false;
-      lastExtendRef.current = Date.now();
-
-      if (warningVisibleRef.current && onHideWarning) {
-        warningVisibleRef.current = false;
-        onHideWarning();
+      // A state request started before an extension can finish after it.
+      if (expiresAtRef.current !== null && localExpiry < expiresAtRef.current) {
+        return;
       }
+      expiresAtRef.current = localExpiry;
+      // Reading the deadline is not a renewal and must not reset the throttle.
 
       if (broadcast) {
         broadcastMessage({ type: 'SESSION_EXTENDED', inactivityExpiresAt });
@@ -127,7 +126,7 @@ export function useSessionKeepAlive({
 
       updateTimers();
     },
-    [broadcastMessage, onHideWarning, updateTimers]
+    [broadcastMessage, updateTimers]
   );
 
   const fetchSessionState = useCallback(async () => {
@@ -230,10 +229,12 @@ export function useSessionKeepAlive({
       }
 
       switch (payload.type) {
-        case 'USER_ACTIVITY':
-          lastExtendRef.current = Date.now();
-          break;
         case 'SESSION_EXTENDED':
+          // Only a confirmed, newer renewal in another tab suppresses a touch.
+          if (Number.isFinite(payload.inactivityExpiresAt) &&
+              payload.inactivityExpiresAt + skewRef.current > (expiresAtRef.current ?? 0)) {
+            lastExtendRef.current = Date.now();
+          }
           applyNewExpiry(payload.inactivityExpiresAt, { broadcast: false });
           break;
         case 'SESSION_EXPIRED':
@@ -290,14 +291,15 @@ export function useSessionKeepAlive({
     }
 
     const handleActivity = () => {
-      broadcastMessage({ type: 'USER_ACTIVITY' });
+      if (warningVisibleRef.current || expiredRef.current) return;
       attemptExtend().catch(() => {
         // errors handled in attemptExtend -> extendSessionRequest
       });
     };
 
     const events = ['click', 'keydown', 'mousemove', 'scroll', 'touchstart'];
-    events.forEach((eventName) => window.addEventListener(eventName, handleActivity, { passive: true }));
+    // Capture includes non-bubbling scrolls in editors, tables, and the sidebar.
+    events.forEach((eventName) => window.addEventListener(eventName, handleActivity, { passive: true, capture: true }));
 
     const visibilityHandler = () => {
       if (document.visibilityState === 'visible') {
@@ -310,12 +312,12 @@ export function useSessionKeepAlive({
     }
 
     return () => {
-      events.forEach((eventName) => window.removeEventListener(eventName, handleActivity));
+      events.forEach((eventName) => window.removeEventListener(eventName, handleActivity, { capture: true }));
       if (hasDocument) {
         document.removeEventListener('visibilitychange', visibilityHandler);
       }
     };
-  }, [attemptExtend, broadcastMessage, tokens.accessToken]);
+  }, [attemptExtend, tokens.accessToken]);
 
   useEffect(() => {
     if (!tokens.accessToken) {

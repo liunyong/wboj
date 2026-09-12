@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
@@ -7,6 +7,7 @@ import DifficultyBadge from '../components/DifficultyBadge.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useUserProgress, userProgressQueryKey } from '../hooks/useUserProgress.js';
 import { useSubmissionStream } from '../hooks/useSubmissionStream.js';
+import { useProblemArchive } from '../hooks/useProblemArchive.js';
 
 const SCROLL_STORAGE_KEY = 'problemsPageScrollY';
 const DEFAULT_PAGE_SIZE = 50;
@@ -14,16 +15,10 @@ const PAGE_SIZE_OPTIONS = [20, 50, 100];
 const SORT_COLUMNS = [
   { field: 'id', label: 'ID', defaultDirection: 'asc' },
   { field: 'title', label: 'Title', defaultDirection: 'asc' },
-  { field: 'author', label: 'Author', defaultDirection: 'asc' },
   { field: 'difficulty', label: 'Difficulty Rating', defaultDirection: 'asc' },
   { field: 'submissions', label: 'Submissions', defaultDirection: 'desc' },
   { field: 'acceptance', label: 'AC Rate', defaultDirection: 'desc' }
 ];
-
-function getAuthorLabel(problem) {
-  return problem.author?.profile?.displayName ?? problem.author?.displayName ??
-    problem.author?.username ?? problem.author?.userName ?? '';
-}
 
 function SortableProblemHeader({ column, sort, onSort }) {
   const { field, label, defaultDirection } = column;
@@ -60,15 +55,6 @@ function compareProblems(a, b, sort) {
 
   if (field === 'title') {
     result = (a.title ?? '').localeCompare(b.title ?? '', undefined, { numeric: true });
-  } else if (field === 'author') {
-    const left = getAuthorLabel(a);
-    const right = getAuthorLabel(b);
-    if (!left || !right) {
-      if (left) return -1;
-      if (right) return 1;
-      return compareId();
-    }
-    result = left.localeCompare(right, undefined, { numeric: true });
   } else if (field === 'difficulty' || field === 'acceptance') {
     const value = (problem) => field === 'difficulty'
       ? problem.difficultyRating
@@ -128,27 +114,7 @@ function ProblemsPage() {
     }, { replace: true });
   };
 
-  const problemsQuery = useQuery({
-    queryKey: ['problems', visibility],
-    queryFn: async () => {
-      const params = new URLSearchParams({ limit: '100', visibility, page: '1' });
-      const firstResponse = await authFetch(`/api/problems?${params.toString()}`);
-      const allItems = Array.isArray(firstResponse?.items) ? [...firstResponse.items] : [];
-      const totalPages = Number.isFinite(firstResponse?.totalPages)
-        ? Math.max(1, firstResponse.totalPages)
-        : 1;
-
-      for (let currentPage = 2; currentPage <= totalPages; currentPage += 1) {
-        params.set('page', String(currentPage));
-        const pageResponse = await authFetch(`/api/problems?${params.toString()}`);
-        if (Array.isArray(pageResponse?.items)) {
-          allItems.push(...pageResponse.items);
-        }
-      }
-
-      return allItems;
-    }
-  });
+  const problemsQuery = useProblemArchive(visibility);
 
   const progressQuery = useUserProgress();
   const solvedProblemIds = useMemo(() => {
@@ -411,7 +377,16 @@ function ProblemsPage() {
             </div>
           </div>
           <div className="problem-table-wrapper" role="region" aria-label="Problem list" tabIndex={0}>
-            <table className="problem-table">
+            <table className={`problem-table${isAdmin ? ' problem-table--admin' : ''}`}>
+              <colgroup>
+                <col className="problem-table__col-status" />
+                <col className="problem-table__col-id" />
+                <col />
+                <col className="problem-table__col-difficulty" />
+                <col className="problem-table__col-submissions" />
+                <col className="problem-table__col-acceptance" />
+                {isAdmin && <col className="problem-table__col-actions" />}
+              </colgroup>
               <thead>
                 <tr>
                   <th className="problem-table__status-header" aria-label="Solved">
@@ -435,9 +410,6 @@ function ProblemsPage() {
                 const acceptanceRate =
                   total > 0 ? `${Math.round((accepted / total) * 100)}%` : '—';
                 const isSolved = solvedProblemIds.has(problem.problemId);
-                const authorUsername =
-                  problem.author?.username ?? problem.author?.userName ?? null;
-                const authorLabel = getAuthorLabel(problem) || '—';
 
                 return (
                   <tr key={problem._id}>
@@ -473,24 +445,18 @@ function ProblemsPage() {
                       ) : null}
                     </td>
                     <td>
-                      {authorUsername ? (
-                        <Link to={`/u/${authorUsername}`}>{authorLabel}</Link>
-                      ) : (
-                        <span className="muted">{authorLabel}</span>
-                      )}
-                    </td>
-                    <td>
                       <DifficultyBadge rating={problem.difficultyRating} />
                     </td>
                     <td>{total}</td>
                     <td>{acceptanceRate}</td>
                     {isAdmin && (
                       <td className="problem-table__actions">
+                        <div className="problem-table__action-buttons">
                         <button
                           type="button"
                           className="secondary"
                           disabled={
-                            toggleVisibilityMutation.isLoading &&
+                            toggleVisibilityMutation.isPending &&
                             visibilityTarget === problem.problemId
                           }
                           onClick={() =>
@@ -509,6 +475,7 @@ function ProblemsPage() {
                         >
                           Delete
                         </button>
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -516,7 +483,7 @@ function ProblemsPage() {
               })}
               {!pageItems.length && (
                 <tr>
-                  <td colSpan={isAdmin ? 8 : 7}>
+                  <td colSpan={isAdmin ? 7 : 6}>
                     <div className="problem-table__empty">No problems found.</div>
                   </td>
                 </tr>

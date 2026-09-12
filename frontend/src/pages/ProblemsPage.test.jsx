@@ -115,6 +115,8 @@ describe('Problem archive controls', () => {
     expect(rows()).toHaveLength(50);
     expect(screen.getByRole('combobox', { name: 'Per page' })).toHaveValue('50');
     expect(screen.getByText('Showing 1–50 of 125 problems')).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Author' })).not.toBeInTheDocument();
+    expect(within(rows()[0]).getAllByRole('cell')).toHaveLength(6);
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(visibleIds()[0]).toBe('#100051');
     expect(params().get('page')).toBe('2');
@@ -186,7 +188,6 @@ describe('Problem archive controls', () => {
     const expected = {
       'id-asc': [1, 2, 3, 4], 'id-desc': [4, 3, 2, 1],
       'title-asc': [2, 3, 4, 1], 'title-desc': [1, 4, 3, 2],
-      'author-asc': [2, 4, 3, 1], 'author-desc': [3, 2, 4, 1],
       'difficulty-asc': [3, 2, 4, 1], 'difficulty-desc': [2, 4, 3, 1],
       'submissions-asc': [1, 2, 4, 3], 'submissions-desc': [3, 4, 2, 1],
       'acceptance-asc': [3, 2, 4, 1], 'acceptance-desc': [2, 4, 3, 1]
