@@ -1,5 +1,23 @@
 # Portfolio ratings
 
+## Implementation map
+
+Read this document when changing ratings, first accepts, seasons or AI difficulty.
+The calculation lives in `backend/src/services/portfolioService.js`; persistence,
+backfill and recovery live in `backend/src/services/ratingService.js`.
+HTTP entrypoints are `backend/src/routes/ratingRoutes.js`,
+`backend/src/controllers/ratingController.js` and
+`backend/src/controllers/difficultyController.js`. Difficulty transport is isolated
+in `backend/src/services/difficultyProviders/openAiCompatible.js`.
+The UI uses `frontend/src/components/RatingOverview.jsx`,
+`frontend/src/components/RatingChart.jsx`,
+`frontend/src/components/DifficultyEvaluation.jsx` and
+`frontend/src/pages/LeaderboardPage.jsx`.
+Validation results and remaining checks are recorded in [handoff](handoff.md);
+data-changing scripts and deletion semantics are described in [database](database.md).
+
+## Dashboard
+
 The Dashboard at `/dashboard` replaces Home; `/` redirects there. Guests can read
 announcements and browse problems or rankings. Signed-in users see their coding
 profile, ratings, history, yearly statistics, activity, progress and submissions.
@@ -42,7 +60,8 @@ and first solves, and anonymizes their archived result rows while preserving ran
 The existing Judge0 pipeline is reused, including its synchronous re-submit path.
 
 `RatingProfile` materializes overall and per-season rating, coverage and history.
-All calculations are in `portfolioService.js` and `ratingService.js`; UI components
+All calculations are in `backend/src/services/portfolioService.js` and
+`backend/src/services/ratingService.js`; UI components
 only display the API result. History replays first accepts and confirmed difficulty
 revisions, recording points only when the rounded rating changes. Difficulty
 changes apply when confirmed, including to already solved problems, without
@@ -93,8 +112,8 @@ DIFFICULTY_AI_TIMEOUT_MS=45000
 
 The adapter uses the documented [Chat Completions API](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)
 with JSON mode, then validates the numeric range and explanation locally.
-`difficultyProviders/openAiCompatible.js` contains provider-specific transport;
-register another adapter in `difficultyService.js` to switch protocol/providers.
+`backend/src/services/difficultyProviders/openAiCompatible.js` contains provider-specific transport;
+register another adapter in `backend/src/services/difficultyService.js` to switch protocol/providers.
 The model is configured explicitly. No paid API request is made automatically.
 Evaluation sends only statement, input/output, constraints, samples, algorithms and
 limits. It excludes hidden test cases, submissions and user information. Requests

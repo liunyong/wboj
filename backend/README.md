@@ -1,66 +1,23 @@
-# Judge0 Backend
+# WBOJ Backend
 
-Node.js + Express + MongoDB backend that integrates with a Judge0 instance to manage coding problems and submissions.
+Express ESM API + MongoDB + 외부 Judge0 연동. 프로세스 시작은 `src/server.js`, HTTP 구성은 `src/app.js`, 설정 기본값은 `src/config/env.js`다.
 
-## Environment Variables
-
-Copy `.env.example` to `.env` (or create the file manually) and set:
-
-- `PORT`: Port for the API server (default `4000`).
-- `MONGO_URI`: Connection string for MongoDB.
-- `JUDGE0_URL`: Base URL of the Judge0 API (e.g. `http://localhost:2358`).
-- `JUDGE0_MAX_CONCURRENCY`: Max concurrent Judge0 submissions processed (default `2`).
-- `JUDGE0_MAX_RETRIES`: Automatic retry attempts for Judge0 requests (default `2`).
-- `JUDGE0_TIMEOUT_MS`: Judge0 HTTP client timeout in milliseconds (default `20000`).
-- `RATE_LIMIT_USE_REDIS`: Set to `true` to back rate limiting with Redis when running multiple instances (default `false`).
-- `REDIS_URL`: Redis connection string used when `RATE_LIMIT_USE_REDIS=true`.
-- `DEBUG_AUTH`: Set to `1` to enable additional auth flow logging useful for debugging rate limiting and validation issues.
-
-## Scripts
-
-- `npm run dev` — Start the server with Nodemon (development).
-- `npm run start` — Start the server with Node.
-- `npm run seed` — Seed MongoDB with sample problems.
-- `npm run migrate:roles` — Promote legacy admins to `super_admin` role.
-- `npm run clean:highlighted-submissions` — Dry-run clean-up for highlighted HTML fragments persisted in `Submission.sourceCode`.
-
-## API Overview
-
-- `GET /api/health` — Service health probe.
-- `GET /api/problems` — List problems.
-- `GET /api/problems/:idOrSlug` — Get problem by Mongo ID or slug.
-- `POST /api/problems` — Create a new problem.
-- `POST /api/problems/:problemId/recount` — Recompute submission counters for a problem (super admin).
-- `GET /api/languages` — Retrieve Judge0 language metadata (cached for 5 minutes, pass `forceRefresh=true` to bypass cache).
-- `POST /api/submissions` — Submit solution for a problem (validates `problemId`, `languageId`, and `sourceCode`).
-- `GET /api/submissions` — Recent submissions.
-- `GET /api/submissions/:id` — Submission details.
-- `PATCH /api/submissions/:id/resubmit` — Re-run a submission and update its result in place.
-- `DELETE /api/submissions/:id` — Soft-delete a submission (super admin).
-- `PATCH /api/users/:id/role` — Update a user's role (super admin).
-- `PATCH /api/users/:id/deactivate` — Activate or deactivate a user account (super admin).
-- `DELETE /api/users/:id` — Soft-delete a user account (super admin).
-
-All submissions are evaluated against stored test cases via Judge0.
-
-## Rate Limiting
-
-Login and registration endpoints have dedicated rate limiters that key on user identifiers (email) and IP + user agent, respectively. Limiters only run in production mode (`NODE_ENV=production`). Successful logins do not count against the limit. To coordinate limits across multiple instances, provide Redis credentials and set `RATE_LIMIT_USE_REDIS=true`. Leave it disabled for single-node development.
-
-## Local Development
-
-1. Install dependencies: `npm install`
-2. Copy `.env.example` to `.env` and update the connection details if you are not using Docker.
-3. Run MongoDB (e.g. `docker compose up mongo`) and Judge0 (see docker compose stack) before starting the API.
-4. Start the backend: `npm run dev`
-5. (Optional) Seed sample data once the database is available: `npm run seed`
-
-## Testing
-
-Integration tests use an in-memory MongoDB instance. Run them with:
+저장소 루트에서:
 
 ```bash
-npm test
+npm ci --prefix backend
+npm run dev --prefix backend
+npm start --prefix backend
+npm test --prefix backend
 ```
 
-If Judge0 is not reachable during tests, mocked responses are used instead.
+`dev`와 `start`는 선택해서 실행한다. API 기본 포트는 4000이며 실행 전 MongoDB와 `backend/.env`를 준비한다. backend 디렉터리에서 실행할 때는 각 명령의 `--prefix backend`를 생략한다.
+
+- [로컬 설정](../README.md#로컬-개발)
+- [구성·API·채점 흐름](../docs/architecture.md)
+- [모델·인덱스·seed·보정 스크립트](../docs/database.md)
+- [환경변수·배포](../docs/deployment.md)
+- [인증·세션](../docs/security/session.md), [레이팅](../docs/ratings.md)
+- [검증 절차](../TEST_PLAN.md), [현재 후속 작업](../docs/handoff.md)
+
+테스트는 mongodb-memory-server와 명시적인 Judge0 mock을 사용한다. 실제 Judge0 장애 시 자동으로 mock으로 바뀌는 운영 동작은 없다. seed는 기존 문제를 삭제하므로 일반 시작 명령으로 사용하지 않는다.

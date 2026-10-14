@@ -1,118 +1,69 @@
-## Website: https://wboj.app
+# WBOJ (Wanbang Online Judge)
 
-# Online Judge System based on Judge0
+서비스: <https://wboj.app>
 
-Full-stack online judge featuring a Node.js + MongoDB backend with Judge0 execution, JWT authentication with role-based access control, and a React dashboard for contestants and administrators.
+문제 작성, 코드 제출, Judge0 채점, 사용자 활동 통계, 레이팅·시즌 순위와 관리자 도구를 제공한다. Express API와 MongoDB, React SPA로 구성되며 Judge0는 별도로 준비한다.
 
-See [Portfolio ratings and seasons](docs/ratings.md) for the unified Dashboard,
-rating policies, first-AC migration, season management and AI difficulty setup.
+## 문서
 
-## Project Structure
+| 문서 | 내용 |
+| --- | --- |
+| [AGENTS.md](AGENTS.md) | 새 Codex 대화에서 읽을 작업 규칙·진입점·명령 |
+| [구조와 흐름](docs/architecture.md) | 컴포넌트, API, 채점과 데이터 처리 |
+| [인수인계](docs/handoff.md) | 확인된 미완료 사항, 후속 작업과 검증 상태 |
+| [DB](docs/database.md) | 모델·식별자·인덱스·삭제·마이그레이션 |
+| [배포](docs/deployment.md) | 환경변수·Compose·프록시·확인 절차 |
+| [세션](docs/security/session.md) | 토큰·유휴 만료·다중 탭·세션 관리 |
+| [레이팅](docs/ratings.md) | 점수·최초 AC·시즌·AI 난이도 |
+| [문제 작성](docs/authoring-math.md) | Markdown·수식·이미지 |
+| [검증](TEST_PLAN.md) | 자동 테스트와 수동 확인 범위 |
 
-- `backend/` — Express API. Stores problems and submissions in MongoDB and forwards execution requests to Judge0.
-- `frontend/` — React single page app powered by Vite. Lists problems, submits code, and displays per-test-case results.
-- `docker-compose.yml` — Spins up MongoDB, the backend, and the frontend. Point the stack at an existing Judge0 deployment.
+기존 [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md), [backend/README.md](backend/README.md), [frontend/README.md](frontend/README.md)는 상세 문서로 연결하는 짧은 안내로 유지한다. [CHANGELOG.md](CHANGELOG.md)는 변경 기록이다.
 
-## Prerequisites
+## 로컬 개발
 
-- Node.js 22+
-- npm 9+
-- MongoDB 6+ (local or remote)
-- Access to a Judge0 instance (API base URL, default `http://localhost:2358`)
-
-## Backend Setup
-
-```bash
-cd backend
-npm install
-cp .env.example .env
-# Set MONGO_URI, JUDGE0_URL, strong ACCESS/REFRESH secrets, and optional admin seed credentials
-npm run seed              # creates admin account + sample problem
-npm run dev               # start the API on http://localhost:4000
-```
-
-### Key Endpoints
-
-- `POST /api/auth/register` / `POST /api/auth/login` — Issue access + refresh tokens.
-- `POST /api/auth/refresh` — Rotate tokens when the access token expires.
-- `GET /api/auth/me` — Session info for the currently authenticated user.
-- `GET /api/problems` — List public problems (admins can request `visibility=all`).
-- `POST /api/problems` — Admin-only creation with difficulty, tags, samples, visibility.
-- `POST /api/submissions` — Authenticated submission `{ problemId, languageId, sourceCode }`.
-- `GET /api/submissions/mine` — Personal submission history.
-- `GET /api/submissions` — Global submissions list (metadata only) for any authenticated user.
-- `GET /api/problems/:problemId/submissions` — Problem-scoped submissions with `scope=mine|all` pagination.
-- `GET /api/submissions/:id` — Submission detail with source gated to the owner or administrators.
-- `GET /api/dashboard/me/summary` + `/me/heatmap` — Yearly stats for dashboards.
-- `GET /api/users` — Admin search, plus role/status management via `PATCH` endpoints.
-
-The backend durably stores Judge0 work in MongoDB, atomically claims queued submissions, recovers stale work after restarts, stores per-case verdicts, updates per-problem counters, and maintains a daily submission cache (`user_stats_daily`) for dashboard heatmaps.
-
-### Session Management
-
-- Authenticated sessions now use a 2 hour sliding inactivity window with a 15 minute pre-expiry warning modal.
-- `GET /api/session/state` and `POST /api/session/extend` expose the inactivity deadline; the React hook keeps all tabs in sync and handles the blocking countdown UI.
-- Configure `INACTIVITY_TTL_MS`, `WARNING_LEAD_MS`, and `MIN_TOUCH_INTERVAL_MS` in the backend environment. See `docs/security/session.md` for full details.
-
-## Frontend Setup
+Node.js 22(현재 의존성에 맞춰 22.12 이상 권장), npm, MongoDB 6, 별도 Judge0 API/worker가 필요하다. 명령은 모두 저장소 루트에서 실행한다. 루트에는 npm 실행 스크립트가 없고 각 서비스의 package.json을 사용한다.
 
 ```bash
-cd frontend
-npm install
-cp .env.example .env
-# set VITE_API_URL (defaults to http://localhost:4000)
-npm run dev      # Vite dev server on http://localhost:5173
+npm ci --prefix backend
+npm ci --prefix frontend
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
 ```
 
-The UI wraps React Router with TanStack Query and an auth context to offer:
+기존 `.env`가 있으면 덮어쓰지 말고 필요한 키만 추가한다. 예제의 `mongo`, `server`는 컨테이너 주소다. 호스트에서 API를 실행할 때 `backend/.env`를 다음에 맞춘다.
 
-- Login/register flow with access-token persistence and automatic refresh through a Secure, HttpOnly cookie.
-- Header that swaps between “Login” and a user dropdown (Dashboard, Settings, Logout).
-- Dashboard heatmap + summary cards powered by `/api/dashboard` endpoints.
-- Profile + password update flows under Settings.
-- Admin panel with problem CRUD/visibility toggles and user role/status management.
-- Problem detail pages with submission forms, samples, and scoped submissions tabs (My vs All) that respect source-code privacy.
-- Global submissions view (`/submissions`) for signed-in users with filters, pagination, and live updates; admin-only actions remain role-locked.
+```dotenv
+MONGO_URI=mongodb://127.0.0.1:27017/judge0
+JUDGE0_URL=http://127.0.0.1:2358
+APP_BASE_URL=http://localhost:5173
+FRONTEND_ORIGIN=http://localhost:5173
+FRONTEND_ORIGINS=http://localhost:5173
+```
 
-## Running with Docker Compose
+ACCESS/REFRESH 토큰 비밀값을 각각 설정한다. 실제 SMTP 또는 개발용 메일 수신 환경이 있어야 가입 이메일 인증·비밀번호 재설정을 끝까지 확인할 수 있다. Turnstile 예제 키는 실제 키가 아니다. 개발 모드 서버는 비밀 키가 비어 있으면 검증을 생략하지만, 가입 UI는 Turnstile 토큰을 요구한다. 브라우저 가입 흐름에는 개발용 또는 실제 Turnstile 키 쌍이 필요하다. 운영에서는 실제 키와 호스트 설정을 사용한다.
+
+MongoDB와 Judge0를 먼저 실행한 뒤 각각 별도 터미널에서 실행한다.
 
 ```bash
-export JUDGE0_URL=http://host.docker.internal:2358   # adjust if Judge0 runs elsewhere
-export ACCESS_TOKEN_SECRET="$(openssl rand -hex 32)"
-export REFRESH_TOKEN_SECRET="$(openssl rand -hex 32)"
-docker compose up --build
+npm run dev --prefix backend
+npm run dev --prefix frontend
 ```
 
-Services exposed:
+API는 기본 `http://localhost:4000`, Vite는 `http://localhost:5173`이다. `frontend/.env`의 `VITE_API_URL=http://localhost:4000`은 브라우저의 API 대상이자 개발 프록시 대상이다. 빈 값이면 브라우저는 동일 출처 `/api`를 사용하며 Vite가 기본 백엔드로 프록시한다. 포트가 점유되면 Vite가 다른 포트를 선택할 수 있으므로 시작 로그와 CORS 허용 출처를 확인한다.
 
-- Backend API — `http://localhost:4000`
-- Frontend UI — `http://localhost:3000`
-- MongoDB — `mongodb://localhost:27017/judge0`
+`npm start --prefix backend`는 watcher 없이 API를 실행한다. `npm run preview --prefix frontend`는 빌드된 SPA를 기본 4173 포트로 제공한다. 현재 설치된 Vite 8의 preview는 `server.proxy`를 상속하므로 동일 출처 `/api` 요청도 backend로 전달한다. 번들에 API URL이 지정되어 있으면 그 주소를 직접 사용한다. backend 허용 출처에는 preview 주소도 추가한다.
 
-> **Note:** This compose file assumes you already run a Judge0 deployment with workers. If not, follow the official Judge0 docs to provision `api` and `worker` services and update `JUDGE0_URL` accordingly.
-
-## Seeding Sample Data
-
-Any time you need a clean database with the starter “A+B Problem”, run:
+## 검증
 
 ```bash
-npm run seed --prefix backend
+npm test --prefix backend
+npm test --prefix frontend
+npm run build --prefix frontend
+docker compose config --quiet
+git diff --check
 ```
 
-The seed clears existing problems, inserts a sample addition challenge, and provisions an admin account based on `ADMIN_USERNAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` in the backend `.env`.
+테스트 구성과 수동 확인은 [TEST_PLAN.md](TEST_PLAN.md), 실제 실행 결과는 [docs/handoff.md](docs/handoff.md)에 기록한다. Docker 운영은 [docs/deployment.md](docs/deployment.md)를 따른다.
 
-## SEO checklist
-
-- **Meta, Open Graph, and JSON-LD** → `frontend/src/hooks/useSeo.js` updates bilingual `<title>`/`<meta>` plus OG/Twitter tags per route, while `frontend/src/pages/HomePage.jsx`, `DashboardPage.jsx`, and `ProblemDetailPage.jsx` emit `CollectionPage`, `WebApplication`, and `SoftwareApplication` JSON-LD for dashboards, blog-like announcements, and problem statements. Add new pages by calling `usePageSeo` with the desired schema payload.
-- **Internationalization signals** → Set `VITE_SITE_URL` (frontend) and `FRONTEND_ORIGIN` (backend) before running `npm run dev`. The new `setHrefLangLinks` utility injects `hreflang` alternates for English and Korean as React Router navigates.
-- **Robots & sitemap** → `frontend/public/robots.txt` and `frontend/public/sitemap.xml` ship with the bundle and are served verbatim by Vite/Nginx/Caddy (`curl http://localhost:5173/robots.txt`). Update them whenever you add static sections, then redeploy so Nginx (see `frontend/nginx.conf`) and the Caddy proxy can cache them for 1 hour.
-- **Backend headers & crawl logging** → `backend/src/middlewares/seoHeaders.js` now sets `Cache-Control`, tightened `Content-Security-Policy`, and `X-Robots-Tag`. Toggle behaviour with `SEO_ALLOW_INDEXING`, `SEO_PRERENDER_AGENTS`, `API_CACHE_SECONDS`, and `FRONTEND_ORIGIN` in `backend/.env.example`. `searchBotLogger` prints `[crawler]` entries whenever Googlebot/Bingbot/etc. hit `/api/*`, so you can trace crawl frequency or add deny rules.
-- **Monitoring & PageSpeed** → After `npm run build --prefix frontend && npm run preview --prefix frontend`, run `npx @lhci/cli collect --url=http://localhost:4173 --preset=desktop --preset=mobile` (or PageSpeed Insights) and record the four Lighthouse scores. Current work prioritises (1) deferring admin/problem editor bundles via dynamic `import()` (Vite code-splitting), (2) prefetching `/problems` data with `<link rel="prefetch">` for high-traffic slugs, and (3) keeping images lazy-loaded with descriptive `alt` text to preserve accessibility scores.
-- **Crawl control in production** → `robots.txt` disallows `/api/` while allowing the rest of the SPA, and Nginx now caches and serves `/robots.txt` + `/sitemap.xml` explicitly. When running under Docker + Caddy, the proxy inherits those assets because requests fall back to the frontend container; keep gzip/brotli enabled as defined in `Caddyfile`.
-
-## Operations
-
-- `/api/live` is the process liveness endpoint; `/api/health` additionally reports MongoDB readiness.
-- Set `RATE_LIMIT_USE_REDIS=true` and `REDIS_URL` when running more than one backend replica.
-- Tune stale-job recovery and history retention with `SUBMISSION_STALE_MS`, `SUBMISSION_WORKER_POLL_MS`, and `SUBMISSION_MAX_RUN_HISTORY`.
-- `FRONTEND_ORIGINS` accepts a comma-separated allowlist. Set `TRUST_PROXY` to match the exact number of trusted reverse proxies.
+`npm run seed --prefix backend`는 **기존 모든 문제와 문제 번호 counter를 삭제**한다. 새 개발 DB에서만 의도적으로 사용한다. 생성되는 admin의 이메일 인증 누락 등 현재 한계는 [인수인계](docs/handoff.md)에 기록되어 있다.
