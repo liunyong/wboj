@@ -12,6 +12,7 @@ import {
   authHeader,
   authenticateAsAdmin,
   authenticateAsSuperAdmin,
+  authenticateAsUser,
   createUser
 } from './utils.js';
 
@@ -41,6 +42,39 @@ beforeEach(async () => {
 });
 
 describe('role enforcement for admin vs super_admin', () => {
+  it.each([authenticateAsAdmin, authenticateAsSuperAdmin])('previews regular-user permissions without changing the stored role (%#)', async (authenticate) => {
+    const session = await authenticate();
+    await Problem.create({
+      title: 'Private preview problem', problemId: 920001, problemNumber: 920001,
+      statement: 'Hidden', isPublic: false, testCases: [{ input: '1', output: '1' }]
+    });
+
+    const previewList = await request(app).get('/api/problems?visibility=all')
+      .set(authHeader(session.tokens.accessToken)).set('X-WBOJ-View-As', 'user');
+    expect(previewList.status).toBe(200);
+    expect(previewList.body.items).toHaveLength(0);
+    const previewDetail = await request(app).get('/api/problems/920001')
+      .set(authHeader(session.tokens.accessToken)).set('X-WBOJ-View-As', 'user');
+    expect(previewDetail.status).toBe(404);
+    const adminRoute = await request(app).get('/api/admin/users')
+      .set(authHeader(session.tokens.accessToken)).set('X-WBOJ-View-As', 'user');
+    expect(adminRoute.status).toBe(403);
+
+    const restored = await request(app).get('/api/problems?visibility=all')
+      .set(authHeader(session.tokens.accessToken));
+    expect(restored.status).toBe(200);
+    expect(restored.body.items).toHaveLength(1);
+    const user = await User.findById(session.user.id);
+    expect(user.role).toBe(session.user.role);
+  });
+
+  it('does not allow the view header to grant administrator permissions', async () => {
+    const session = await authenticateAsUser();
+    const response = await request(app).get('/api/admin/users')
+      .set(authHeader(session.tokens.accessToken)).set('X-WBOJ-View-As', 'admin');
+    expect(response.status).toBe(403);
+  });
+
   it('allows only super_admin to manage user roles and activation', async () => {
     const adminSession = await authenticateAsAdmin();
     const superSession = await authenticateAsSuperAdmin();

@@ -1,5 +1,29 @@
 # WBOJ 인수인계
 
+## 관리자 일반 사용자 시점 전환 (2026-10-14)
+
+- 왼쪽 Administration 아래 `Admin view` / `User view` 스위치를 추가했다. 일반 사용자 시점에서도 복귀 스위치는 유지하며 관리자 메뉴·버튼·경로는 일반 사용자 역할을 따른다. 같은 계정의 소유자 권한은 유지한다. 새로고침·로그아웃 시 해제된다.
+- AuthContext는 실제 사용자와 화면용 사용자를 구분하고, 전환 시 기존 조회를 취소하고 캐시를 지운 뒤 화면을 다시 마운트한다. 서버 인증 미들웨어는 `X-WBOJ-View-As: user` 요청의 관리자 역할만 낮춘다. DB 역할·세션은 변경하지 않으며 일반 사용자의 권한 상승은 허용하지 않는다.
+- 검증: backend 전체 17개 파일·92/92, frontend 전체 17개 파일·72/72 통과. backend 변경 파일 두 개 구문 검사, frontend build, Compose 설정 검사, `git diff --check` 통과. 전체 backend 검사의 최초 샌드박스 실행은 MongoDB 포트 바인딩 EPERM으로 중단했고 제한 밖 재실행에서 통과했다.
+- backend/frontend만 재빌드·배포했고 backend healthy, frontend Up, 공개 health/database up을 확인했다. 배포된 frontend와 모의 API를 사용하는 Chromium 검사에서 데스크톱·모바일 전환/복귀, 관리자 메뉴와 비공개 문제 숨김, 일반 사용자 목록 열 구성, 캐시 재조회, 요청 헤더를 확인했다. 실제 운영 계정 로그인·DB 변경은 하지 않았다. 서버 권한 제한은 테스트 전용 MongoDB를 사용하는 API 테스트로 검증했다.
+
+## Problems 목록 태그 표시 (2026-10-14)
+
+- 문제 목록의 제목 아래 표시값을 `algorithms`에서 `tags`로 바꿨다. 태그가 없으면 줄을 숨긴다. 관련 CSS 이름도 태그에 맞췄다.
+- 검증: 목록 UI 테스트 9/9, frontend build, Compose 설정 검사, `git diff --check` 통과. frontend만 재빌드·배포했고 컨테이너 Up, 공개 목록 JS 번들의 태그 표시 코드, 공개 health/database up을 확인했다. 실제 브라우저 시각 검사는 실행하지 않았다. backend는 변경하지 않아 이번 작업에서 backend 테스트는 재실행하지 않았다.
+
+## 문제 상세 태그 표시 (2026-10-14)
+
+- 문제 상세 상단 Author·Source 아래에 저장된 태그를 `Tags` 줄로 표시한다. 태그가 없으면 숨기고, 긴 태그는 줄바꿈한다. 기존 API의 `tags`를 사용한다.
+- 검증: 문제 상세 UI 테스트 5/5, frontend build, Compose 설정 검사, `git diff --check` 통과. frontend만 재빌드·배포했으며 컨테이너 Up, 공개 상세 페이지 JS 번들의 태그 표시 코드 및 공개 health/database up을 확인했다. 실제 브라우저 시각 검사는 실행하지 않았다. backend 변경은 없어 이번 작업에서 backend 테스트를 재실행하지 않았다.
+
+## Display Name 저장 오류 수정 (2026-10-14)
+
+- 원인: Settings는 `avatarUrl: ''`을 포함해 프로필을 저장하지만 서버 URL 검증이 빈 문자열을 거부해 Display Name 저장도 실패했다.
+- 수정: 프로필 API의 Avatar URL에 빈 문자열(아바타 제거)을 허용한다. 유효하지 않은 비어 있지 않은 URL은 계속 거부한다. 설정 폼 저장·DB 반영, 아바타 설정/제거, 잘못된 URL의 변경 방지, 미인증 요청 거부 회귀 테스트를 추가했다.
+- 검증: 관련 테스트 5/5, backend 전체 17개 파일·89/89 통과. 변경 JS 두 파일의 `node --check`, `git diff --check`, `docker compose config --quiet` 통과. 아래 이전 기록의 로그인 제한 timeout은 이번 전체 실행에서 재현되지 않았다.
+- 배포: backend만 기존 Compose로 재빌드·배포했다. 컨테이너 healthy, 공개 `/api/health`에서 database up 확인. 배포된 컨테이너의 스키마에서도 빈 Avatar URL이 포함된 설정 요청의 검증 통과를 확인했다. 실제 사용자 계정으로 브라우저 저장은 실행하지 않았다. frontend 변경은 없어 UI 테스트/빌드는 실행하지 않았다.
+
 확인일: 2026-10-14. 이번 저장소 코드·설정·문서 확인에서 드러난 사항만 기록한다. 이전 대화의 약속, 외부 issue, 운영자의 미완료 작업은 확인하지 않았으며 추정하지 않는다. 아래 항목은 아직 수정하지 않았다.
 
 ## 이번 작업

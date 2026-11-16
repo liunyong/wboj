@@ -438,9 +438,9 @@ function ProblemsPage() {
                         <Link to={`/problems/${problem.problemId}`}>{problem.title}</Link>
                         {!problem.isPublic && <span className="problem-table__badge">Private</span>}
                       </div>
-                      {problem.algorithms?.length ? (
-                        <div className="problem-table__algorithms">
-                          {problem.algorithms.join(', ')}
+                      {problem.tags?.length ? (
+                        <div className="problem-table__tags">
+                          {problem.tags.join(', ')}
                         </div>
                       ) : null}
                     </td>

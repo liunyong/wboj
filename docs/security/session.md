@@ -46,4 +46,10 @@
 
 ## 검증
 
+관리자는 왼쪽 Administration의 `Admin view` / `User view` 스위치로 같은 계정의 일반 사용자 시점을 확인할 수 있다. 전환 시 관리자 링크·버튼을 숨기고 조회 캐시를 비워 다시 조회한다. 관리자 전용 경로에서는 일반 화면으로 이동한다. 이 모드는 현재 탭에서만 유지되고 새로고침·로그아웃 시 해제된다. 본인이 작성한 문제 등 일반 사용자에게도 허용되는 소유자 권한은 유지된다.
+
+미리보기 요청은 `X-WBOJ-View-As: user` 헤더를 보내고 인증 미들웨어가 해당 요청의 관리자 역할을 `user`로 낮춘다. DB의 실제 역할과 세션은 바꾸지 않는다. 실제 역할을 유지하는 `/api/auth/me` 조회와 토큰 갱신은 미리보기 헤더를 보내지 않는다. 이 헤더로 권한을 올릴 수는 없다.
+
+Account → Settings의 프로필 저장은 `PATCH /api/auth/me/profile`을 사용한다. `displayName`은 최대 64자, `bio`는 최대 1024자이며 `avatarUrl`은 유효한 URL 또는 빈 문자열을 받는다. 빈 문자열은 아바타 제거를 뜻하고, 필드 생략은 기존 값을 유지한다.
+
 `npm test --prefix backend -- tests/session.routes.test.js tests/session.service.test.js tests/auth.routes.test.js`와 `npm test --prefix frontend -- src/hooks/useSessionKeepAlive.test.jsx src/components/SessionExpiryModal.test.jsx`를 실행한다. 수동으로 두 탭의 연장·로그아웃 동기화, 모달 키보드 접근, background polling 중 유휴 만료를 확인한다. 현재 실행 상태는 [handoff](../handoff.md)에 기록한다.

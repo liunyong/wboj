@@ -319,6 +319,58 @@ describe('Auth routes', () => {
     expect(refreshResponse.body.tokens.accessToken).not.toBe(tokens.accessToken);
   });
 
+  it('saves the settings form with an empty avatar URL and persists the display name', async () => {
+    const session = await authenticateAsUser();
+    const response = await request(app)
+      .patch('/api/auth/me/profile')
+      .set(authHeader(session.tokens.accessToken))
+      .send({ displayName: '새 표시 이름', bio: '', avatarUrl: '' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.user.profile.displayName).toBe('새 표시 이름');
+    const user = await User.findById(session.user.id);
+    expect(user.profile.displayName).toBe('새 표시 이름');
+    expect(user.profile.avatarUrl).toBe('');
+  });
+
+  it('allows setting and clearing an avatar URL', async () => {
+    const session = await authenticateAsUser();
+    for (const avatarUrl of ['https://example.com/avatar.png', '']) {
+      const response = await request(app)
+        .patch('/api/auth/me/profile')
+        .set(authHeader(session.tokens.accessToken))
+        .send({ avatarUrl });
+
+      expect(response.status).toBe(200);
+      expect(response.body.user.profile.avatarUrl).toBe(avatarUrl);
+      const user = await User.findById(session.user.id);
+      expect(user.profile.avatarUrl).toBe(avatarUrl);
+    }
+  });
+
+  it('rejects invalid nonempty avatar URLs without changing the profile', async () => {
+    const session = await authenticateAsUser();
+    const response = await request(app)
+      .patch('/api/auth/me/profile')
+      .set(authHeader(session.tokens.accessToken))
+      .send({ displayName: 'Not saved', avatarUrl: 'invalid-url' });
+
+    expect(response.status).toBe(400);
+    expect(response.body.details).toContainEqual({
+      path: 'avatarUrl', message: 'Avatar URL must be a valid URL'
+    });
+    const user = await User.findById(session.user.id);
+    expect(user.profile?.displayName).not.toBe('Not saved');
+  });
+
+  it('requires authentication to update a profile', async () => {
+    const response = await request(app)
+      .patch('/api/auth/me/profile')
+      .send({ displayName: 'Tester', bio: '', avatarUrl: '' });
+
+    expect(response.status).toBe(401);
+  });
+
   it('allows authenticated users to update profile and password', async () => {
     const session = await authenticateAsUser();
     const userBefore = await User.findById(session.user.id);

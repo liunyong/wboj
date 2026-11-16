@@ -193,10 +193,15 @@ textarea {
   font-size: 0.95rem;
 }
 
-.problem-source {
+.problem-source,
+.problem-tags {
   margin-top: 0.25rem;
   color: var(--muted);
   font-size: 0.95rem;
+}
+
+.problem-tags {
+  overflow-wrap: anywhere;
 }
 
 .markdown-body blockquote {
@@ -863,7 +868,7 @@ button.secondary.problem-tag-filter__button--active:hover {
   letter-spacing: 0.04em;
 }
 
-.problem-table__algorithms {
+.problem-table__tags {
   font-size: 0.85rem;
   color: var(--muted);
   margin-top: 0.1rem;
@@ -4022,6 +4027,13 @@ a:focus-visible, button:focus-visible, [tabindex='0']:focus-visible {
 .sidebar-group-title { margin: 0 12px 8px; font-size: 0.66rem; font-weight: 650; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 8px; color: var(--muted); background: transparent; font-size: 0.875rem; font-weight: 500; text-align: left; min-height: 44px; }
 .sidebar-link svg { flex-shrink: 0; }
+.sidebar-view-toggle { width: 100%; }
+.sidebar-view-toggle__track { margin-left: auto; width: 30px; height: 18px; padding: 3px; border-radius: 12px; background: var(--muted); flex-shrink: 0; }
+.sidebar-view-toggle__track::before { content: ''; display: block; width: 12px; height: 12px; border-radius: 50%; background: var(--surface); }
+.sidebar-view-toggle[aria-checked="true"] { color: var(--accent); background: var(--accent-soft); }
+.sidebar-view-toggle[aria-checked="true"] .sidebar-view-toggle__track { background: var(--accent); }
+.sidebar-view-toggle[aria-checked="true"] .sidebar-view-toggle__track::before { transform: translateX(12px); }
+.sidebar-collapsed .sidebar-view-toggle__track { display: none; }
 .sidebar-link:hover { background: var(--subtle); color: var(--text); text-decoration: none; }
 .sidebar-link.active { color: var(--accent); background: var(--accent-soft); font-weight: 650; box-shadow: inset 3px 0 var(--accent); }
 .sidebar-bottom { margin-top: auto; padding-top: 32px; display: flex; flex-direction: column; gap: 16px; }
@@ -4126,7 +4138,7 @@ a:focus-visible, button:focus-visible, [tabindex='0']:focus-visible {
 .problem-table__action-buttons { display: flex; align-items: center; gap: 8px; }
 .problem-table__actions button { min-width: 0; }
 .problem-table__actions .secondary { flex: 1; }
-.problem-table__title, .problem-table__algorithms { overflow-wrap: anywhere; }
+.problem-table__title, .problem-table__tags { overflow-wrap: anywhere; }
 .problem-table__badge { align-self: flex-start; }
 .problem-table .problem-table__status, .problem-table .problem-table__status-header {
   padding-inline: 8px;

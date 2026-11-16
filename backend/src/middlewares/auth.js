@@ -13,6 +13,14 @@ const extractBearerToken = (req) => {
   return token?.trim() ?? '';
 };
 
+// Preview only lowers permissions for this request; the stored role stays intact.
+const applyUserPreview = (req, user) => {
+  if (req.get('X-WBOJ-View-As') === 'user' && ['admin', 'super_admin'].includes(user.role)) {
+    return { ...user, role: 'user' };
+  }
+  return user;
+};
+
 const resolveUserFromToken = async (token, { touch = false } = {}) => {
   const payload = decodeAccessToken(token);
   if (!payload?.sub || !payload?.sid) {
@@ -57,7 +65,7 @@ export const authenticateOptional = async (req, res, next) => {
     const resolved = await resolveUserFromToken(token, { touch: false });
     if (resolved) {
       const { session, ...user } = resolved;
-      req.user = user;
+      req.user = applyUserPreview(req, user);
       req.session = session;
     }
     return next();
@@ -82,7 +90,7 @@ export const requireAuth = async (req, res, next) => {
     }
 
     const { session, ...user } = resolved;
-    req.user = user;
+    req.user = applyUserPreview(req, user);
     req.session = session;
     return next();
   } catch (error) {
@@ -103,7 +111,7 @@ export const requireAuthAndTouch = async (req, res, next) => {
     }
 
     const { session, ...user } = resolved;
-    req.user = user;
+    req.user = applyUserPreview(req, user);
     req.session = session;
     return next();
   } catch (error) {

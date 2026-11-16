@@ -3,10 +3,13 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
 
-const auth = vi.hoisted(() => ({ user: null, logout: vi.fn().mockResolvedValue(), isLoading: false }));
+const auth = vi.hoisted(() => ({ user: null, actualUser: null, isUserPreview: false, setUserPreview: vi.fn(), logout: vi.fn().mockResolvedValue(), isLoading: false }));
 vi.mock('../context/AuthContext.jsx', () => ({ useAuth: () => auth }));
 beforeEach(() => {
   auth.user = null;
+  auth.actualUser = null;
+  auth.isUserPreview = false;
+  auth.setUserPreview.mockClear();
   vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -17,14 +20,28 @@ it('keeps the problem section active on detail pages and hides admin routes from
   mount();
   expect(screen.getByRole('link', { name: 'Problems' })).toHaveAttribute('aria-current', 'page');
   expect(screen.queryByRole('link', { name: 'User Management' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('switch')).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Login' })).toHaveAttribute('href', '/login');
 });
 it('exposes account and all administration routes to admins', () => {
   auth.user = { username: 'admin', role: 'super_admin' };
   mount();
   for (const name of ['Settings', 'Create Problem', 'User Management', 'Manage Uploads']) expect(screen.getByRole('link', { name })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('switch', { name: 'View as regular user' }));
+  expect(auth.setUserPreview).toHaveBeenCalledWith(true);
   fireEvent.click(screen.getByRole('button', { name: 'Logout' }));
   expect(auth.logout).toHaveBeenCalled();
+});
+it('keeps the return switch available while hiding admin links in user view', () => {
+  auth.actualUser = { username: 'admin', role: 'super_admin' };
+  auth.user = { ...auth.actualUser, role: 'user' };
+  auth.isUserPreview = true;
+  mount();
+  expect(screen.queryByRole('link', { name: 'User Management' })).not.toBeInTheDocument();
+  const toggle = screen.getByRole('switch', { name: 'View as regular user' });
+  expect(toggle).toHaveAttribute('aria-checked', 'true');
+  fireEvent.click(toggle);
+  expect(auth.setUserPreview).toHaveBeenCalledWith(false);
 });
 it('locks background interaction and restores focus when dismissing the mobile drawer', () => {
   const { container } = mount();

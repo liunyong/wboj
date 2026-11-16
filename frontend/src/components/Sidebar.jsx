@@ -23,13 +23,14 @@ function Icon({ name }) {
 }
 
 export default function Sidebar({ collapsed, onToggle }) {
-  const { user, logout, isLoading } = useAuth();
+  const { user, actualUser, isUserPreview, setUserPreview, logout, isLoading } = useAuth();
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const sidebarRef = useRef(null);
   const menuRef = useRef(null);
   const closeRef = useRef(null);
   const admin = ['admin', 'super_admin'].includes(user?.role);
+  const canPreview = ['admin', 'super_admin'].includes((actualUser ?? user)?.role);
 
   useEffect(() => { setOpen(false); }, [location.pathname, location.search]);
   useEffect(() => {
@@ -85,10 +86,15 @@ export default function Sidebar({ collapsed, onToggle }) {
           {navItem('/leaderboard', 'Leaderboard', 'leaderboard')}
         </div>
         {user && <div className="sidebar-group"><p className="sidebar-group-title">Account</p>{navItem('/settings', 'Settings', 'settings')}</div>}
-        {admin && <div className="sidebar-group"><p className="sidebar-group-title">Administration</p>
+        {canPreview && <div className="sidebar-group"><p className="sidebar-group-title">Administration</p>
+          {admin && <>
           {navItem('/admin/create', 'Create Problem', 'create')}
           {navItem('/admin/users', 'User Management', 'users')}
           {navItem('/admin/uploads', 'Manage Uploads', 'uploads')}
+          </>}
+          <button type="button" className="sidebar-link sidebar-view-toggle" role="switch" aria-label="View as regular user" aria-checked={Boolean(isUserPreview)} title={isUserPreview ? 'Return to admin view' : 'View as regular user'} onClick={() => setUserPreview(!isUserPreview)}>
+            <Icon name="users" /><span className="sidebar-label">{isUserPreview ? 'User view' : 'Admin view'}</span><span className="sidebar-view-toggle__track" aria-hidden="true" />
+          </button>
         </div>}
       </nav>
       <div className="sidebar-bottom">

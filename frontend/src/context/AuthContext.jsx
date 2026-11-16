@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 const STORAGE_KEY = 'oj.tokens';
@@ -87,6 +87,7 @@ const createError = async (response) => {
 export function AuthProvider({ children }) {
   const queryClient = useQueryClient();
   const [tokens, setTokens] = useState(loadTokens);
+  const [previewUserId, setPreviewUserId] = useState(null);
   const refreshPromiseRef = useRef(null);
 
   const saveTokens = (nextTokens) => {
@@ -101,6 +102,7 @@ export function AuthProvider({ children }) {
   };
 
   const clearTokens = () => {
+    setPreviewUserId(null);
     setTokens({ accessToken: null });
     const storage = getTokenStorage();
     if (storage) {
@@ -158,6 +160,10 @@ export function AuthProvider({ children }) {
     const target = buildUrl(path);
     const init = { ...options };
     const headers = new Headers(init.headers || {});
+    headers.delete('X-WBOJ-View-As');
+    if (previewUserId && !skipAuth && path !== '/api/auth/me') {
+      headers.set('X-WBOJ-View-As', 'user');
+    }
     let body = init.body;
 
     if (body && !(body instanceof FormData)) {
@@ -221,6 +227,7 @@ export function AuthProvider({ children }) {
   });
 
   const login = async ({ email, password, turnstileToken }) => {
+    setPreviewUserId(null);
     const data = await authFetch(
       '/api/auth/login',
       {
@@ -303,9 +310,21 @@ export function AuthProvider({ children }) {
     clearTokens();
   };
 
+  const isUserPreview = Boolean(previewUserId && previewUserId === me?.id && ['admin', 'super_admin'].includes(me?.role));
+  const setUserPreview = (enabled) => {
+    if (!['admin', 'super_admin'].includes(me?.role)) return;
+    // Cancel and discard data fetched with the previous permissions before remounting.
+    queryClient.cancelQueries({ predicate: (query) => query.queryKey[0] !== 'me' });
+    queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== 'me' });
+    setPreviewUserId(enabled ? me.id : null);
+  };
+
   const value = useMemo(
     () => ({
-      user: me ?? null,
+      user: me ? (isUserPreview ? { ...me, role: 'user' } : me) : null,
+      actualUser: me ?? null,
+      isUserPreview,
+      setUserPreview,
       tokens,
       isLoading: Boolean(tokens.accessToken) && isFetchingMe,
       login,
@@ -325,6 +344,8 @@ export function AuthProvider({ children }) {
       login,
       logout,
       me,
+      isUserPreview,
+      setUserPreview,
       register,
       requestPasswordReset,
       resetPassword,
@@ -347,7 +368,7 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('storage', handleStorage);
   }, [clearTokens]);
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={value}><Fragment key={isUserPreview ? 'user' : 'admin'}>{children}</Fragment></AuthContext.Provider>;
 }
 
 export const useAuth = () => {

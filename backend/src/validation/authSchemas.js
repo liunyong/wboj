@@ -83,6 +83,7 @@ export const profileUpdateSchema = z
     avatarUrl: z
       .string()
       .url('Avatar URL must be a valid URL')
+      .or(z.literal(''))
       .optional()
       .transform((value) => value ?? undefined)
   })

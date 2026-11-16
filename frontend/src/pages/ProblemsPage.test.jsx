@@ -117,6 +117,8 @@ describe('Problem archive controls', () => {
     expect(screen.getByText('Showing 1–50 of 125 problems')).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Author' })).not.toBeInTheDocument();
     expect(within(rows()[0]).getAllByRole('cell')).toHaveLength(6);
+    const titleCell = within(rows()[0]).getAllByRole('cell')[2];
+    expect(titleCell).toHaveTextContent('Math');
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(visibleIds()[0]).toBe('#100051');
     expect(params().get('page')).toBe('2');

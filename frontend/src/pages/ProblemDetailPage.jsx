@@ -586,6 +586,9 @@ const resubmitMutation = useResubmitSubmission({
               </div>
               {authorName && <div className="problem-author">Author: {authorName}</div>}
               {problem.source && <div className="problem-source">Source: {problem.source}</div>}
+              {problem.tags?.length > 0 && (
+                <div className="problem-tags">Tags: {problem.tags.join(', ')}</div>
+              )}
             </div>
             <div className="problem-detail__meta">
               <div className="problem-stats">

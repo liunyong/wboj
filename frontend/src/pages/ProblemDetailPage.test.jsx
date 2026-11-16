@@ -107,6 +107,8 @@ describe('ProblemDetailPage submission form', () => {
       _id: '507f1f77bcf86cd799439011',
       problemId: 345,
       title: 'Sample Problem',
+      source: 'Sample Contest',
+      tags: ['implementation', '수학'],
       statement: 'Add two numbers.',
       statementMd: 'Add two numbers.',
       author: {
@@ -148,6 +150,9 @@ describe('ProblemDetailPage submission form', () => {
     );
 
     await screen.findByText('Author: Problem Maker');
+    const header = screen.getByRole('heading', { name: /Sample Problem/ }).closest('header');
+    expect(header).toHaveTextContent('Source: Sample Contest');
+    expect(header).toHaveTextContent('Tags: implementation, 수학');
     const textarea = await screen.findByLabelText('Source Code');
     const codeSample = 'if (m < 3) {\n  return m;\n}';
 
