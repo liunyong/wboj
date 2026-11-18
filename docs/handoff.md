@@ -1,5 +1,12 @@
 # WBOJ 인수인계
 
+## 필터 목록의 문제 이전/다음 이동 (2026-11-18)
+
+- 목록은 전체 archive에 검색·태그·정렬을 적용하지만 상세 화살표는 별도로 전체 문제를 ID순으로 정렬하던 차이를 수정했다. `utils/problemList.js`에서 URL 옵션과 기존 필터·정렬 함수를 공유하고, 목록 → 상세 → 화살표 → Problems 링크에 쿼리를 유지한다. 표시 페이지 경계를 넘어 같은 검색 결과를 순회하며 목록 복귀 시 원래 페이지·페이지 크기를 복원한다.
+- 기존 태그 단일 선택·반복 `tag` 중 첫 값 사용·검색과 태그의 결합을 유지한다. 활성 필터가 없거나 문맥 없는 상세 직접 접근은 전체 ID순 이동을 유지하고 경계는 기존 disabled 버튼을 사용한다. 구조는 `PROJECT_STRUCTURE.md`에 기록했다.
+- 검증: `npm test --prefix frontend -- --maxWorkers=1 --no-file-parallelism` 20개 파일·87/87 통과. 실제 목록/상세 컴포넌트를 연결한 새 회귀 테스트 8개에서 반복 양방향 이동, 첫/끝·단일 결과, 필터 밖 현재 문제, API/표시 페이지 경계, 목록 복귀, 쿼리 직접 접근, 무필터 이동을 확인했다. frontend build, 새 JS의 `node --check`, Compose 설정, diff 검사 통과. backend 변경·push는 없어 backend 테스트는 재실행하지 않았다.
+- frontend만 기존 Compose로 재빌드·배포했다. 배포된 정적 파일과 모의 API를 사용하는 Chromium에서 반복 이동·첫/끝·새로고침·Problems 링크·브라우저 Back·표시 페이지 경계·원래 목록 페이지 복원·문맥 없는 직접 접근의 전체 ID순 이동을 확인했다. 페이지 오류 0건, frontend Up, backend healthy, 공개 health/database up. 운영 문제·계정 데이터는 변경하지 않았다.
+
 ## Markdown 인라인 코드 렌더링 (2026-11-18)
 
 - 편집 미리보기와 발행된 문제 화면은 `ProblemStatement`를 공유한다. react-markdown v9에서 제거된 `code.inline`에 의존해 모든 코드가 `CodeBlock`의 `<pre>`로 렌더링됐다. 문장 안의 `<pre>`에는 기존 `.markdown-body pre` 블록 스타일이 적용됐고 fenced code는 `<pre>`가 중첩됐다.

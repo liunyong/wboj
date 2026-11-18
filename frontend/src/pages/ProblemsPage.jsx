@@ -8,17 +8,9 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useUserProgress, userProgressQueryKey } from '../hooks/useUserProgress.js';
 import { useSubmissionStream } from '../hooks/useSubmissionStream.js';
 import { useProblemArchive } from '../hooks/useProblemArchive.js';
+import { filterAndSortProblems, getProblemListOptions, PAGE_SIZE_OPTIONS, SORT_COLUMNS } from '../utils/problemList.js';
 
 const SCROLL_STORAGE_KEY = 'problemsPageScrollY';
-const DEFAULT_PAGE_SIZE = 50;
-const PAGE_SIZE_OPTIONS = [20, 50, 100];
-const SORT_COLUMNS = [
-  { field: 'id', label: 'ID', defaultDirection: 'asc' },
-  { field: 'title', label: 'Title', defaultDirection: 'asc' },
-  { field: 'difficulty', label: 'Difficulty Rating', defaultDirection: 'asc' },
-  { field: 'submissions', label: 'Submissions', defaultDirection: 'desc' },
-  { field: 'acceptance', label: 'AC Rate', defaultDirection: 'desc' }
-];
 
 function SortableProblemHeader({ column, sort, onSort }) {
   const { field, label, defaultDirection } = column;
@@ -48,56 +40,12 @@ function SortableProblemHeader({ column, sort, onSort }) {
   );
 }
 
-function compareProblems(a, b, sort) {
-  const [field, direction] = sort.split('-');
-  const compareId = () => Number(a.problemId) - Number(b.problemId);
-  let result = 0;
-
-  if (field === 'title') {
-    result = (a.title ?? '').localeCompare(b.title ?? '', undefined, { numeric: true });
-  } else if (field === 'difficulty' || field === 'acceptance') {
-    const value = (problem) => field === 'difficulty'
-      ? problem.difficultyRating
-      : problem.submissionCount > 0
-        ? (problem.acceptedSubmissionCount ?? 0) / problem.submissionCount
-        : null;
-    const left = value(a);
-    const right = value(b);
-    // Keep unrated problems and problems without submissions last in either direction.
-    if (!Number.isFinite(left) || !Number.isFinite(right)) {
-      if (Number.isFinite(left)) return -1;
-      if (Number.isFinite(right)) return 1;
-      return compareId();
-    }
-    result = left - right;
-  } else if (field === 'submissions') {
-    result = (a.submissionCount ?? 0) - (b.submissionCount ?? 0);
-  } else {
-    result = compareId();
-  }
-
-  return (direction === 'desc' ? -result : result) || compareId();
-}
-
 function ProblemsPage() {
   const { authFetch, user } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const isAdminLike = ['admin', 'super_admin'].includes(user?.role);
-  const search = searchParams.get('q') ?? '';
-  const requestedVisibility = searchParams.get('visibility');
-  const visibility = isAdminLike
-    ? (['public', 'private'].includes(requestedVisibility) ? requestedVisibility : 'all')
-    : 'public';
-  const tagFilter = searchParams.get('tag') ?? '';
-  const requestedPage = Number(searchParams.get('page') ?? '1');
-  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-  const requestedPageSize = Number(searchParams.get('limit'));
-  const pageSize = PAGE_SIZE_OPTIONS.includes(requestedPageSize) ? requestedPageSize : DEFAULT_PAGE_SIZE;
-  const requestedSort = searchParams.get('sort');
-  const sort = SORT_COLUMNS.some(({ field }) =>
-    requestedSort === `${field}-asc` || requestedSort === `${field}-desc`
-  ) ? requestedSort : 'id-asc';
+  const { search, visibility, tagFilter, page, pageSize, sort } = getProblemListOptions(searchParams, isAdminLike);
   const [pendingDeletion, setPendingDeletion] = useState(null);
   const [visibilityTarget, setVisibilityTarget] = useState(null);
   const [hasRestoredScroll, setHasRestoredScroll] = useState(false);
@@ -200,32 +148,10 @@ function ProblemsPage() {
     return Array.from(tags).sort((a, b) => a.localeCompare(b));
   }, [problemsQuery.data]);
 
-  const filtered = useMemo(() => {
-    const items = problemsQuery.data ?? [];
-    const trimmed = search.trim().toLowerCase();
-    let results = items;
-
-    if (trimmed) {
-      results = results.filter((problem) => {
-        const fields = [
-          problem.title,
-          problem.problemId ? `#${problem.problemId}` : '',
-          ...(problem.algorithms ?? []),
-          ...(problem.tags ?? [])
-        ];
-        return fields
-          .filter(Boolean)
-          .map((value) => value.toString().toLowerCase())
-          .some((value) => value.includes(trimmed));
-      });
-    }
-
-    if (tagFilter) {
-      results = results.filter((problem) => (problem.tags ?? []).includes(tagFilter));
-    }
-
-    return [...results].sort((a, b) => compareProblems(a, b, sort));
-  }, [problemsQuery.data, search, sort, tagFilter]);
+  const filtered = useMemo(
+    () => filterAndSortProblems(problemsQuery.data ?? [], { search, tagFilter, sort }),
+    [problemsQuery.data, search, sort, tagFilter]
+  );
 
   const totalProblems = filtered.length;
   const totalPages = Math.max(1, Math.ceil(totalProblems / pageSize));
@@ -435,7 +361,7 @@ function ProblemsPage() {
                     <td className="problem-table__id">#{problem.problemId}</td>
                     <td>
                       <div className="problem-table__title">
-                        <Link to={`/problems/${problem.problemId}`}>{problem.title}</Link>
+                        <Link to={`/problems/${problem.problemId}${searchParams.size ? `?${searchParams}` : ''}`}>{problem.title}</Link>
                         {!problem.isPublic && <span className="problem-table__badge">Private</span>}
                       </div>
                       {problem.tags?.length ? (

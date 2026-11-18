@@ -10,6 +10,13 @@
 
 일반 구조 설명은 architecture에서 관리하며, Java Class Writing의 코드 지도와 작성 안내는 아래에 기록한다.
 
+## Problem list and detail navigation
+
+- `frontend/src/hooks/useProblemArchive.js` loads every API page for the current visibility and user. `pages/ProblemsPage.jsx` filters and sorts the complete archive before display pagination.
+- `frontend/src/utils/problemList.js` shares URL option parsing, search/tag filtering, and sorting between the list and `components/ProblemNavigation.jsx`. Tag selection retains the existing single-select behavior: exact tag matching, with the first `tag` value used if a URL repeats the parameter. Search combines with the selected tag.
+- List problem links carry the list query (`tag`, `q`, `visibility`, `sort`, `limit`, `page`) into the detail URL. Previous/Next preserve that query and traverse all matching results in list order across display pages; Problems returns to the original list view. The URL also restores context on reload or opening a link in another tab.
+- With no active search/tag/visibility filter, including direct problem URLs without context, arrows retain full-archive ascending-ID navigation. Missing neighbors use the existing disabled arrow buttons. Flow coverage is in `pages/ProblemNavigationFlow.test.jsx`; archive controls and direct navigation also have their existing tests.
+
 ## Markdown rendering
 
 - `frontend/src/components/ProblemEditor.jsx` (live preview) and `frontend/src/pages/ProblemDetailPage.jsx` (published statement and other Markdown sections) share `components/ProblemStatement.jsx`.
