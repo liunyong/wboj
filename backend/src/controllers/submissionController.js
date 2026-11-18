@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
+import { ensureJavaClassSupport, safeJavaResults } from '../services/javaClassService.js';
 import Problem from '../models/Problem.js';
 import { reconcileRatingSubmissions } from '../services/ratingService.js';
 import Submission from '../models/Submission.js';
@@ -211,9 +213,9 @@ const sanitizeSubmission = (submission, { resolveLanguageLabel } = {}) => {
     finishedAt: submission.finishedAt,
     lastRunAt: submission.lastRunAt,
     deletedAt: submission.deletedAt ?? null,
-    testCaseResults: submission.testCaseResults,
+    testCaseResults: submission.mode === 'java_class' ? safeJavaResults(submission) : submission.testCaseResults,
     resultSummary: submission.resultSummary,
-    judge0: submission.judge0
+    judge0: submission.mode === 'java_class' ? undefined : submission.judge0
   };
 };
 
@@ -281,6 +283,7 @@ const buildSubmissionDetail = (submission, { resolveLanguageLabel } = {}) => {
     problemTitle: submission.problemTitle ?? submission.problem?.title ?? null,
     languageId: submission.languageId,
     language: languageLabel,
+    mode: submission.mode || 'stdin',
     sourceLen: computedSourceLen,
     source: safeSource,
     status: submission.status,
@@ -294,12 +297,12 @@ const buildSubmissionDetail = (submission, { resolveLanguageLabel } = {}) => {
     finishedAt: submission.finishedAt,
     lastRunAt: submission.lastRunAt,
     resultSummary: submission.resultSummary ?? { score: 0, cases: [] },
-    testCaseResults: Array.isArray(submission.testCaseResults) ? submission.testCaseResults : [],
+    testCaseResults: submission.mode === 'java_class' ? safeJavaResults(submission) : (submission.testCaseResults || []),
     runs: Array.isArray(submission.runs)
       ? submission.runs.map((run) => ({
           at: run.at,
           judge0Token: run.judge0Token ?? null,
-          status: run.status ?? null,
+          status: submission.mode === 'java_class' ? { verdict: run.status?.verdict, status: run.status?.status, score: run.status?.score } : run.status ?? null,
           time: run.time ?? null,
           memory: run.memory ?? null
         }))
@@ -324,10 +327,16 @@ const markSubmissionFailed = async (submission, { verdict = 'IE', save = true, e
   }
   const finishedAt = submission.finishedAt ?? new Date();
   submission.status = 'failed';
-  submission.verdict = submission.verdict ?? verdict;
+  submission.verdict = verdict;
+  submission.score = 0;
+  submission.testCaseResults = [];
+  submission.resultSummary = { score: 0, cases: [] };
+  submission.judge0 = {};
+  submission.accountingPending = true;
   submission.finishedAt = finishedAt;
   submission.lastRunAt = finishedAt;
   submission.activeKey = undefined;
+  submission.markModified('activeKey');
   if (error) {
     const message = error?.message ?? 'Execution failed';
     submission.runs = Array.isArray(submission.runs) ? submission.runs : [];
@@ -345,21 +354,23 @@ const markSubmissionFailed = async (submission, { verdict = 'IE', save = true, e
   }
   if (save) {
     await submission.save();
+    await reconcilePendingSubmissionAccounting();
   }
   emitSubmissionEvent(submission);
 };
 
 export const processSubmission = async (submissionId) => {
+  const gradingAttempt = randomUUID();
   const claimed = await Submission.findOneAndUpdate(
     { _id: submissionId, status: 'queued', deletedAt: null },
-    { $set: { status: 'running', startedAt: new Date(), lastRunAt: new Date() } },
+    { $set: { status: 'running', gradingAttempt, startedAt: new Date(), lastRunAt: new Date() } },
     { new: true }
   );
   if (!claimed) {
     return;
   }
 
-  const submission = await Submission.findById(claimed._id)
+  const submission = await Submission.findOne({ _id: claimed._id, gradingAttempt })
     .populate('problem')
     .populate('user', 'username');
 
@@ -367,6 +378,8 @@ export const processSubmission = async (submissionId) => {
     return;
   }
 
+  // Fence every save against a stale worker whose lease was recovered.
+  submission.$where = { gradingAttempt };
   const problem = submission.problem;
 
   if (!problem || !Array.isArray(problem.testCases) || problem.testCases.length === 0) {
@@ -376,8 +389,14 @@ export const processSubmission = async (submissionId) => {
 
   emitSubmissionEvent(submission);
 
+  const heartbeat = setInterval(() => {
+    void Submission.updateOne({ _id: submission._id, status: 'running', gradingAttempt }, { $set: { startedAt: new Date() } })
+      .catch((error) => console.error('Submission heartbeat failed', { message: error.message }));
+  }, Math.max(1000, Math.floor(env.staleSubmissionMs / 3)));
+  heartbeat.unref?.();
   let finalized = false;
   try {
+    submission.mode = problem.mode || 'stdin';
     const evaluation = await evaluateSubmissionRun({ submission, problem });
     const finishedAt = new Date();
 
@@ -417,6 +436,7 @@ export const processSubmission = async (submissionId) => {
     await reconcilePendingSubmissionAccounting();
     submission.status = finalStatus;
     submission.activeKey = undefined;
+    submission.markModified('activeKey');
     submission.accountingPending = false;
     await submission.save();
     finalized = true;
@@ -432,6 +452,8 @@ export const processSubmission = async (submissionId) => {
       return;
     }
     await markSubmissionFailed(submission, { error });
+  } finally {
+    clearInterval(heartbeat);
   }
 };
 
@@ -453,7 +475,7 @@ export const createSubmission = async (req, res, next) => {
     const username = req.user.username || req.user.email;
 
     const problem = await Problem.findById(problemId).select(
-      'problemId title judge0LanguageIds testCases isPublic author cpuTimeLimit memoryLimit'
+      'problemId title mode className judge0LanguageIds testCases isPublic author cpuTimeLimit memoryLimit'
     );
 
     if (
@@ -501,7 +523,11 @@ export const createSubmission = async (req, res, next) => {
       ? problem.judge0LanguageIds
       : [];
 
-    if (allowedLanguages.length && !allowedLanguages.includes(languageId)) {
+    if (problem.mode === 'java_class') {
+      if (languageId !== 62) return res.status(400).json({ code: 'JAVA_REQUIRED', message: 'Java Class Writing accepts only Java (62)' });
+      await ensureJavaClassSupport();
+    }
+    if (problem.mode !== 'java_class' && allowedLanguages.length && !allowedLanguages.includes(languageId)) {
       return res.status(400).json({ code: 'INVALID_LANGUAGE', message: 'Language not allowed' });
     }
 
@@ -543,6 +569,7 @@ export const createSubmission = async (req, res, next) => {
       language: languageLabel,
       sourceCode: normalizedSourceCode,
       sourceLen: normalizedSourceCode.length,
+      mode: problem.mode || 'stdin',
       verdict: 'PENDING',
       status: 'queued',
       activeKey,
@@ -745,6 +772,7 @@ export const resubmitSubmission = async (req, res, next) => {
     const { id } = req.validated?.params || req.params;
     const result = await resubmitAndUpdate({ submissionId: id, actingUser: req.user });
     const updatedSubmission = result.submission;
+    if (updatedSubmission.status === 'queued') queueSubmissionProcessing(updatedSubmission._id);
 
     emitSubmissionEvent(updatedSubmission);
 

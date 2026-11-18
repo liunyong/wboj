@@ -1,5 +1,21 @@
 # WBOJ 인수인계
 
+## Markdown 인라인 코드 렌더링 (2026-11-18)
+
+- 편집 미리보기와 발행된 문제 화면은 `ProblemStatement`를 공유한다. react-markdown v9에서 제거된 `code.inline`에 의존해 모든 코드가 `CodeBlock`의 `<pre>`로 렌더링됐다. 문장 안의 `<pre>`에는 기존 `.markdown-body pre` 블록 스타일이 적용됐고 fenced code는 `<pre>`가 중첩됐다.
+- `ProblemStatement`의 블록 처리를 `pre`로 옮겼다. 인라인 코드는 기본 `<code>`로 유지하고 fenced/들여쓰기 코드는 기존 `CodeBlock`과 언어 클래스를 재사용한다. CSS·Markdown/KaTeX plugin·sanitize 정책은 변경하지 않았다. 구조/작성 문서와 두 화면의 통합 회귀 테스트를 추가했다.
+- 검증: 수정 전 두 화면 테스트에서 동일 실패를 재현했다. 수정 후 `npm test --prefix frontend -- --maxWorkers=1 --no-file-parallelism` 19개 파일·79/79 통과, `npm run build --prefix frontend`, Docker build, Compose 설정, diff 검사 통과. 언어 없는 fence·들여쓰기·Python·Java 블록과 일반 HTML pre/code도 검증했다. 이번 수정은 backend를 변경하지 않아 backend 테스트는 재실행하지 않았다.
+- frontend만 기존 Compose로 재빌드·배포했다. 배포 전후 공개 사이트의 실제 JS/CSS와 모의 API 데이터를 사용하는 Chromium으로 편집 미리보기/발행 화면을 검사했다. 재현 문장의 잘못된 `<pre>` 7개와 fenced code의 중첩 `<pre>`가 제거됐고 인라인 `display: inline`, Java 블록의 단일 `<pre><code class="code-block language-java">`, Markdown 표/강조/링크, 인라인·블록 LaTeX, script/event handler/위험 URL 제거를 확인했다. 운영 계정·문제 데이터는 변경하지 않았다. frontend Up, backend healthy, 공개 health/database up 확인.
+
+## Java Class Writing (2026-11-16)
+
+- `java_class` 모드와 클래스명·시작 코드·공개/비공개 Main.java 테스트 그룹을 추가했다. 정수 배점 합은 100이며 빈 예상 stdout도 지원한다. 기존 문제는 `stdin` 기본값으로 동작하며 데이터 마이그레이션은 없다. 작성 방법·코드 지도·공유 JVM의 시험 보안 한계는 [PROJECT_STRUCTURE.md](../PROJECT_STRUCTURE.md#java-class-writing-ap-csa)를 참고한다.
+- 기존 Judge0 큐·제한·재시도·결과 갱신·통계를 재사용한다. Java 재채점은 같은 제출을 다시 queued로 만들고 activeKey로 중복 실행을 막는다. heartbeat와 실행 식별자로 오래된 워커의 결과 덮어쓰기를 막는다. 비공개 입출력·원본 진단은 Java 응답 DTO에서 제거한다.
+- 현재 Judge0는 Java 62/OpenJDK 13.0.1과 multi-file 89를 지원한다. JVM 시작에 512 MB 가상 메모리 제한이 필요해 Java 작성 기본값/최소값을 512 MB로 설정했다. ZIP에는 서버 소유 compile/run과 두 Java 파일만 넣는다. Judge0가 빈 stdout/빈 예상 출력에 WA를 반환하는 경우 정상 종료 상태 4에서 두 출력이 모두 비면 AC로 보정한다.
+- 검증: backend 전체 18개 파일·94개 테스트 통과 후 최종 영향 범위 24개 통과, 빈 출력 보정 후 Java 전용 10개 통과. frontend 최종 전체 18개 파일·74개 통과(`npm test --prefix frontend -- --maxWorkers=1 --no-file-parallelism`). 초기 UI 시간 초과는 문제 목록 테스트의 반복 셀 접근성 조회 비용을 줄이고 직렬 실행하여 기본 제한시간 내 통과했다. JS 구문, frontend/Docker build, Compose 설정, diff 검사 통과.
+- 배포: backend/frontend만 기존 Compose로 재빌드·배포했다. backend healthy, frontend 실행, 공개 health DB up 및 새 asset 제공 확인. 배포된 코드의 `scripts/verify-java-class.js`로 실제 Judge0 probe, Rectangle 정답 100/100 AC, 시그니처 오류 30/100 CE와 안전한 피드백, static width 60/100 PARTIAL, 빈 출력 100/100 AC, 기존 Python stdin/stdout 100/100 AC 모두 확인했다. 필수 Judge0 배포 검증은 남아 있지 않다.
+- 검증 경계: API 권한·비공개 결과·반복 재채점·통계는 격리된 in-memory Mongo + Judge0 mock으로 검사했고, 실제 Judge0 검사는 DB를 사용하지 않는 배포 스크립트로 실행했다. 운영 계정의 브라우저 작성→제출 수동 시나리오는 실행하지 않았다.
+
 ## 관리자 일반 사용자 시점 전환 (2026-10-14)
 
 - 왼쪽 Administration 아래 `Admin view` / `User view` 스위치를 추가했다. 일반 사용자 시점에서도 복귀 스위치는 유지하며 관리자 메뉴·버튼·경로는 일반 사용자 역할을 따른다. 같은 계정의 소유자 권한은 유지한다. 새로고침·로그아웃 시 해제된다.

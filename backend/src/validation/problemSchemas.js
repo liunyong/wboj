@@ -17,8 +17,9 @@ const sampleSchema = z.object({
 });
 
 export const testCaseSchema = z.object({
-  input: z.string().min(1, 'Input is required'),
-  output: z.string().min(1, 'Output is required'),
+  input: z.string().min(1, 'Input or Java Main test code is required'),
+  visibility: z.enum(['public', 'private']).optional().default('private'),
+  output: z.string(),
   points: z
     .coerce.number()
     .int('Points must be an integer')
@@ -104,6 +105,9 @@ export const legacySlugParamSchema = z
 
 export const createProblemSchema = z
   .object({
+    mode: z.enum(['stdin', 'java_class']).optional(),
+    className: z.string().optional(),
+    starterCode: z.string().max(50000).optional(),
     title: z
       .string()
       .trim()
@@ -167,6 +171,9 @@ export const createProblemSchema = z
 
 export const updateProblemSchema = z
   .object({
+    mode: z.enum(['stdin', 'java_class']).optional(),
+    className: z.string().optional(),
+    starterCode: z.string().max(50000).optional(),
     title: z
       .string()
       .trim()

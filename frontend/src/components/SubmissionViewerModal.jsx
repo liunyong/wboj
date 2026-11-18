@@ -185,6 +185,13 @@ function SubmissionViewerModal({
               </div>
             </div>
 
+            {submission.mode === 'java_class' && <section>
+              <h3>Test groups · {submission.score}/100 points</h3>
+              {(submission.testCaseResults || []).map((group) => <div key={group.index}>
+                <p>Group {group.index}: {group.status?.description} · {group.passed ? group.points : 0}/{group.points} points</p>
+                {group.compileOutput && <pre>{group.compileOutput}</pre>}
+              </div>)}
+            </section>}
             {runHistory.length ? (
               <div className="submission-modal__history">
                 <h3>Run History</h3>

@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup } from '@testing-library/react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,6 +18,7 @@ const authFetchMock = vi.fn(async (path, options = {}, _meta = {}) => {
 
   if (path === '/api/languages') {
     return [
+      { id: 62, name: 'Java' },
       { id: 71, name: 'Python (3.10)' },
       { id: 63, name: 'JavaScript (Node)' }
     ];
@@ -53,6 +54,7 @@ vi.mock('../hooks/useDeleteSubmission.js', () => ({
 vi.mock('../hooks/useLanguages.js', () => ({
   useLanguages: () => {
     const languages = [
+      { id: 62, name: 'Java' },
       { id: 71, name: 'Python (3.10)' },
       { id: 63, name: 'JavaScript (Node)' }
     ];
@@ -330,4 +332,19 @@ describe('ProblemDetailPage submission form', () => {
 
     queryClient.clear();
   });
+  it('shows the required class and preloads Java starter source', async () => {
+    problemResponse = { ...problemResponse, mode: 'java_class', className: 'Rectangle',
+      starterCode: 'public class Rectangle { }', judge0LanguageIds: [71],
+      publicTestGroups: [{ input: 'public class Main {}', output: '', points: 30 }] };
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    render(<QueryClientProvider client={queryClient}><MemoryRouter initialEntries={['/problems/345']}><Routes><Route path="/problems/:problemId" element={<ProblemDetailPage />} /></Routes></MemoryRouter></QueryClientProvider>);
+    await screen.findByText('Java Class Writing: Rectangle');
+    await waitFor(() => expect(screen.getByLabelText('Source Code')).toHaveValue('public class Rectangle { }'));
+    const language = screen.getByRole('combobox');
+    expect(language).toHaveValue('62');
+    expect(within(language).getAllByRole('option')).toHaveLength(1);
+    expect(screen.getByText('Public group 1 · 30 points')).toBeInTheDocument();
+    queryClient.clear();
+  });
+
 });

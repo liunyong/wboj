@@ -69,5 +69,27 @@ describe('ProblemStatement', () => {
     expect(code).not.toBeNull();
     expect(code?.textContent).toContain("print('hello')");
     expect(code?.className).toContain('language-python');
+    expect(container.querySelectorAll('pre')).toHaveLength(1);
+  });
+
+  it.each([
+    ['unlabelled fence', '```\nprivate double length;\n```'],
+    ['indented block', '    private double length;']
+  ])('renders a %s as a single code block', (_name, source) => {
+    const { container } = render(<ProblemStatement source={source} />);
+
+    expect(container.querySelectorAll('pre')).toHaveLength(1);
+    expect(container.querySelector('pre > code.code-block')).toHaveTextContent('private double length;');
+    expect(container.querySelector('pre pre')).toBeNull();
+  });
+
+  it('preserves plain preformatted HTML and inline HTML code', () => {
+    const { container } = render(
+      <ProblemStatement source={'<pre>plain text</pre>\n\n<p>Use <code>Rectangle</code>.</p>'} />
+    );
+
+    expect(container.querySelector('pre')).toHaveTextContent('plain text');
+    expect(container.querySelector('p > code')).toHaveTextContent('Rectangle');
+    expect(container.querySelector('.code-block')).toBeNull();
   });
 });

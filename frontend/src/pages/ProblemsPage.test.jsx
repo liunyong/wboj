@@ -45,7 +45,8 @@ function renderPage(entry = '/problems') {
 }
 
 const rows = () => within(screen.getByRole('table')).getAllByRole('row').slice(1);
-const visibleIds = () => rows().map((row) => within(row).getAllByRole('cell')[1].textContent);
+// rows() already checks accessibility; use the native table API to read the ID cell.
+const visibleIds = () => rows().map((row) => row.cells[1].textContent);
 const params = () => new URLSearchParams(screen.getByTestId('location').textContent);
 const sortLabels = {
   id: 'ID', title: 'Title', author: 'Author', difficulty: 'Difficulty Rating',

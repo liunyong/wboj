@@ -5,7 +5,8 @@ import FirstSolve from './FirstSolve.js';
 const testCaseSchema = new mongoose.Schema(
   {
     input: { type: String, required: true },
-    output: { type: String, required: true },
+    visibility: { type: String, enum: ['public', 'private'], default: 'private' },
+    output: { type: String, default: '' },
     points: { type: Number, min: 1, max: 1000, default: 1 }
   },
   { _id: false }
@@ -30,6 +31,9 @@ const languageTemplateSchema = new mongoose.Schema(
 
 const problemSchema = new mongoose.Schema(
   {
+    mode: { type: String, enum: ['stdin', 'java_class'], default: 'stdin' },
+    className: String,
+    starterCode: { type: String, default: '' },
     title: { type: String, required: true, trim: true },
     slug: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
     problemId: { type: Number, required: true, unique: true, min: 100000, immutable: true },

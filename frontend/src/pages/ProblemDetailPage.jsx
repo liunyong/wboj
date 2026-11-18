@@ -248,11 +248,12 @@ const resubmitMutation = useResubmitSubmission({
   }, []);
 
   const allowedLanguageIdSet = useMemo(() => {
+    if (problem?.mode === 'java_class') return new Set([62]);
     const ids = Array.isArray(problem?.judge0LanguageIds) ? problem.judge0LanguageIds : [];
     return new Set(
       ids.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0)
     );
-  }, [problem?.judge0LanguageIds]);
+  }, [problem?.judge0LanguageIds, problem?.mode]);
 
   const allowedLanguages = useMemo(() => {
     if (allowedLanguageIdSet.size > 0) {
@@ -261,9 +262,11 @@ const resubmitMutation = useResubmitSubmission({
     return languages;
   }, [allowedLanguageIdSet, languages]);
 
-  const selectedLanguageId = languageId || String(allowedLanguages[0]?.id ?? '');
+  const selectedLanguageId = allowedLanguages.some((item) => String(item.id) === languageId)
+    ? languageId : String(allowedLanguages[0]?.id ?? '');
   const languageTemplateMap = useMemo(() => {
     const next = new Map();
+    if (problem?.mode === 'java_class') { next.set('62', problem.starterCode || ''); return next; }
     for (const item of problem?.languageTemplates ?? []) {
       const id = Number(item?.languageId);
       const template = typeof item?.template === 'string' ? item.template : '';
@@ -275,7 +278,7 @@ const resubmitMutation = useResubmitSubmission({
       }
     }
     return next;
-  }, [allowedLanguageIdSet, problem?.languageTemplates]);
+  }, [allowedLanguageIdSet, problem?.languageTemplates, problem?.mode, problem?.starterCode]);
 
   const preferStatement = (markdown, fallback) => {
     if (typeof markdown === 'string' && markdown.trim()) {
@@ -418,7 +421,7 @@ const resubmitMutation = useResubmitSubmission({
   usePageSeo(seoConfig);
 
   useEffect(() => {
-    if (!languageId && allowedLanguages.length) {
+    if (allowedLanguages.length && !allowedLanguages.some((item) => String(item.id) === languageId)) {
       setLanguageId(String(allowedLanguages[0].id));
     }
   }, [allowedLanguages, languageId]);
@@ -573,6 +576,11 @@ const resubmitMutation = useResubmitSubmission({
 
       {problem && (
         <div className="problem-detail">
+          {problem.mode === 'java_class' && <section className="admin-card">
+            <h2>Java Class Writing: {problem.className}</h2>
+            <p>Submit public class {problem.className} only. The grader supplies Main.java. Full credit requires 100/100 points.</p>
+            {(problem.publicTestGroups || []).map((group, index) => <details key={index}><summary>Public group {index + 1} · {group.points} points</summary><pre>{group.input}</pre><p>Expected stdout</p><pre>{group.output || '(empty)'}</pre></details>)}
+          </section>}
           <ProblemNavigation problemId={problem.problemId} isAdmin={isAdmin} />
           <header className="problem-detail__header">
             <div>

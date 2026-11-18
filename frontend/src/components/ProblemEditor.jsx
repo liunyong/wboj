@@ -42,6 +42,9 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
   const statementTextareaRef = useRef(null);
 
   const [form, setForm] = useState(buildDefaultForm);
+  const [problemMode, setProblemMode] = useState('stdin');
+  const [className, setClassName] = useState('');
+  const [starterCode, setStarterCode] = useState('');
   const [testCases, setTestCases] = useState([]);
   const [samples, setSamples] = useState([]);
   const [selectedLanguages, setSelectedLanguages] = useState([71]);
@@ -139,6 +142,9 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
       algorithms: Array.isArray(initialProblem.algorithms) ? initialProblem.algorithms : []
     });
 
+    setProblemMode(initialProblem.mode || 'stdin');
+    setClassName(initialProblem.className || '');
+    setStarterCode(initialProblem.starterCode || '');
     const initialLanguages = Array.isArray(initialProblem.judge0LanguageIds)
       ? initialProblem.judge0LanguageIds.map((value) => Number(value))
       : [71];
@@ -161,6 +167,7 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
     setTestCases(
       (initialProblem.testCases ?? []).map((testCase) => ({
         uid: generateUid(),
+        visibility: testCase.visibility || 'private',
         input: testCase.input,
         output: testCase.output,
         points: testCase.points ?? 1
@@ -185,6 +192,9 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
   }, [initialProblem, isEdit]);
 
   const resetForm = () => {
+    setProblemMode('stdin');
+    setClassName('');
+    setStarterCode('');
     setForm(buildDefaultForm());
     setTestCases([]);
     setSamples([]);
@@ -276,6 +286,7 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
         setTestCases(
           (response.testCases ?? []).map((testCase) => ({
             uid: generateUid(),
+            visibility: testCase.visibility || 'private',
             input: testCase.input,
             output: testCase.output,
             points: testCase.points ?? 1
@@ -699,9 +710,16 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
       return;
     }
 
+    if (problemMode === 'java_class' && (totalPoints !== 100 || !className.trim() || testCases.some((item) => !item.input.trim()))) {
+      setError('Required class name and Java Main test code are required; points must total 100.');
+      return;
+    }
     const statementMarkdown = form.statementMd;
 
     const payload = {
+      mode: problemMode,
+      className,
+      starterCode,
       title: form.title.trim(),
       statementMd: statementMarkdown,
       statement: statementMarkdown,
@@ -709,7 +727,7 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
       inputFormat: form.inputFormat || undefined,
       outputFormat: form.outputFormat || undefined,
       constraints: form.constraints || undefined,
-      judge0LanguageIds: selectedLanguages,
+      judge0LanguageIds: problemMode === 'java_class' ? [62] : selectedLanguages,
       languageTemplates: selectedLanguages
         .map((languageId) => {
           const template = languageTemplates[String(languageId)] ?? '';
@@ -730,6 +748,7 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
         return next;
       }),
       testCases: testCases.map((testCase) => ({
+        visibility: testCase.visibility || 'private',
         input: testCase.input,
         output: testCase.output,
         points: testCase.points
@@ -783,6 +802,27 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
       </header>
 
       <form className="admin-card" onSubmit={handleSubmit}>
+        <label>Problem mode
+          <select value={problemMode} onChange={(event) => { setProblemMode(event.target.value); if (event.target.value === 'java_class') setForm((prev) => ({ ...prev, memoryLimit: '512' })); setTestCases([]); }}>
+            <option value="stdin">Standard input / output</option>
+            <option value="java_class">Java Class Writing (AP CSA)</option>
+          </select>
+        </label>
+        {problemMode === 'java_class' && <section>
+          <label>Required Java class name<input value={className} onChange={(event) => setClassName(event.target.value)} required /></label>
+          <label>Starter code (optional)<textarea rows={8} value={starterCode} onChange={(event) => setStarterCode(event.target.value)} /></label>
+          <h3>Java test groups · {totalPoints}/100 points</h3>
+          <p>Each group is a complete Main class with public static void main(String[] args). Submit the student class only. Private tests are hidden from students.</p>
+          {testCases.map((group, index) => <fieldset key={group.uid}>
+            <legend>Group {index + 1}</legend>
+            <label>Main.java<textarea rows={10} required value={group.input} onChange={(event) => setTestCases((items) => items.map((item, i) => i === index ? { ...item, input: event.target.value } : item))} /></label>
+            <label>Expected stdout (may be empty)<textarea value={group.output} onChange={(event) => setTestCases((items) => items.map((item, i) => i === index ? { ...item, output: event.target.value } : item))} /></label>
+            <label>Points<input type="number" min="1" max="100" required value={group.points} onChange={(event) => setTestCases((items) => items.map((item, i) => i === index ? { ...item, points: Number(event.target.value) } : item))} /></label>
+            <label>Visibility<select value={group.visibility || 'private'} onChange={(event) => setTestCases((items) => items.map((item, i) => i === index ? { ...item, visibility: event.target.value } : item))}><option value="private">Private</option><option value="public">Public</option></select></label>
+            <button type="button" onClick={() => setTestCases((items) => items.filter((_, i) => i !== index))}>Remove group</button>
+          </fieldset>)}
+          <button type="button" onClick={() => setTestCases((items) => [...items, { uid: generateUid(), input: '', output: '', points: 1, visibility: 'private' }])}>Add Java test group</button>
+        </section>}
         <label>
           Title
           <input
@@ -1042,7 +1082,7 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
           </div>
         </label>
 
-        <div className="language-picker">
+        <div className="language-picker" hidden={problemMode === 'java_class'}>
           <h3>Judge0 Languages</h3>
           <div className="language-picker__content">
             <select
@@ -1080,7 +1120,7 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
           </div>
         </div>
 
-        <section className="language-template-section">
+        <section className="language-template-section" hidden={problemMode === 'java_class'}>
           <header className="language-template-section__header">
             <h3>Language Templates</h3>
             <span className="helper-text">
@@ -1175,7 +1215,7 @@ function ProblemEditor({ mode = 'create', initialProblem = null, onSuccess }) {
           )}
         </section>
 
-        <section className="testcase-section">
+        <section className="testcase-section" hidden={problemMode === 'java_class'}>
           <header className="testcase-section__header">
             <h3>Test Cases</h3>
             <span>

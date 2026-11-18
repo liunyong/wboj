@@ -3,6 +3,7 @@ import axios from 'axios';
 let cachedClient = null;
 let languageCache = null;
 let languageCacheTimestamp = 0;
+let languageCacheUrl;
 const submissionQueue = [];
 let activeSubmissions = 0;
 
@@ -101,6 +102,7 @@ const encode = (value) => Buffer.from(value ?? '', 'utf8').toString('base64');
 export const runJudge0Submission = async ({
   languageId,
   sourceCode,
+  additionalFiles,
   stdin,
   expectedOutput,
   cpuTimeLimit,
@@ -117,7 +119,7 @@ export const runJudge0Submission = async ({
           (() => {
             const payload = {
               language_id: languageId,
-              source_code: encode(sourceCode),
+              ...(additionalFiles ? { additional_files: additionalFiles } : { source_code: encode(sourceCode) }),
               stdin: encode(stdin),
               enable_network: Boolean(enableNetwork)
             };
@@ -148,7 +150,7 @@ export const runJudge0Submission = async ({
 export const fetchJudge0Languages = async () => {
   const now = Date.now();
 
-  if (languageCache && now - languageCacheTimestamp < LANGUAGE_CACHE_TTL_MS) {
+  if (languageCache && languageCacheUrl === (process.env.JUDGE0_URL || 'http://localhost:2358') && now - languageCacheTimestamp < LANGUAGE_CACHE_TTL_MS) {
     return languageCache;
   }
 
@@ -158,6 +160,7 @@ export const fetchJudge0Languages = async () => {
     retries: SUBMISSION_MAX_RETRIES
   });
 
+  languageCacheUrl = process.env.JUDGE0_URL || 'http://localhost:2358';
   languageCache = response.data;
   languageCacheTimestamp = now;
 

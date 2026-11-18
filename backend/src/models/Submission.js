@@ -8,6 +8,7 @@ const testCaseResultSchema = new mongoose.Schema(
     stdout: String,
     stderr: String,
     compileOutput: String,
+    feedback: String,
     message: String,
     points: { type: Number, default: 1 },
     passed: { type: Boolean, default: false },
@@ -64,6 +65,7 @@ const submissionSchema = new mongoose.Schema(
     problemTitle: { type: String },
     languageId: { type: Number, required: true },
     language: { type: String },
+    mode: { type: String, default: 'stdin' },
     sourceCode: { type: String, required: true, alias: 'source' },
     sourceLen: { type: Number, default: 0 },
     verdict: {
@@ -112,6 +114,7 @@ const submissionSchema = new mongoose.Schema(
     lastRunAt: { type: Date, default: null },
     deletedAt: { type: Date, default: null },
     accountingPending: { type: Boolean, default: false, index: true },
+    gradingAttempt: { type: String, select: false },
     activeKey: { type: String, default: undefined, select: false }
   },
   { timestamps: true }

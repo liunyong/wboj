@@ -2,6 +2,8 @@
 
 `frontend/src/components/ProblemEditor.jsx`와 `frontend/src/components/ProblemStatement.jsx`가 편집 미리보기와 문제 화면의 렌더러를 공유한다. GitHub Flavored Markdown, remark-math, KaTeX를 사용한다. 입력/출력 예시는 코드 영역으로 표시되므로 수식 설명은 본문·입출력 형식·제약·예시 설명에 작성한다.
 
+한 쌍의 백틱으로 감싼 코드는 문단·목록 안의 인라인 `<code>`로 표시한다. fenced/들여쓰기 코드 블록만 `ProblemStatement`의 `pre` 처리에서 기존 `CodeBlock`으로 전달하며, 언어 클래스와 블록 스타일은 이 경로에 적용한다.
+
 ## 수식
 
 인라인은 한 쌍의 `$`, 블록은 별도 줄의 `$$`로 감싼다. Markdown 원문에는 LaTeX의 백슬래시 하나를 입력한다(JSON/JS 문자열의 escape와 구별).

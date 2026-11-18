@@ -1,3 +1,4 @@
+import { validateProblemMode } from '../services/javaClassService.js';
 import Problem from '../models/Problem.js';
 import ProblemUpdate from '../models/ProblemUpdate.js';
 import { getNextSequence } from '../services/idService.js';
@@ -8,7 +9,7 @@ import { decodeHtmlEntities, sanitizeMarkdown, sanitizeOptionalRichText } from '
 import { recomputeProblemCounters } from '../services/submissionService.js';
 import { invalidateSitemapCache } from '../services/sitemapService.js';
 
-const sanitizeTestCases = (testCases = []) => {
+const sanitizeTestCases = (testCases = [], mode) => {
   const sanitized = (testCases ?? [])
     .map((testCase) => {
       const input = typeof testCase.input === 'string' ? testCase.input : '';
@@ -16,11 +17,12 @@ const sanitizeTestCases = (testCases = []) => {
       const rawPoints = Number.parseInt(testCase.points ?? 1, 10);
       const points = Number.isFinite(rawPoints) && rawPoints >= 1 ? Math.min(rawPoints, 1000) : 1;
 
-      if (!input || !output) {
+      if (!input || (mode !== 'java_class' && !output)) {
         return null;
       }
 
       return {
+        visibility: testCase.visibility || 'private',
         input,
         output,
         points
@@ -213,7 +215,7 @@ export const getProblemById = async (req, res, next) => {
     }
 
     const isUserAdmin = isAdmin(req.user);
-    const isOwner = problem.author?.toString() === req.user?.id;
+    const isOwner = (problem.author?._id ?? problem.author)?.toString() === req.user?.id;
 
     if (!problem.isPublic && !isUserAdmin && !isOwner) {
       return res.status(404).json({ code: 'PROBLEM_NOT_FOUND', message: 'Problem not found' });
@@ -226,6 +228,9 @@ export const getProblemById = async (req, res, next) => {
       : 0;
 
     if (!(isUserAdmin || isOwner) || !includePrivate) {
+      if (problem.mode === 'java_class') {
+        payload.publicTestGroups = payload.testCases.filter((item) => item.visibility === 'public');
+      }
       delete payload.testCases;
     }
 
@@ -261,10 +266,12 @@ export const createProblem = async (req, res, next) => {
       slug: _clientSlug,
       ...clientPayload
     } = payload;
-    const sanitizedTestCases = sanitizeTestCases(clientPayload.testCases);
+    const sanitizedTestCases = sanitizeTestCases(clientPayload.testCases, clientPayload.mode);
     if (!sanitizedTestCases.length) {
       return res.status(400).json({ message: 'At least one valid test case is required' });
     }
+    const modeError = validateProblemMode({ ...clientPayload, testCases: sanitizedTestCases });
+    if (modeError) return res.status(400).json({ message: modeError });
     const tags = normalizeTags(clientPayload.tags);
     const algorithms = normalizeAlgorithms(clientPayload.algorithms);
     const languageTemplates = normalizeLanguageTemplates(
@@ -298,6 +305,9 @@ export const createProblem = async (req, res, next) => {
 
       try {
         const problemData = {
+          mode: clientPayload.mode || 'stdin',
+          className: clientPayload.className,
+          starterCode: clientPayload.starterCode,
           title: normalizedTitle,
           statement: sanitizedStatementMd,
           statementMd: sanitizedStatementMd,
@@ -320,7 +330,7 @@ export const createProblem = async (req, res, next) => {
         assignIfDefined(problemData, 'constraints', sanitizedConstraints);
         assignIfDefined(problemData, 'source', sanitizedSource || undefined);
         assignIfDefined(problemData, 'cpuTimeLimit', clientPayload.cpuTimeLimit);
-        assignIfDefined(problemData, 'memoryLimit', clientPayload.memoryLimit);
+        assignIfDefined(problemData, 'memoryLimit', clientPayload.memoryLimit ?? (clientPayload.mode === 'java_class' ? 512 : undefined));
         assignIfDefined(
           problemData,
           'statementHtmlCache',
@@ -490,13 +500,16 @@ export const updateProblem = async (req, res, next) => {
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, 'testCases')) {
-      const sanitized = sanitizeTestCases(updates.testCases);
+      const sanitized = sanitizeTestCases(updates.testCases, updates.mode || problem.mode);
       if (!sanitized.length) {
         return res.status(400).json({ message: 'At least one valid test case is required' });
       }
       nextUpdates.testCases = sanitized;
     }
 
+    for (const key of ['mode', 'className', 'starterCode']) assignIfDefined(nextUpdates, key, updates[key]);
+    const modeError = validateProblemMode({ ...problem.toObject(), ...nextUpdates });
+    if (modeError) return res.status(400).json({ message: modeError });
     problem.set(nextUpdates);
     await problem.save();
     await problem.populate('author', 'username profile.displayName');

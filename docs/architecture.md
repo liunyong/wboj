@@ -41,7 +41,7 @@ flowchart LR
 주요 API mount는 `backend/src/app.js`에 있다: `/api/auth`, `/api/session`, `/api/problems`, `/api/submissions`, `/api/judge`, `/api/languages`, `/api/dashboard`, `/api/ratings`, `/api/users`, `/api/admin/users`, `/api/announcements`, `/api/problem-updates`, `/api/uploads`.
 
 - 공개 문제 목록/상세·제출 메타데이터·레이팅 순위는 비로그인 조회를 지원한다. 비공개 문제와 개인 데이터는 controller에서 추가로 제한한다.
-- 제출 상세의 소스는 소유자 또는 admin 계열만 조회한다. 일반 공개 목록은 요약 메타데이터를 반환한다. 현재 상세 API는 비소유자에게도 testcase 결과와 runs를 남기므로, 비공개 testcase 정책 점검을 [handoff](handoff.md)에 기록했다.
+- 제출 상세의 소스는 소유자 또는 admin 계열만 조회한다. 일반 공개 목록은 요약 메타데이터를 반환한다. Java Class Writing 응답은 모든 사용자에게 테스트 입출력과 Judge0 원본 진단을 제거하고 안전한 컴파일 안내만 제공한다. stdin 상세 API는 비소유자에게도 testcase 결과와 runs를 남기므로, 비공개 testcase 정책 점검을 [handoff](handoff.md)에 기록했다.
 - 역할은 `user < admin < super_admin`. 문제 CRUD·난이도는 admin 계열, 제출 삭제·counter 재계산·계정 권한 변경 등은 super_admin 권한을 요구한다. 문제 수정에는 저자 허용 분기도 있으므로 UI guard와 서버 권한을 함께 확인한다.
 - `/api/live`는 프로세스 응답, `/api/health`는 Mongo 연결까지 검사(실패 503)한다. Judge0 가용성은 health에 포함하지 않는다.
 
@@ -55,7 +55,7 @@ flowchart LR
 6. 점수·최종 verdict·시간/메모리·testcase 결과·실행 이력을 저장한다. `accountingPending`으로 문제 counter와 UTC 일별 통계를 복구하고, 최초 AC 및 `ratingPending`으로 레이팅을 갱신한다. 완료 시 activeKey를 제거하고 이벤트를 발행한다.
 7. `backend/src/services/submissionWorkerService.js`가 기본 1초마다 queued 작업(최대 10개 조회)을 처리하고, 5분 이상 running인 작업을 재대기시킨다. 통계/레이팅의 pending 항목과 종료 시즌도 정리한다. 긴 채점과 stale 기준이 충돌하지 않도록 설정해야 한다.
 
-재채점 `PATCH /api/submissions/:id/resubmit`은 같은 문서를 **동기적으로** 갱신한다. 소유자 또는 admin 계열이 사용할 수 있다. `submissionService.js`는 transaction을 시도하고 standalone Mongo의 미지원 오류이면 transaction 없이 실행한다. 실행 이력은 기본 최근 20개만 보존한다.
+재채점 `PATCH /api/submissions/:id/resubmit`은 stdin 모드에서 같은 문서를 동기적으로 갱신한다. Java Class Writing에서는 같은 문서를 activeKey lock과 함께 queued로 전환하여 기존 비동기 워커에서 재채점한다. 소유자 또는 admin 계열이 사용할 수 있다. `submissionService.js`는 transaction을 시도하고 standalone Mongo의 미지원 오류이면 transaction 없이 실행한다. 실행 이력은 기본 최근 20개만 보존한다.
 
 ## 실시간 UI
 
@@ -69,3 +69,5 @@ React Query가 목록·상세·통계를 캐시하고 이벤트에 따라 갱신
 - 문제 작성: `frontend/src/components/ProblemEditor.jsx` → 문제 API → 서버 sanitize → `frontend/src/components/ProblemStatement.jsx`의 Markdown/KaTeX 렌더링. 이미지 API는 sharp로 검증·재인코딩하고 `/api/uploads/problems/...` 경로를 편집기에 삽입한다. [작성 상세](authoring-math.md).
 - 레이팅: 최초 AC → 고유 `FirstSolve` → `backend/src/services/portfolioService.js` 계산 → `RatingProfile` 캐시. `backend/src/services/ratingService.js`가 최초 AC backfill·재계산·시즌 결과 확정을 수행한다. AI 난이도는 admin의 미리보기 요청 후 명시적으로 확정한다. [정책 상세](ratings.md).
 - SEO: `frontend/src/hooks/useSeo.js`, `frontend/src/utils/seo.js`, `frontend/src/utils/hreflang.js`; 정적 `frontend/public/robots.txt`, `frontend/public/sitemap.xml`과 동적 `/api/sitemap.xml`은 서로 다른 제공 경로다.
+
+Java Class Writing의 코드 지도·작성 방법·JVM 제약·공유 JVM 보안 한계는 [PROJECT_STRUCTURE.md](../PROJECT_STRUCTURE.md#java-class-writing-ap-csa)를 참고한다.

@@ -1,5 +1,5 @@
 import 'katex/dist/katex.min.css';
-import { useMemo } from 'react';
+import { Children, isValidElement, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -23,17 +23,16 @@ function ProblemStatement({ source, className = DEFAULT_CLASSNAME, components, .
   const sanitized = useMemo(() => sanitizeMarkdownSource(source), [source]);
   const markdownComponents = useMemo(
     () => ({
-      code({ inline, className: codeClassName, children, ...codeProps }) {
-        if (inline) {
-          return (
-            <code className={codeClassName} {...codeProps}>
-              {children}
-            </code>
-          );
+      // react-markdown v9 identifies blocks by <pre>; code has no inline prop.
+      pre({ node, children, ...preProps }) {
+        const codeElement = Children.toArray(children)[0];
+        if (node.children.length !== 1 || !isValidElement(codeElement) || codeElement.type !== 'code') {
+          return <pre {...preProps}>{children}</pre>;
         }
 
+        const { className: codeClassName, children: codeChildren } = codeElement.props;
         const language = codeClassName?.match(LANGUAGE_CLASS_REGEX)?.[1] ?? '';
-        const code = extractCodeText(children).replace(/\n$/, '');
+        const code = extractCodeText(codeChildren).replace(/\n$/, '');
         return <CodeBlock code={code} language={language} />;
       },
       ...(components ?? {})

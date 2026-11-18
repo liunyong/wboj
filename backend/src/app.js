@@ -155,7 +155,7 @@ app.use((err, req, res, next) => {
   const body = {
     code: err.code || (status >= 500 ? 'INTERNAL_SERVER_ERROR' : 'ERROR'),
     message:
-      status >= 500 && env.isProduction
+      status >= 500 && env.isProduction && err.code !== 'JAVA_CLASS_CONFIGURATION'
         ? 'Internal Server Error'
         : err.message || 'Internal Server Error'
   };

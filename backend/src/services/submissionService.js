@@ -79,6 +79,7 @@ const mapTestCaseResults = (results) =>
     stdout: result.stdout,
     stderr: result.stderr,
     compileOutput: result.compileOutput,
+    feedback: result.feedback,
     message: result.message,
     status: result.status,
     time: result.time,
@@ -142,6 +143,8 @@ export const evaluateSubmissionRun = async ({ submission, problem }) => {
   }
 
   const { results, score, maxExecTimeMs, maxMemoryKb } = await executeTestCases({
+    mode: problem.mode,
+    className: problem.className,
     sourceCode: submission.sourceCode,
     languageId: submission.languageId,
     testCases: problem.testCases,
@@ -171,7 +174,7 @@ const isAdminLike = (user) => ['admin', 'super_admin'].includes(user?.role);
 
 export const resubmitAndUpdate = async ({ submissionId, actingUser }) => {
   const submission = await Submission.findById(submissionId)
-    .populate('problem', 'problemId title testCases cpuTimeLimit memoryLimit')
+    .populate('problem', 'problemId title mode className testCases cpuTimeLimit memoryLimit')
     .populate('user', 'username');
 
   if (!submission || submission.deletedAt) {
@@ -196,6 +199,23 @@ export const resubmitAndUpdate = async ({ submissionId, actingUser }) => {
       'INVALID_SOURCE',
       'Original submission source is unavailable'
     );
+  }
+
+  if (submission.problem?.mode === 'java_class' || submission.mode === 'java_class') {
+    const now = new Date();
+    let queued;
+    try {
+      queued = await Submission.findOneAndUpdate({ _id: submissionId, deletedAt: null,
+        status: { $nin: ['queued', 'running'] } }, { $set: {
+        status: 'queued', mode: 'java_class', queuedAt: now,
+        activeKey: `${ownerId}:${submission.problem._id}`
+      } }, { new: true });
+    } catch (error) {
+      if (error.code === 11000) throw buildHttpError(409, 'SUBMISSION_PENDING', 'Submission already in progress for this problem');
+      throw error;
+    }
+    if (!queued) throw buildHttpError(409, 'SUBMISSION_PENDING', 'Submission already in progress');
+    return { submission: queued };
   }
 
   const startedAt = new Date();

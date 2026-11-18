@@ -1,3 +1,4 @@
+import { buildJavaArchive, ensureJavaClassSupport, javaCompilerFeedback } from './javaClassService.js';
 import { runJudge0Submission } from './judge0Service.js';
 
 const TERMINATE_STATUSES = new Set([6, 15]);
@@ -29,11 +30,18 @@ const toJudgeMemoryLimitKb = (memoryLimitMb) => {
 
 export const executeTestCases = async ({
   sourceCode,
+  mode,
+  className,
   languageId,
   testCases,
   cpuTimeLimit,
   memoryLimit
 }) => {
+  const javaClass = mode === 'java_class';
+  if (javaClass) {
+    if (languageId !== 62) throw new Error('Java Class Writing requires Java (62)');
+    await ensureJavaClassSupport();
+  }
   const results = [];
   let passedPoints = 0;
   let maxExecTimeMs = 0;
@@ -48,9 +56,10 @@ export const executeTestCases = async ({
   for (; index < testCases.length; index += 1) {
     const testCase = testCases[index];
     const judgeResult = await runJudge0Submission({
-      languageId,
+      languageId: javaClass ? 89 : languageId,
       sourceCode,
-      stdin: testCase.input,
+      ...(javaClass ? { additionalFiles: buildJavaArchive({ className, sourceCode, testCode: testCase.input }) } : {}),
+      stdin: javaClass ? '' : testCase.input,
       expectedOutput: testCase.output,
       cpuTimeLimit: effectiveTimeLimit,
       memoryLimit: judgeMemoryLimit,
@@ -61,16 +70,28 @@ export const executeTestCases = async ({
     const stderr = decodeBase64(judgeResult.stderr);
     const compileOutput = decodeBase64(judgeResult.compile_output);
     const message = decodeBase64(judgeResult.message);
-    const status = judgeResult.status || {};
-    const statusId = Number.isFinite(status.id) ? status.id : 0;
+    let status = judgeResult.status || {};
+    let statusId = Number.isFinite(status.id) ? status.id : 0;
+    if ([13, 14].includes(statusId) || statusId < 3 || statusId > 12) {
+      const error = new Error('Judge0 service failed to execute the test group');
+      error.code = 'JUDGE0_SERVICE_FAILURE';
+      throw error;
+    }
     const points = Number.isFinite(testCase.points) ? testCase.points : 1;
 
+    // Judge0 can report WA for null stdout versus an intentionally empty expected_output.
+    if (javaClass && statusId === 4 && normalizeOutput(testCase.output) === '' && normalizeOutput(stdout) === '') {
+      statusId = 3;
+      status = { id: 3, description: 'Accepted' };
+    }
     let passed = statusId === 3;
     if (passed) {
       const expected = normalizeOutput(testCase.output);
       const actual = normalizeOutput(stdout);
       if (expected !== actual) {
         passed = false;
+        statusId = 4;
+        status = { id: 4, description: 'Wrong Answer' };
       }
     }
 
@@ -91,6 +112,7 @@ export const executeTestCases = async ({
       stdout,
       stderr,
       compileOutput,
+      feedback: javaClass && statusId === 6 ? javaCompilerFeedback(compileOutput, className) : undefined,
       message,
       status,
       statusId,
@@ -100,7 +122,7 @@ export const executeTestCases = async ({
       passed
     });
 
-    if (TERMINATE_STATUSES.has(statusId)) {
+    if (!javaClass && TERMINATE_STATUSES.has(statusId)) {
       index += 1;
       break;
     }
